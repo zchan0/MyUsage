@@ -33,6 +33,7 @@ final class UsageManager {
 
         // Register providers — each auto-detects availability
         register(ClaudeProvider())
+        register(CodexProvider())
     }
 
     // MARK: - Public API
