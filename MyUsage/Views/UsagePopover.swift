@@ -103,7 +103,10 @@ struct UsagePopover: View {
     private var footer: some View {
         HStack {
             Spacer()
-            SettingsLink {
+            Button {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
                 Image(systemName: "gear")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)

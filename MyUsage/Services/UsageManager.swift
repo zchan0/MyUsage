@@ -31,9 +31,8 @@ final class UsageManager {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
 
-        // TODO: In future features, providers will be added here.
-        // For now, start with an empty list. Each provider feature will
-        // register itself during init.
+        // Register providers — each auto-detects availability
+        register(ClaudeProvider())
     }
 
     // MARK: - Public API
