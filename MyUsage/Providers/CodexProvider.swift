@@ -185,9 +185,6 @@ final class CodexProvider: UsageProvider {
                 return
             }
         }
-        if KeychainHelper.readGenericPassword(service: Self.keychainService) != nil {
-            isAvailable = true
-        }
     }
 
     // MARK: - Auth Loading

@@ -151,11 +151,7 @@ final class ClaudeProvider: UsageProvider {
     // MARK: - Detection
 
     private func detectAvailability() {
-        if FileManager.default.fileExists(atPath: Self.credentialFilePath) {
-            isAvailable = true
-        } else if KeychainHelper.readGenericPassword(service: Self.keychainService) != nil {
-            isAvailable = true
-        }
+        isAvailable = FileManager.default.fileExists(atPath: Self.credentialFilePath)
     }
 
     // MARK: - Credentials
