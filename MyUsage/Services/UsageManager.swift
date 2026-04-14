@@ -35,6 +35,7 @@ final class UsageManager {
         register(ClaudeProvider())
         register(CodexProvider())
         register(CursorProvider())
+        register(AntigravityProvider())
     }
 
     // MARK: - Public API
