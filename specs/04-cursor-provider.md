@@ -30,29 +30,28 @@ Existing Cursor extension code at `~/Developer/Copilot/CursorUsageMonitor/src/se
 
 ## Deliverables
 
-- [ ] `CursorProvider.swift` — Conforms to `UsageProvider`
-  - [ ] Read tokens from `state.vscdb` via SQLite3 C API
-  - [ ] Token refresh (JWT check + POST)
-  - [ ] Fetch usage (Connect RPC) → populate `UsageSnapshot`
-  - [ ] Fallback to cursor.com/api/usage if Connect RPC fails
-  - [ ] `isAvailable` based on `state.vscdb` existence
-- [ ] `SQLiteHelper.swift` — Lightweight SQLite3 reader
-- [ ] Cursor-specific card layout (total %, auto/API split, dollar amounts, cycle countdown)
+- [x] `CursorProvider.swift` — Conforms to `UsageProvider`
+  - [x] Read tokens from `state.vscdb` via SQLite3 C API
+  - [x] Token refresh (JWT check + POST)
+  - [x] Fetch usage (Connect RPC) → populate `UsageSnapshot`
+  - [ ] Fallback to cursor.com/api/usage if Connect RPC fails (deferred)
+  - [x] `isAvailable` based on `state.vscdb` existence
+- [x] `SQLiteHelper.swift` — Lightweight SQLite3 reader
+- [x] Cursor-specific card layout (total %, dollar amounts, on-demand, cycle countdown)
 
 ## Unit Tests
 
-- [ ] Parse `state.vscdb` key-value extraction (mock SQLite data)
-- [ ] JWT expiry check
-- [ ] Parse `GetCurrentPeriodUsage` response:
-  - [ ] `totalPercentUsed` → `totalUsagePercent`
-  - [ ] `autoPercentUsed`, `apiPercentUsed` → breakdown
-  - [ ] `totalSpend` / `limit` (cents → dollars)
-  - [ ] `billingCycleEnd` (unix ms string → Date)
-  - [ ] `spendLimitUsage` → on-demand budget
-- [ ] Parse `GetPlanInfo` response → plan name + price
-- [ ] Fallback API response parsing (legacy format)
-- [ ] Session cookie construction: `userId%3A%3A<accessToken>`
-- [ ] Billing cycle days remaining calculation
+- [ ] Parse `state.vscdb` key-value extraction (deferred: requires mock DB)
+- [ ] JWT expiry check (logic exists, no dedicated test)
+- [x] Parse `GetCurrentPeriodUsage` response:
+  - [x] `totalSpend` / `limit` / `includedSpend` (cents → dollars)
+  - [x] `billingCycleEnd` (unix ms string → Date)
+  - [x] `spendLimitUsage` → on-demand budget
+  - [ ] `autoPercentUsed`, `apiPercentUsed` → breakdown (deferred: not mapped to snapshot)
+- [x] Parse `GetPlanInfo` response → plan name
+- [ ] Fallback API response parsing (deferred: fallback not implemented)
+- [ ] Session cookie construction (deferred: not needed for Connect RPC)
+- [x] Billing cycle end → Date mapping
 
 ## Manual Verification Checklist
 

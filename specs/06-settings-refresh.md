@@ -19,22 +19,23 @@ Build the Settings window and implement automatic periodic refresh with configur
 
 ## Deliverables
 
-- [ ] `SettingsView.swift` — Full settings implementation
-  - [ ] General tab: refresh interval picker, launch at login toggle
-  - [ ] Providers tab: per-provider enable/disable toggles with detection status
-- [ ] `UsageManager.swift` — Timer-based auto-refresh
-  - [ ] Configurable intervals: 1m, 2m, 5m, 15m, manual
-  - [ ] Timer restarts when interval changes
-  - [ ] Manual refresh button in popover triggers immediate refresh
-- [ ] Auto-detect providers on launch (check credential existence)
-- [ ] Persist settings via `@AppStorage` / `UserDefaults`
-- [ ] Launch at Login via `SMAppService` (macOS 13+)
+- [x] `SettingsView.swift` — Full settings implementation
+  - [x] General tab: refresh interval picker, launch at login toggle
+  - [x] Providers tab: per-provider enable/disable toggles with detection status
+  - [x] About tab: version, GitHub link
+- [x] `UsageManager.swift` — Timer-based auto-refresh
+  - [x] Configurable intervals: 1m, 2m, 5m, 15m, manual
+  - [x] Timer restarts when interval changes
+  - [x] Manual refresh button in popover triggers immediate refresh
+- [x] Auto-detect providers on launch (check credential existence)
+- [x] Persist settings via `UserDefaults`
+- [x] Launch at Login via `SMAppService` (macOS 14+)
 
 ## Unit Tests
 
-- [ ] Refresh interval enum: raw values, display names
-- [ ] Provider auto-detection: file exists → detected, file missing → not detected
-- [ ] Settings persistence round-trip
+- [x] Refresh interval enum: raw values, display names, seconds
+- [ ] Provider auto-detection round-trip (deferred: requires mock filesystem)
+- [ ] Settings persistence round-trip (deferred: requires app lifecycle test)
 
 ## Manual Verification Checklist
 

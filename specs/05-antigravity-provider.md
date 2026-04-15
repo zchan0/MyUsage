@@ -39,32 +39,31 @@ Implement the Antigravity provider: discover local language server process, extr
 
 ## Deliverables
 
-- [ ] `AntigravityProvider.swift` — Conforms to `UsageProvider`
-  - [ ] Process discovery via `ps` + regex
-  - [ ] CSRF token extraction from CLI args
-  - [ ] Port discovery via `lsof`
-  - [ ] Port probing (GetUnleashData) — with overall timeout guard
-  - [ ] Usage fetch (GetUserStatus → GetCommandModelConfigs fallback)
-  - [ ] Parse per-model quotas → `UsageSnapshot.modelQuotas`
-  - [ ] `isAvailable` based on running process detection
-- [ ] `ProcessHelper.swift` — Shell command wrappers for `ps` and `lsof`
-- [ ] Antigravity-specific card layout (multi-bar per model)
+- [x] `AntigravityProvider.swift` — Conforms to `UsageProvider`
+  - [x] Process discovery via `ps` + regex
+  - [x] CSRF token extraction from CLI args
+  - [x] Port discovery via `lsof`
+  - [x] Port probing (GetUnleashData) — with overall timeout guard
+  - [x] Usage fetch (GetUserStatus → GetCommandModelConfigs fallback)
+  - [x] Parse per-model quotas → `UsageSnapshot.modelQuotas`
+  - [x] `isAvailable` based on state.vscdb + running process
+- [x] `ProcessHelper.swift` — Shell command wrappers for `ps` and `lsof`
+- [x] Antigravity-specific card layout (multi-bar per model)
 
 ## Unit Tests
 
-- [ ] Parse `ps` output → PID + CSRF token + extension_server_port
-  - [ ] Match `--app_data_dir antigravity`
-  - [ ] Match path containing `/antigravity/`
-  - [ ] No match → nil
-- [ ] Parse `lsof` output → list of listening ports
-- [ ] Parse `GetUserStatus` response:
-  - [ ] `planName` → "Pro", "Free", etc.
-  - [ ] `clientModelConfigs` → list of `ModelQuota`
-  - [ ] `remainingFraction` 1.0 → 0% used, 0.0 → 100% used
-  - [ ] `resetTime` ISO 8601 → `Date`
-  - [ ] Dynamic model list (not hardcoded)
-- [ ] Parse `GetCommandModelConfigs` fallback response
-- [ ] Process not running → `isAvailable = false`
+- [x] Parse `ps` output → PID + CSRF token + extension_server_port
+  - [x] Extract flag helper tested
+  - [ ] Full `findAntigravityProcess` parsing test (deferred: requires mock ps output)
+- [ ] Parse `lsof` output → list of listening ports (deferred: requires mock)
+- [x] Parse `GetUserStatus` response:
+  - [x] `planName` → "Pro", "Free", etc.
+  - [x] `clientModelConfigs` → list of `ModelQuota`
+  - [x] `remainingFraction` 1.0 → 0% used, 0.0 → 100% used
+  - [x] `resetTime` ISO 8601 → `Date`
+  - [x] Dynamic model list (not hardcoded)
+- [x] Parse `GetCommandModelConfigs` fallback response
+- [ ] Process not running → `isAvailable = false` (logic exists, no dedicated test)
 
 ## Manual Verification Checklist
 

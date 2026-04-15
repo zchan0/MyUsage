@@ -12,22 +12,22 @@ Final polish: error states, animations, app icon, and launch preparation.
 
 ## Deliverables
 
-- [ ] Error states for each provider card
-  - [ ] "Not configured" — credential file missing
-  - [ ] "Authentication failed" — token refresh fails
-  - [ ] "Fetch failed" — API error with retry button
-  - [ ] "IDE not running" — Antigravity when process not found
-- [ ] Loading states (skeleton cards while fetching)
-- [ ] Smooth animations on data updates (progress bar transitions)
-- [ ] Dynamic menu bar icon tint (green/yellow/red based on worst provider)
-- [ ] App icon design (`Assets.xcassets`)
-- [ ] "About" section in Settings (version, GitHub link)
-- [ ] `.gitignore` for Xcode artifacts
-- [ ] README.md with screenshots and setup instructions
+- [x] Error states for each provider card
+  - [x] "Not configured" — credential file missing
+  - [x] "Token refresh failed" — token refresh fails
+  - [x] API error with retry button
+  - [x] "IDE not running" — Antigravity when process not found
+- [x] Loading states (spinner + "Loading…" while fetching)
+- [x] Smooth animations on data updates (progress bar/ring transitions)
+- [x] Dynamic menu bar icon tint (green/yellow/red based on worst provider)
+- [ ] App icon design (`Assets.xcassets`) — deferred
+- [x] "About" section in Settings (version, GitHub link)
+- [x] `.gitignore` for Xcode artifacts
+- [x] README.md
 
 ## Unit Tests
 
-- [ ] Menu bar icon color logic: all green, any yellow, any red
+- [ ] Menu bar icon color logic (deferred: logic in view, no unit test)
 
 ## Manual Verification Checklist
 

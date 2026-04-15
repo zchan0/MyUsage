@@ -13,29 +13,29 @@ Implement the Claude Code provider: read local credentials, refresh OAuth tokens
 
 ## Deliverables
 
-- [ ] `ClaudeProvider.swift` — Conforms to `UsageProvider`
-  - [ ] Read credentials from file, fallback to Keychain
-  - [ ] Token expiry check + auto-refresh
-  - [ ] Fetch usage API → populate `UsageSnapshot`
-  - [ ] `isAvailable` based on credential file existence
-- [ ] `KeychainHelper.swift` — Read Keychain items by service name
-- [ ] `TokenRefresher.swift` — Claude-specific token refresh
-- [ ] `ProviderCard.swift` — Render Claude card (circular ring + linear bar)
-- [ ] Wire Claude into `UsageManager`
+- [x] `ClaudeProvider.swift` — Conforms to `UsageProvider`
+  - [x] Read credentials from file, fallback to Keychain
+  - [x] Token expiry check + auto-refresh
+  - [x] Fetch usage API → populate `UsageSnapshot`
+  - [x] `isAvailable` based on credential file existence
+- [x] `KeychainHelper.swift` — Read Keychain items by service name
+- [x] Token refresh logic (inline in ClaudeProvider, not separate file)
+- [x] `ProviderCard.swift` — Render Claude card (circular ring + linear bar)
+- [x] Wire Claude into `UsageManager`
 
 ## Unit Tests
 
-- [ ] Parse `credentials.json` → extract `accessToken`, `refreshToken`, `expiresAt`
-- [ ] Token expiry detection: expired / not-expired / about-to-expire (5min buffer)
-- [ ] Parse usage API response → `UsageSnapshot` mapping
-  - [ ] `five_hour.utilization` → `sessionUsage.percentUsed`
-  - [ ] `seven_day.utilization` → `weeklyUsage.percentUsed`
-  - [ ] `extra_usage` → `credits` (cents → dollars)
-  - [ ] Missing `extra_usage` → `credits` is nil
-  - [ ] Missing `seven_day_opus` → no opus data
-- [ ] Reset time string → `Date` parsing (ISO 8601)
-- [ ] Progress color: <60% green, 60-85% yellow, >85% red
-- [ ] Mock refresh response → token update logic
+- [x] Parse `credentials.json` → extract `accessToken`, `refreshToken`, `expiresAt`
+- [x] Token expiry detection: expired / not-expired / about-to-expire (5min buffer)
+- [x] Parse usage API response → `UsageSnapshot` mapping
+  - [x] `five_hour.utilization` → `sessionUsage.percentUsed`
+  - [x] `seven_day.utilization` → `weeklyUsage.percentUsed`
+  - [x] `extra_usage` → `onDemandSpend`
+  - [x] Missing `extra_usage` → no on-demand data
+  - [ ] Missing `seven_day_opus` → no opus data (deferred: field not commonly used)
+- [x] Reset time string → `Date` parsing (ISO 8601)
+- [ ] Progress color thresholds (covered in view code, no unit test)
+- [ ] Mock refresh response → token update logic (deferred: requires HTTP mocking)
 
 ## Manual Verification Checklist
 

@@ -13,13 +13,13 @@ Implement the Codex provider: read OAuth tokens from `auth.json`, refresh tokens
 
 ## Deliverables
 
-- [ ] `CodexProvider.swift` — Conforms to `UsageProvider`
-  - [ ] Read `auth.json` with multi-path lookup (`CODEX_HOME`, `~/.config/codex/`, `~/.codex/`)
-  - [ ] Token refresh (form-encoded POST)
-  - [ ] Fetch usage API → populate `UsageSnapshot`
-  - [ ] `isAvailable` based on auth file existence
-- [ ] Token refresh in `TokenRefresher.swift` (Codex path)
-- [ ] Provider card rendering (reuse `ProviderCard` with Codex styling)
+- [x] `CodexProvider.swift` — Conforms to `UsageProvider`
+  - [x] Read `auth.json` with multi-path lookup (`CODEX_HOME`, `~/.config/codex/`, `~/.codex/`)
+  - [x] Token refresh (form-encoded POST)
+  - [x] Fetch usage API → populate `UsageSnapshot`
+  - [x] `isAvailable` based on auth file existence
+- [x] Token refresh logic (inline in CodexProvider)
+- [x] Provider card rendering (reuse `ProviderCard` with Codex styling)
 
 ## Implementation Notes
 
@@ -30,17 +30,17 @@ Implement the Codex provider: read OAuth tokens from `auth.json`, refresh tokens
 
 ## Unit Tests
 
-- [ ] Parse `auth.json` → extract `access_token`, `refresh_token`, `account_id`, `last_refresh`
-- [ ] `last_refresh` > 8 days → needs refresh
-- [ ] Parse usage response:
-  - [ ] `primary_window.used_percent` → `sessionUsage.percentUsed`
-  - [ ] `secondary_window.used_percent` → `weeklyUsage.percentUsed`
-  - [ ] `credits.balance` → `credits.balance` (Double or String)
-  - [ ] `credits.has_credits = false` → credits nil
-  - [ ] `plan_type` → `planName`
-- [ ] **`balance` as String** → decoded to Double correctly
-- [ ] Reset timestamps (unix seconds → `Date`)
-- [ ] Auth file lookup order priority
+- [x] Parse `auth.json` → extract `access_token`, `refresh_token`, `account_id`, `last_refresh`
+- [x] `last_refresh` > 8 days → needs refresh
+- [x] Parse usage response:
+  - [x] `primary_window.used_percent` → `sessionUsage.percentUsed`
+  - [x] `secondary_window.used_percent` → `weeklyUsage.percentUsed`
+  - [x] `credits.balance` → `credits.balance` (Double or String)
+  - [x] `credits.has_credits = false` → credits nil
+  - [x] `plan_type` → `planName`
+- [x] **`balance` as String** → decoded to Double correctly
+- [x] Reset timestamps (unix seconds → `Date`)
+- [ ] Auth file lookup order priority (deferred: logic exists, no dedicated test)
 
 ## Manual Verification Checklist
 

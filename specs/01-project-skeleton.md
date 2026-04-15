@@ -7,21 +7,21 @@ Set up the Xcode project, menu bar infrastructure, and empty popover. This is th
 ## Deliverables
 
 - [x] Xcode project: `MyUsage.xcodeproj`, Swift 6, macOS 14+
-- [ ] `MyUsageApp.swift` — `@main` entry, `MenuBarExtra` or `NSStatusItem`
-- [ ] `MenuBarIcon.swift` — Status item with gauge SF Symbol
-- [ ] `UsagePopover.swift` — Empty popover with header ("MyUsage" + refresh button) and footer (settings gear)
-- [ ] `SettingsView.swift` — Placeholder settings window
-- [ ] `UsageManager.swift` — Empty manager, publishes empty provider list
-- [ ] `UsageProvider.swift` — Protocol definition
-- [ ] `UsageSnapshot.swift` — Data model
-- [ ] `ProviderKind.swift` — Enum
-- [ ] App has no Dock icon (`LSUIElement = true`)
-- [ ] App builds and runs without errors
+- [x] `MyUsageApp.swift` — `@main` entry, `MenuBarExtra`
+- [x] `MenuBarIcon.swift` — Status item with dynamic tint
+- [x] `UsagePopover.swift` — Popover with header, cards, footer
+- [x] `SettingsView.swift` — Full settings (General/Providers/About tabs)
+- [x] `UsageManager.swift` — Orchestrator with timer + auto-detect
+- [x] `UsageProvider.swift` — Protocol definition
+- [x] `UsageSnapshot.swift` — Data model
+- [x] `ProviderKind.swift` — Enum
+- [x] App has no Dock icon (`LSUIElement = true`)
+- [x] App builds and runs without errors
 
 ## Unit Tests
 
-- [ ] `ProviderKind` enum: `allCases`, `displayName`, `accentColor`
-- [ ] `UsageSnapshot` default values
+- [x] `ProviderKind` enum: `allCases`, `displayName`
+- [x] `UsageSnapshot` default values, worst usage, model quotas
 
 ## Manual Verification Checklist
 
