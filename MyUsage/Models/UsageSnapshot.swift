@@ -70,8 +70,6 @@ struct UsageSnapshot: Sendable {
 
     // MARK: - Billing cycle (Cursor)
     var totalUsagePercent: Double?
-    var autoUsagePercent: Double?
-    var apiUsagePercent: Double?
     var billingCycleEnd: Date?
     var spentAmount: CreditInfo?
 

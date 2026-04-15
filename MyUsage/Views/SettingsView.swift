@@ -1,8 +1,10 @@
 import SwiftUI
+import ServiceManagement
 
 /// App settings window.
 struct SettingsView: View {
     @Environment(UsageManager.self) private var manager
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         @Bindable var mgr = manager
@@ -17,8 +19,13 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Providers", systemImage: "square.stack.3d.up")
                 }
+
+            aboutTab
+                .tabItem {
+                    Label("About", systemImage: "info.circle")
+                }
         }
-        .frame(width: 400, height: 240)
+        .frame(width: 420, height: 280)
     }
 
     // MARK: - General
@@ -31,8 +38,18 @@ struct SettingsView: View {
                 }
             }
 
-            // TODO: Launch at Login toggle (Feature 07)
-            // Toggle("Launch at Login", isOn: $launchAtLogin)
+            Toggle("Launch at Login", isOn: $launchAtLogin)
+                .onChange(of: launchAtLogin) { _, newValue in
+                    do {
+                        if newValue {
+                            try SMAppService.mainApp.register()
+                        } else {
+                            try SMAppService.mainApp.unregister()
+                        }
+                    } catch {
+                        launchAtLogin = SMAppService.mainApp.status == .enabled
+                    }
+                }
         }
         .formStyle(.grouped)
         .padding()
@@ -77,11 +94,42 @@ struct SettingsView: View {
 
             Toggle("", isOn: Binding(
                 get: { provider.isEnabled },
-                set: { provider.isEnabled = $0 }
+                set: { newValue in
+                    provider.isEnabled = newValue
+                    UserDefaults.standard.set(newValue, forKey: "provider.\(provider.kind.rawValue).enabled")
+                }
             ))
             .toggleStyle(.switch)
             .labelsHidden()
         }
+    }
+
+    // MARK: - About
+
+    private var aboutTab: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "chart.bar.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.tint)
+
+            Text("MyUsage")
+                .font(.title2.bold())
+
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
+            Text("Version \(version)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Monitor AI coding tool usage from your menu bar.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Link("GitHub", destination: URL(string: "https://github.com/zchan0/MyUsage")!)
+                .font(.caption)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 }
 

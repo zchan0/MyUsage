@@ -21,6 +21,13 @@ Implement the Codex provider: read OAuth tokens from `auth.json`, refresh tokens
 - [ ] Token refresh in `TokenRefresher.swift` (Codex path)
 - [ ] Provider card rendering (reuse `ProviderCard` with Codex styling)
 
+## Implementation Notes
+
+> **Fix (2026-04-15):** `credits.balance` field — OpenAI API may return this as
+> either a JSON number (`5.39`) or a string (`"150.0"`). `CodexCredits` uses a
+> custom `init(from:)` to decode both types. Ref: CodexBar handles the same
+> inconsistency.
+
 ## Unit Tests
 
 - [ ] Parse `auth.json` → extract `access_token`, `refresh_token`, `account_id`, `last_refresh`
@@ -28,9 +35,10 @@ Implement the Codex provider: read OAuth tokens from `auth.json`, refresh tokens
 - [ ] Parse usage response:
   - [ ] `primary_window.used_percent` → `sessionUsage.percentUsed`
   - [ ] `secondary_window.used_percent` → `weeklyUsage.percentUsed`
-  - [ ] `credits.balance` → `credits.balance`
+  - [ ] `credits.balance` → `credits.balance` (Double or String)
   - [ ] `credits.has_credits = false` → credits nil
   - [ ] `plan_type` → `planName`
+- [ ] **`balance` as String** → decoded to Double correctly
 - [ ] Reset timestamps (unix seconds → `Date`)
 - [ ] Auth file lookup order priority
 

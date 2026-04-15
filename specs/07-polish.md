@@ -4,6 +4,12 @@
 
 Final polish: error states, animations, app icon, and launch preparation.
 
+## Implementation Notes
+
+> **Fix (2026-04-15): Refresh button has no visual feedback** — Added spinning
+> animation (`rotationEffect` + `repeatForever`) on the refresh icon while
+> `isRefreshing` is true.
+
 ## Deliverables
 
 - [ ] Error states for each provider card

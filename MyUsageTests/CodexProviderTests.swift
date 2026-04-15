@@ -34,6 +34,7 @@ struct CodexProviderTests {
         let oldDate = Date.now.addingTimeInterval(-9 * 24 * 3600) // 9 days ago
         let isoString = ISO8601DateFormatter().string(from: oldDate)
         let auth = CodexAuthFile(
+            openaiApiKey: nil,
             tokens: CodexTokens(accessToken: "t", refreshToken: "r", idToken: nil, accountId: nil),
             lastRefresh: isoString
         )
@@ -45,6 +46,7 @@ struct CodexProviderTests {
         let recentDate = Date.now.addingTimeInterval(-3600) // 1 hour ago
         let isoString = ISO8601DateFormatter().string(from: recentDate)
         let auth = CodexAuthFile(
+            openaiApiKey: nil,
             tokens: CodexTokens(accessToken: "t", refreshToken: "r", idToken: nil, accountId: nil),
             lastRefresh: isoString
         )
@@ -54,6 +56,7 @@ struct CodexProviderTests {
     @Test("Needs refresh when last_refresh is nil")
     func needsRefreshNil() {
         let auth = CodexAuthFile(
+            openaiApiKey: nil,
             tokens: CodexTokens(accessToken: "t", refreshToken: "r", idToken: nil, accountId: nil),
             lastRefresh: nil
         )
@@ -94,6 +97,28 @@ struct CodexProviderTests {
         #expect(response.rateLimit?.secondaryWindow?.usedPercent == 24)
         #expect(response.credits?.hasCredits == true)
         #expect(response.credits?.balance == 5.39)
+    }
+
+    @Test("Parse usage response with balance as string")
+    func parseUsageBalanceString() throws {
+        let json = """
+        {
+            "plan_type": "pro",
+            "rate_limit": {
+                "primary_window": { "used_percent": 10, "reset_at": 1738300000 }
+            },
+            "credits": {
+                "has_credits": true,
+                "unlimited": false,
+                "balance": "150.0"
+            }
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let response = try JSONDecoder().decode(CodexUsageResponse.self, from: data)
+
+        #expect(response.credits?.balance == 150.0)
+        #expect(response.credits?.hasCredits == true)
     }
 
     @Test("Parse usage without credits")

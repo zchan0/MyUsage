@@ -10,23 +10,19 @@ struct MenuBarIcon: View {
             .foregroundStyle(iconColor)
     }
 
+    private var worstPercent: Double {
+        usageManager.worstUsagePercent
+    }
+
     private var iconName: String {
-        let percent = usageManager.worstUsagePercent
-        if percent > 85 {
-            return "gauge.with.dots.needle.100percent"
-        } else if percent > 60 {
-            return "gauge.with.dots.needle.67percent"
-        } else if percent > 30 {
-            return "gauge.with.dots.needle.33percent"
-        } else {
-            return "gauge.with.dots.needle.0percent"
-        }
+        if worstPercent > 85 { return "chart.bar.fill" }
+        if worstPercent > 60 { return "chart.bar.fill" }
+        return "chart.bar.fill"
     }
 
     private var iconColor: Color {
-        let percent = usageManager.worstUsagePercent
-        if percent > 85 { return .red }
-        if percent > 60 { return .yellow }
+        if worstPercent > 85 { return .red }
+        if worstPercent > 60 { return .yellow }
         return .green
     }
 }

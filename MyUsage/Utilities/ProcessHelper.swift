@@ -3,31 +3,40 @@ import Foundation
 /// Shell command helpers for process discovery (Antigravity).
 enum ProcessHelper {
 
-    /// Run a shell command and return stdout.
-    static func run(_ command: String) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", command]
+    /// Run a shell command and return stdout — runs off main thread.
+    /// Reads pipe data before waitUntilExit to avoid pipe buffer deadlock.
+    static func run(_ command: String) async -> String? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/bin/sh")
+                process.arguments = ["-c", command]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = FileHandle.nullDevice
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                // Read ALL data BEFORE waitUntilExit — prevents pipe buffer deadlock
+                // when stdout exceeds 64KB (e.g. `ps -axww`).
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+
+                continuation.resume(returning: String(data: data, encoding: .utf8))
+            }
         }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)
     }
 
     /// Find Antigravity language server process.
     /// Returns (pid, csrfToken, extensionServerPort) if found.
-    static func findAntigravityProcess() -> (pid: Int, csrfToken: String, httpPort: Int?)? {
-        guard let output = run("ps -ax -o pid=,command=") else { return nil }
+    static func findAntigravityProcess() async -> (pid: Int, csrfToken: String, httpPort: Int?)? {
+        guard let output = await run("ps -axww -o pid=,command=") else { return nil }
 
         for line in output.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -55,8 +64,8 @@ enum ProcessHelper {
     }
 
     /// Find listening TCP ports for a given PID.
-    static func findListeningPorts(pid: Int) -> [Int] {
-        guard let output = run("lsof -nP -iTCP -sTCP:LISTEN -a -p \(pid)") else { return [] }
+    static func findListeningPorts(pid: Int) async -> [Int] {
+        guard let output = await run("lsof -nP -iTCP -sTCP:LISTEN -a -p \(pid)") else { return [] }
 
         var ports: [Int] = []
         for line in output.components(separatedBy: "\n") {

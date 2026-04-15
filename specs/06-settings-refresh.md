@@ -4,6 +4,19 @@
 
 Build the Settings window and implement automatic periodic refresh with configurable intervals.
 
+## Implementation Notes
+
+> **Fix (2026-04-15): Settings button unresponsive** — Footer used
+> `NSApp.sendAction(Selector(("showSettingsWindow:")))`, a private AppKit
+> selector that doesn't work reliably inside `MenuBarExtra` popover. Replaced
+> with SwiftUI-native `SettingsLink` (macOS 14+).
+>
+> **Fix (2026-04-15): Refresh only fires once** — `.task {}` in popover body
+> only runs once per SwiftUI view lifetime, so subsequent popover opens didn't
+> trigger refresh. Split into:
+> - `.onAppear` → `refreshAll()` (fires every popover open)
+> - `.task(id: "init")` → `startTimer()` (fires once)
+
 ## Deliverables
 
 - [ ] `SettingsView.swift` — Full settings implementation

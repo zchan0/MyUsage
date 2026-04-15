@@ -18,6 +18,16 @@ Implement the Cursor provider: read auth from local SQLite DB, refresh JWT, fetc
 
 Existing Cursor extension code at `~/Developer/Copilot/CursorUsageMonitor/src/services/` — specifically `auth.ts` (SQLite token read) and `cursorApi.ts` (usage API + data parsing).
 
+## Implementation Notes
+
+> **Fix (2026-04-15): Usage values inaccurate** — `mapToSnapshot` used hardcoded
+> budget + derived on-demand calculation. This diverged from
+> CursorUsageMonitor's values. Fix:
+> 1. Use `planUsage.limit` (API-reported budget) before hardcoded fallback.
+> 2. Use `planUsage.includedSpend` (API-reported included spend) when available.
+> 3. Use `spendLimitUsage.individualUsed` for on-demand (API-reported).
+> 4. Hardcoded `includedBudgetCents` only used as last-resort fallback.
+
 ## Deliverables
 
 - [ ] `CursorProvider.swift` — Conforms to `UsageProvider`

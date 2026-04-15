@@ -54,8 +54,12 @@ final class UsageManager {
         }
     }
 
-    /// Register a provider.
+    /// Register a provider, restoring persisted enabled state.
     func register(_ provider: any UsageProvider) {
+        let key = "provider.\(provider.kind.rawValue).enabled"
+        if UserDefaults.standard.object(forKey: key) != nil {
+            provider.isEnabled = UserDefaults.standard.bool(forKey: key)
+        }
         providers.append(provider)
     }
 

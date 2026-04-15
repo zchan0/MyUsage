@@ -104,26 +104,39 @@ struct ProviderCard: View {
 
     @ViewBuilder
     private func billingCycleContent(_ snapshot: UsageSnapshot) -> some View {
-        if let total = snapshot.totalUsagePercent {
-            usageBar(label: "Total Usage", percent: total)
+        // Included budget
+        if let spent = snapshot.spentAmount {
+            usageBar(
+                label: "Included (\(spent.formatted))",
+                percent: snapshot.totalUsagePercent ?? 0
+            )
         }
 
-        // Auto / API split
-        if let auto_ = snapshot.autoUsagePercent, let api = snapshot.apiUsagePercent {
-            HStack(spacing: 4) {
-                Text("Auto: \(Int(auto_))%")
-                Text("·")
-                Text("API: \(Int(api))%")
+        // On-demand spending
+        if let onDemand = snapshot.onDemandSpend {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("On-Demand")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(onDemand.formatted)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.orange)
+                }
+                if let limit = onDemand.limit, limit > 0 {
+                    ProgressBar(percent: onDemand.amount / limit * 100)
+                }
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
         }
 
-        // Spending
+        // Billing cycle info
         HStack {
-            if let spent = snapshot.spentAmount {
-                Text(spent.formatted)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+            if let email = snapshot.email {
+                Text(email)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
 
             Spacer()
@@ -194,6 +207,17 @@ struct ProviderCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            Spacer()
+
+            Button {
+                Task { await provider.refresh() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }
@@ -221,6 +245,7 @@ struct ProgressBar: View {
                 Capsule()
                     .fill(barColor)
                     .frame(width: max(0, geo.size.width * min(percent, 100) / 100))
+                    .animation(.easeInOut(duration: 0.4), value: percent)
             }
         }
         .frame(height: height)
@@ -249,6 +274,7 @@ struct CircularProgressRing: View {
                 .trim(from: 0, to: min(percent, 100) / 100)
                 .stroke(ringColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.4), value: percent)
 
             Text("\(Int(percent))%")
                 .font(.system(size: size * 0.24, weight: .semibold, design: .monospaced))

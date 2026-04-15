@@ -71,7 +71,10 @@ final class CursorProvider: UsageProvider {
 
     // MARK: - Constants
 
-    private static let dbPath = "\(NSHomeDirectory())/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+    private static let dbPath: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+    }()
     private static let clientID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
     private static let usageURL = URL(string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage")!
     private static let planURL = URL(string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetPlanInfo")!
@@ -241,7 +244,13 @@ final class CursorProvider: UsageProvider {
         return try JSONDecoder().decode(CursorPlanInfoResponse.self, from: data)
     }
 
-    // MARK: - Snapshot Mapping
+    /// Known plan included budgets (cents)
+    nonisolated static let includedBudgetCents: [String: Int] = [
+        "pro": 2_000, "hobby": 2_000,
+        "pro_plus": 7_000,
+        "ultra": 40_000,
+        "team": 2_000,
+    ]
 
     nonisolated static func mapToSnapshot(
         usage: CursorUsageResponse,
@@ -254,14 +263,10 @@ final class CursorProvider: UsageProvider {
         snapshot.email = email
 
         // Plan name
+        let rawPlan = plan?.planInfo?.planName?.lowercased() ?? membership?.lowercased() ?? ""
         snapshot.planName = plan?.planInfo?.planName ?? membership.map {
             $0.prefix(1).uppercased() + $0.dropFirst()
         }
-
-        // Total usage
-        snapshot.totalUsagePercent = usage.planUsage?.totalPercentUsed
-        snapshot.autoUsagePercent = usage.planUsage?.autoPercentUsed
-        snapshot.apiUsagePercent = usage.planUsage?.apiPercentUsed
 
         // Billing cycle end
         if let endStr = usage.billingCycleEnd ?? plan?.planInfo?.billingCycleEnd,
@@ -269,19 +274,44 @@ final class CursorProvider: UsageProvider {
             snapshot.billingCycleEnd = Date(timeIntervalSince1970: endMs / 1000)
         }
 
-        // Spending
-        if let planUsage = usage.planUsage {
-            let spent = Double(planUsage.totalSpend ?? 0) / 100.0
-            let limit = planUsage.limit.map { Double($0) / 100.0 }
-            snapshot.spentAmount = CreditInfo(amount: spent, limit: limit, currency: "USD")
+        // Included budget: prefer API limit > plan includedAmountCents > hardcoded
+        let budgetCents = usage.planUsage?.limit
+            ?? plan?.planInfo?.includedAmountCents
+            ?? includedBudgetCents[rawPlan]
+            ?? 0
+
+        // Included spend: prefer API includedSpend > capped totalSpend
+        let includedUsedCents: Int
+        if let apiIncluded = usage.planUsage?.includedSpend {
+            includedUsedCents = apiIncluded
+        } else {
+            includedUsedCents = min(usage.planUsage?.totalSpend ?? 0, budgetCents)
         }
 
-        // On-demand
-        if let spendLimit = usage.spendLimitUsage,
-           let indLimit = spendLimit.individualLimit, indLimit > 0 {
-            let spent = Double(spendLimit.individualUsed ?? 0) / 100.0
-            let limit = Double(indLimit) / 100.0
-            snapshot.onDemandSpend = CreditInfo(amount: spent, limit: limit, currency: "USD")
+        if budgetCents > 0 {
+            let percent = Double(includedUsedCents) / Double(budgetCents) * 100
+            snapshot.spentAmount = CreditInfo(
+                amount: Double(includedUsedCents) / 100.0,
+                limit: Double(budgetCents) / 100.0,
+                currency: "USD"
+            )
+            snapshot.totalUsagePercent = min(percent, 100)
+        }
+
+        // On-demand: prefer spendLimitUsage (API-reported)
+        let spendLimit = usage.spendLimitUsage
+        let onDemandUsedCents = spendLimit?.individualUsed
+            ?? spendLimit?.totalSpend
+            ?? max(0, (usage.planUsage?.totalSpend ?? 0) - budgetCents)
+
+        if onDemandUsedCents > 0 {
+            let indLimit = spendLimit?.individualLimit
+            let limitDollars = indLimit.flatMap { $0 > 0 ? Double($0) / 100.0 : nil }
+            snapshot.onDemandSpend = CreditInfo(
+                amount: Double(onDemandUsedCents) / 100.0,
+                limit: limitDollars,
+                currency: "USD"
+            )
         }
 
         return snapshot

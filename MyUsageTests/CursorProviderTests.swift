@@ -63,8 +63,9 @@ struct CursorProviderTests {
 
     // MARK: - Snapshot Mapping
 
-    @Test("Map usage + plan to snapshot")
-    func mapSnapshot() {
+    @Test("Map usage with included budget under limit")
+    func mapSnapshotUnderLimit() {
+        // Ultra plan, spent $232.22 out of $400 budget
         let usage = CursorUsageResponse(
             billingCycleStart: "1768399334000",
             billingCycleEnd: "1771077734000",
@@ -76,7 +77,7 @@ struct CursorProviderTests {
             ),
             spendLimitUsage: .init(
                 totalSpend: 0, individualLimit: 10000,
-                individualUsed: 500, individualRemaining: 9500,
+                individualUsed: 0, individualRemaining: 10000,
                 pooledLimit: nil, pooledUsed: nil,
                 limitType: "user"
             )
@@ -87,16 +88,48 @@ struct CursorProviderTests {
 
         let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: plan, email: "test@email.com", membership: nil)
 
-        #expect(snapshot.totalUsagePercent == 46.0)
-        #expect(snapshot.autoUsagePercent == 12.0)
-        #expect(snapshot.apiUsagePercent == 34.0)
         #expect(snapshot.planName == "Ultra")
         #expect(snapshot.email == "test@email.com")
-        #expect(snapshot.spentAmount?.amount == 232.22)  // 23222 cents
-        #expect(snapshot.spentAmount?.limit == 400.0)     // 40000 cents
-        #expect(snapshot.onDemandSpend?.amount == 5.0)    // 500 cents
-        #expect(snapshot.onDemandSpend?.limit == 100.0)   // 10000 cents
+        // Included: $232.22 / $400.00 = 58.055%
+        #expect(snapshot.spentAmount?.amount == 232.22)
+        #expect(snapshot.spentAmount?.limit == 400.0)
+        #expect(snapshot.totalUsagePercent != nil)
+        #expect(snapshot.totalUsagePercent! > 50)
+        // No on-demand yet (under budget)
+        #expect(snapshot.onDemandSpend == nil)
         #expect(snapshot.billingCycleEnd != nil)
+    }
+
+    @Test("Map usage exceeding included budget")
+    func mapSnapshotOverBudget() {
+        // Team plan ($20 budget), included exhausted, $5 on-demand
+        let usage = CursorUsageResponse(
+            billingCycleStart: nil, billingCycleEnd: nil,
+            planUsage: .init(
+                totalSpend: 2500, includedSpend: 2000,
+                remaining: 0, limit: 2000,
+                autoPercentUsed: nil, apiPercentUsed: nil,
+                totalPercentUsed: nil
+            ),
+            spendLimitUsage: .init(
+                totalSpend: 500, individualLimit: 5000,
+                individualUsed: 500, individualRemaining: 4500,
+                pooledLimit: nil, pooledUsed: nil,
+                limitType: "user"
+            )
+        )
+
+        let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: nil, email: nil, membership: "team")
+
+        #expect(snapshot.planName == "Team")
+        // Included: $20/$20 = 100%
+        #expect(snapshot.spentAmount?.amount == 20.0)
+        #expect(snapshot.spentAmount?.limit == 20.0)
+        #expect(snapshot.totalUsagePercent == 100)
+        // On-demand: $5 (from spendLimitUsage.individualUsed)
+        #expect(snapshot.onDemandSpend != nil)
+        #expect(snapshot.onDemandSpend?.amount == 5.0)
+        #expect(snapshot.onDemandSpend?.limit == 50.0)
     }
 
     @Test("Map without plan info, uses membership fallback")
@@ -104,35 +137,38 @@ struct CursorProviderTests {
         let usage = CursorUsageResponse(
             billingCycleStart: nil, billingCycleEnd: nil,
             planUsage: .init(
-                totalSpend: nil, includedSpend: nil,
+                totalSpend: 500, includedSpend: nil,
                 remaining: nil, limit: nil,
                 autoPercentUsed: nil, apiPercentUsed: nil,
-                totalPercentUsed: 20.0
+                totalPercentUsed: nil
             ),
             spendLimitUsage: nil
         )
         let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: nil, email: nil, membership: "pro")
 
         #expect(snapshot.planName == "Pro")
-        #expect(snapshot.totalUsagePercent == 20.0)
+        // Pro budget = $20, spent $5 = 25%
+        #expect(snapshot.spentAmount?.amount == 5.0)
+        #expect(snapshot.totalUsagePercent == 25.0)
     }
 
-    @Test("Map without spend limit — no on-demand")
-    func mapNoSpendLimit() {
+    @Test("Map with zero spend")
+    func mapZeroSpend() {
         let usage = CursorUsageResponse(
             billingCycleStart: nil, billingCycleEnd: nil,
             planUsage: .init(
-                totalSpend: 1000, includedSpend: 1000,
-                remaining: 1000, limit: 2000,
+                totalSpend: 0, includedSpend: nil,
+                remaining: nil, limit: nil,
                 autoPercentUsed: nil, apiPercentUsed: nil,
-                totalPercentUsed: 50.0
+                totalPercentUsed: nil
             ),
             spendLimitUsage: nil
         )
-        let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: nil, email: nil, membership: nil)
+        let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: nil, email: nil, membership: "pro")
 
+        #expect(snapshot.totalUsagePercent == 0)
+        #expect(snapshot.spentAmount?.amount == 0)
         #expect(snapshot.onDemandSpend == nil)
-        #expect(snapshot.spentAmount?.amount == 10.0)
     }
 
     @Test("Billing cycle date from unix ms string")

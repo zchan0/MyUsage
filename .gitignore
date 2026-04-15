@@ -29,6 +29,12 @@ build/
 Packages/
 Package.resolved
 
+# IDE
+.vscode/
+
+# Coverage
+*.profraw
+
 # Misc
 *.swp
 *~

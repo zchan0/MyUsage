@@ -4,17 +4,24 @@ import Foundation
 
 /// Codex CLI auth.json structure.
 struct CodexAuthFile: Codable, Sendable {
+    let openaiApiKey: String?    // May be null in auth.json
     let tokens: CodexTokens?
     let lastRefresh: String?  // ISO 8601
 
     enum CodingKeys: String, CodingKey {
+        case openaiApiKey = "OPENAI_API_KEY"
         case tokens
         case lastRefresh = "last_refresh"
     }
 
     /// Whether token needs refresh (last_refresh > 8 days ago).
     var needsRefresh: Bool {
-        guard let lastRefresh, let date = ISO8601DateFormatter().date(from: lastRefresh) else {
+        guard let lastRefresh else { return true }
+        // Try with fractional seconds first, then without
+        let fmtFrac = ISO8601DateFormatter()
+        fmtFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fmtBasic = ISO8601DateFormatter()
+        guard let date = fmtFrac.date(from: lastRefresh) ?? fmtBasic.date(from: lastRefresh) else {
             return true
         }
         return date.timeIntervalSinceNow < -(8 * 24 * 3600) // > 8 days ago
@@ -72,15 +79,31 @@ struct CodexWindow: Codable, Sendable {
     }
 }
 
-struct CodexCredits: Codable, Sendable {
+struct CodexCredits: Sendable, Equatable {
     let hasCredits: Bool?
     let unlimited: Bool?
-    let balance: Double?      // dollars
+    let balance: Double?
+}
 
+extension CodexCredits: Codable {
     enum CodingKeys: String, CodingKey {
         case hasCredits = "has_credits"
         case unlimited
         case balance
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hasCredits = try container.decodeIfPresent(Bool.self, forKey: .hasCredits)
+        unlimited = try container.decodeIfPresent(Bool.self, forKey: .unlimited)
+        // API may return balance as Double or String
+        if let d = try? container.decodeIfPresent(Double.self, forKey: .balance) {
+            balance = d
+        } else if let s = try? container.decodeIfPresent(String.self, forKey: .balance) {
+            balance = Double(s)
+        } else {
+            balance = nil
+        }
     }
 }
 
@@ -128,12 +151,13 @@ final class CodexProvider: UsageProvider {
 
     /// Search paths for auth.json, in priority order.
     private static var authFilePaths: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
         var paths: [String] = []
         if let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"] {
             paths.append("\(codexHome)/auth.json")
         }
-        paths.append("\(NSHomeDirectory())/.config/codex/auth.json")
-        paths.append("\(NSHomeDirectory())/.codex/auth.json")
+        paths.append("\(home)/.config/codex/auth.json")
+        paths.append("\(home)/.codex/auth.json")
         return paths
     }
 
@@ -159,16 +183,23 @@ final class CodexProvider: UsageProvider {
 
             var accessToken = tokens.accessToken
 
-            // Refresh if needed
-            if auth.needsRefresh {
-                let refreshed = try await refreshToken(tokens.refreshToken)
-                accessToken = refreshed.accessToken
+            // Strategy 1: Try API with existing token first
+            do {
+                let usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
+                snapshot = Self.mapToSnapshot(usage)
+                return
+            } catch ProviderError.apiFailed(let code) where code == 401 || code == 403 {
+                // Token expired — try refresh
+            } catch {
+                // If needsRefresh was true, try refreshing before giving up
+                guard auth.needsRefresh else { throw error }
             }
 
-            // Fetch usage
-            let usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
+            // Strategy 2: Refresh token and retry
+            let refreshed = try await refreshToken(tokens.refreshToken)
+            accessToken = refreshed.accessToken
 
-            // Map to snapshot
+            let usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
             snapshot = Self.mapToSnapshot(usage)
 
         } catch {

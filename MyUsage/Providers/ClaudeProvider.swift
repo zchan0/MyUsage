@@ -97,7 +97,10 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Constants
 
-    private static let credentialFilePath = "\(NSHomeDirectory())/.claude/.credentials.json"
+    private static let credentialFilePath: String = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/.claude/.credentials.json"
+    }()
     private static let keychainService = "Claude Code-credentials"
     private static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!

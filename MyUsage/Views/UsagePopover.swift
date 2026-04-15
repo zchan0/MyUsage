@@ -6,7 +6,6 @@ struct UsagePopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             header
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
@@ -15,7 +14,6 @@ struct UsagePopover: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            // Provider cards
             if enabledProviders.isEmpty {
                 emptyState
             } else {
@@ -33,15 +31,16 @@ struct UsagePopover: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            // Footer
             footer
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
         }
         .frame(width: 340)
-        .task {
-            await manager.refreshAll()
+        .task(id: "init") {
             manager.startTimer()
+        }
+        .onAppear {
+            Task { await manager.refreshAll() }
         }
     }
 
@@ -68,7 +67,7 @@ struct UsagePopover: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12))
-                    .rotationEffect(manager.isRefreshing ? .degrees(360) : .zero)
+                    .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0))
                     .animation(
                         manager.isRefreshing
                             ? .linear(duration: 1).repeatForever(autoreverses: false)
@@ -103,10 +102,8 @@ struct UsagePopover: View {
     private var footer: some View {
         HStack {
             Spacer()
-            Button {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
+
+            SettingsLink {
                 Image(systemName: "gear")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -118,7 +115,19 @@ struct UsagePopover: View {
     // MARK: - Helpers
 
     private var enabledProviders: [any UsageProvider] {
-        manager.providers.filter { $0.isEnabled }
+        manager.providers
+            .filter { $0.isEnabled }
+            .sorted { a, b in
+                sortPriority(a) < sortPriority(b)
+            }
+    }
+
+    private func sortPriority(_ provider: any UsageProvider) -> Int {
+        if provider.snapshot != nil { return 0 }
+        if provider.isLoading { return 1 }
+        if provider.error != nil { return 2 }
+        if !provider.isAvailable { return 3 }
+        return 4
     }
 }
 
