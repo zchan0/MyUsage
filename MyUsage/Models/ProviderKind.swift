@@ -31,10 +31,10 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
     /// SF Symbol name for the provider.
     var iconName: String {
         switch self {
-        case .claude: "brain.head.profile"
-        case .codex: "terminal"
-        case .cursor: "cursorarrow.click.2"
-        case .antigravity: "sparkles"
+        case .claude: "brain"
+        case .codex: "chevron.left.forwardslash.chevron.right"
+        case .cursor: "cursorarrow.rays"
+        case .antigravity: "atom"
         }
     }
 }

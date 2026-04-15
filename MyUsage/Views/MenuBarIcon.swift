@@ -5,24 +5,18 @@ struct MenuBarIcon: View {
     let usageManager: UsageManager
 
     var body: some View {
-        Image(systemName: iconName)
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(iconColor)
+        let percent = usageManager.trackedUsagePercent
+        let color = iconColor(for: percent)
+
+        Image(systemName: "gauge.with.needle.fill")
+            .symbolRenderingMode(usageManager.iconFollowsUsage ? .palette : .monochrome)
+            .foregroundStyle(color, color.opacity(0.4))
     }
 
-    private var worstPercent: Double {
-        usageManager.worstUsagePercent
-    }
-
-    private var iconName: String {
-        if worstPercent > 85 { return "chart.bar.fill" }
-        if worstPercent > 60 { return "chart.bar.fill" }
-        return "chart.bar.fill"
-    }
-
-    private var iconColor: Color {
-        if worstPercent > 85 { return .red }
-        if worstPercent > 60 { return .yellow }
+    private func iconColor(for percent: Double) -> Color {
+        guard usageManager.iconFollowsUsage else { return .primary }
+        if percent > 85 { return .red }
+        if percent > 60 { return .yellow }
         return .green
     }
 }

@@ -25,31 +25,50 @@ struct SettingsView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 420, height: 280)
+        .frame(width: 420, height: 340)
     }
 
     // MARK: - General
 
     private func generalTab(refreshInterval: Binding<RefreshInterval>) -> some View {
-        Form {
-            Picker("Refresh Interval", selection: refreshInterval) {
-                ForEach(RefreshInterval.allCases) { interval in
-                    Text(interval.displayName).tag(interval)
+        @Bindable var mgr = manager
+
+        return Form {
+            Section("Refresh") {
+                Picker("Interval", selection: refreshInterval) {
+                    ForEach(RefreshInterval.allCases) { interval in
+                        Text(interval.displayName).tag(interval)
+                    }
                 }
             }
 
-            Toggle("Launch at Login", isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, newValue in
-                    do {
-                        if newValue {
-                            try SMAppService.mainApp.register()
-                        } else {
-                            try SMAppService.mainApp.unregister()
+            Section("Menu Bar Icon") {
+                Toggle("Color follows usage", isOn: $mgr.iconFollowsUsage)
+
+                if manager.iconFollowsUsage {
+                    Picker("Track", selection: $mgr.iconTrackProvider) {
+                        Text("Worst (all providers)").tag("")
+                        ForEach(manager.providers, id: \.kind) { provider in
+                            Text(provider.kind.displayName).tag(provider.kind.rawValue)
                         }
-                    } catch {
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
                 }
+            }
+
+            Section("System") {
+                Toggle("Launch at Login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        do {
+                            if newValue {
+                                try SMAppService.mainApp.register()
+                            } else {
+                                try SMAppService.mainApp.unregister()
+                            }
+                        } catch {
+                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                        }
+                    }
+            }
         }
         .formStyle(.grouped)
         .padding()

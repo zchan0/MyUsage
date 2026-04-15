@@ -56,47 +56,19 @@ struct ProviderCard: View {
         case .antigravity:
             perModelContent(snapshot)
         }
+
+        cardFooter(snapshot)
     }
 
     // MARK: - Claude / Codex: rolling windows
 
     @ViewBuilder
     private func rollingWindowContent(_ snapshot: UsageSnapshot) -> some View {
-        HStack(spacing: 12) {
-            // Circular ring for session
-            if let session = snapshot.sessionUsage {
-                CircularProgressRing(
-                    percent: session.percentUsed,
-                    size: 44
-                )
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                if let session = snapshot.sessionUsage {
-                    usageBar(label: "Session (5h)", percent: session.percentUsed)
-                }
-                if let weekly = snapshot.weeklyUsage {
-                    usageBar(label: "Weekly (7d)", percent: weekly.percentUsed)
-                }
-            }
+        if let session = snapshot.sessionUsage {
+            usageBar(label: "Session (5h)", percent: session.percentUsed)
         }
-
-        // Bottom info
-        HStack {
-            if let countdown = snapshot.sessionUsage?.resetCountdown {
-                Label(countdown, systemImage: "clock")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if let email = snapshot.email {
-                Text(email)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
+        if let weekly = snapshot.weeklyUsage {
+            usageBar(label: "Weekly (7d)", percent: weekly.percentUsed)
         }
     }
 
@@ -104,7 +76,6 @@ struct ProviderCard: View {
 
     @ViewBuilder
     private func billingCycleContent(_ snapshot: UsageSnapshot) -> some View {
-        // Included budget
         if let spent = snapshot.spentAmount {
             usageBar(
                 label: "Included (\(spent.formatted))",
@@ -112,7 +83,6 @@ struct ProviderCard: View {
             )
         }
 
-        // On-demand spending
         if let onDemand = snapshot.onDemandSpend {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
@@ -129,25 +99,6 @@ struct ProviderCard: View {
                 }
             }
         }
-
-        // Billing cycle info
-        HStack {
-            if let email = snapshot.email {
-                Text(email)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if let cycleEnd = snapshot.billingCycleEnd {
-                let daysLeft = Calendar.current.dateComponents([.day], from: .now, to: cycleEnd).day ?? 0
-                Label("\(max(0, daysLeft))d left", systemImage: "calendar")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
     }
 
     // MARK: - Antigravity: per-model bars
@@ -157,14 +108,40 @@ struct ProviderCard: View {
         ForEach(snapshot.modelQuotas) { quota in
             usageBar(label: quota.label, percent: quota.percentUsed)
         }
+    }
 
-        if let resetTime = snapshot.modelQuotas.first?.resetsAt {
-            let countdown = UsageWindow(percentUsed: 0, resetsAt: resetTime).resetCountdown
-            if let countdown {
-                Label("Resets in \(countdown)", systemImage: "clock")
+    // MARK: - Unified footer
+
+    private func cardFooter(_ snapshot: UsageSnapshot) -> some View {
+        HStack {
+            if let reset = resetText(snapshot) {
+                Label(reset, systemImage: "clock")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer()
+
+            if let email = snapshot.email {
+                Text(email)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func resetText(_ snapshot: UsageSnapshot) -> String? {
+        switch provider.kind {
+        case .claude, .codex:
+            return snapshot.sessionUsage?.resetCountdown
+        case .cursor:
+            guard let cycleEnd = snapshot.billingCycleEnd else { return nil }
+            let daysLeft = Calendar.current.dateComponents([.day], from: .now, to: cycleEnd).day ?? 0
+            return "\(max(0, daysLeft))d left"
+        case .antigravity:
+            guard let resetTime = snapshot.modelQuotas.first?.resetsAt else { return nil }
+            return UsageWindow(percentUsed: 0, resetsAt: resetTime).resetCountdown
         }
     }
 
@@ -258,33 +235,3 @@ struct ProgressBar: View {
     }
 }
 
-// MARK: - Circular Progress Ring
-
-struct CircularProgressRing: View {
-    let percent: Double
-    var size: CGFloat = 44
-    private let lineWidth: CGFloat = 4
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(.quaternary, lineWidth: lineWidth)
-
-            Circle()
-                .trim(from: 0, to: min(percent, 100) / 100)
-                .stroke(ringColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 0.4), value: percent)
-
-            Text("\(Int(percent))%")
-                .font(.system(size: size * 0.24, weight: .semibold, design: .monospaced))
-        }
-        .frame(width: size, height: size)
-    }
-
-    private var ringColor: Color {
-        if percent > 85 { return .red }
-        if percent > 60 { return .yellow }
-        return .green
-    }
-}

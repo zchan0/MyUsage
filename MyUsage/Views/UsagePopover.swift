@@ -101,6 +101,13 @@ struct UsagePopover: View {
 
     private var footer: some View {
         HStack {
+            Button("Quit") {
+                NSApp.terminate(nil)
+            }
+            .font(.caption2)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+
             Spacer()
 
             SettingsLink {
@@ -109,6 +116,11 @@ struct UsagePopover: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            })
         }
     }
 

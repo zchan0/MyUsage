@@ -21,6 +21,16 @@ final class UsageManager {
         }
     }
 
+    /// Whether menu bar icon color follows usage.
+    var iconFollowsUsage: Bool {
+        didSet { UserDefaults.standard.set(iconFollowsUsage, forKey: "iconFollowsUsage") }
+    }
+
+    /// Which provider drives icon color. Empty string = worst across all.
+    var iconTrackProvider: String {
+        didSet { UserDefaults.standard.set(iconTrackProvider, forKey: "iconTrackProvider") }
+    }
+
     // MARK: - Private
 
     private var refreshTask: Task<Void, Never>?
@@ -30,8 +40,9 @@ final class UsageManager {
     init() {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
+        self.iconFollowsUsage = UserDefaults.standard.object(forKey: "iconFollowsUsage") as? Bool ?? true
+        self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider") ?? ""
 
-        // Register providers — each auto-detects availability
         register(ClaudeProvider())
         register(CodexProvider())
         register(CursorProvider())
@@ -69,6 +80,17 @@ final class UsageManager {
             .filter { $0.isEnabled }
             .compactMap { $0.snapshot?.worstUsagePercent }
             .max() ?? 0
+    }
+
+    /// Usage percent that drives the menu bar icon color.
+    var trackedUsagePercent: Double {
+        guard iconFollowsUsage else { return 0 }
+        if iconTrackProvider.isEmpty {
+            return worstUsagePercent
+        }
+        return providers
+            .first { $0.kind.rawValue == iconTrackProvider && $0.isEnabled }?
+            .snapshot?.worstUsagePercent ?? 0
     }
 
     /// Start the auto-refresh timer.
