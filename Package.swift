@@ -8,7 +8,10 @@ let package = Package(
         .executableTarget(
             name: "MyUsage",
             path: "MyUsage",
-            exclude: ["Resources/Info.plist"]
+            exclude: ["Resources/Info.plist"],
+            resources: [
+                .copy("Resources/Icons")
+            ]
         ),
         .testTarget(
             name: "MyUsageTests",

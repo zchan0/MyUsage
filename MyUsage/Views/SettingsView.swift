@@ -43,14 +43,10 @@ struct SettingsView: View {
             }
 
             Section("Menu Bar Icon") {
-                Toggle("Color follows usage", isOn: $mgr.iconFollowsUsage)
-
-                if manager.iconFollowsUsage {
-                    Picker("Track", selection: $mgr.iconTrackProvider) {
-                        Text("Worst (all providers)").tag("")
-                        ForEach(manager.providers, id: \.kind) { provider in
-                            Text(provider.kind.displayName).tag(provider.kind.rawValue)
-                        }
+                Picker("Show usage", selection: $mgr.iconTrackProvider) {
+                    Text("Icon only").tag("")
+                    ForEach(manager.providers, id: \.kind) { provider in
+                        Text(provider.kind.displayName).tag(provider.kind.rawValue)
                     }
                 }
             }
@@ -77,14 +73,22 @@ struct SettingsView: View {
     // MARK: - Providers
 
     private var providersTab: some View {
-        Form {
-            if manager.providers.isEmpty {
-                Text("No providers detected yet.")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(manager.providers, id: \.kind) { provider in
-                    providerRow(provider)
+        @Bindable var mgr = manager
+
+        return Form {
+            Section {
+                List {
+                    ForEach(manager.providerOrder, id: \.self) { kindRaw in
+                        if let provider = manager.providers.first(where: { $0.kind.rawValue == kindRaw }) {
+                            providerRow(provider)
+                        }
+                    }
+                    .onMove { source, destination in
+                        manager.moveProvider(from: source, to: destination)
+                    }
                 }
+            } header: {
+                Text("Drag to reorder")
             }
         }
         .formStyle(.grouped)
@@ -93,9 +97,7 @@ struct SettingsView: View {
 
     private func providerRow(_ provider: any UsageProvider) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: provider.kind.iconName)
-                .foregroundStyle(provider.kind.accentColor)
-                .frame(width: 20)
+            ProviderIcon(kind: provider.kind, size: 20)
 
             Text(provider.kind.displayName)
 

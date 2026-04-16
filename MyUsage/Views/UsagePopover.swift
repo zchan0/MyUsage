@@ -127,19 +127,7 @@ struct UsagePopover: View {
     // MARK: - Helpers
 
     private var enabledProviders: [any UsageProvider] {
-        manager.providers
-            .filter { $0.isEnabled }
-            .sorted { a, b in
-                sortPriority(a) < sortPriority(b)
-            }
-    }
-
-    private func sortPriority(_ provider: any UsageProvider) -> Int {
-        if provider.snapshot != nil { return 0 }
-        if provider.isLoading { return 1 }
-        if provider.error != nil { return 2 }
-        if !provider.isAvailable { return 3 }
-        return 4
+        manager.orderedProviders.filter { $0.isEnabled }
     }
 }
 

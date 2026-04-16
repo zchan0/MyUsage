@@ -21,14 +21,14 @@ final class UsageManager {
         }
     }
 
-    /// Whether menu bar icon color follows usage.
-    var iconFollowsUsage: Bool {
-        didSet { UserDefaults.standard.set(iconFollowsUsage, forKey: "iconFollowsUsage") }
-    }
-
-    /// Which provider drives icon color. Empty string = worst across all.
+    /// Which provider to show usage for in the menu bar. Empty string = none.
     var iconTrackProvider: String {
         didSet { UserDefaults.standard.set(iconTrackProvider, forKey: "iconTrackProvider") }
+    }
+
+    /// Custom display order for providers.
+    var providerOrder: [String] {
+        didSet { UserDefaults.standard.set(providerOrder, forKey: "providerOrder") }
     }
 
     // MARK: - Private
@@ -40,8 +40,9 @@ final class UsageManager {
     init() {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
-        self.iconFollowsUsage = UserDefaults.standard.object(forKey: "iconFollowsUsage") as? Bool ?? true
         self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider") ?? ""
+        self.providerOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
+            ?? ProviderKind.allCases.map(\.rawValue)
 
         register(ClaudeProvider())
         register(CodexProvider())
@@ -74,6 +75,20 @@ final class UsageManager {
         providers.append(provider)
     }
 
+    /// Providers sorted by user-defined order.
+    var orderedProviders: [any UsageProvider] {
+        providers.sorted { a, b in
+            let ai = providerOrder.firstIndex(of: a.kind.rawValue) ?? Int.max
+            let bi = providerOrder.firstIndex(of: b.kind.rawValue) ?? Int.max
+            return ai < bi
+        }
+    }
+
+    /// Move a provider from one position to another.
+    func moveProvider(from source: IndexSet, to destination: Int) {
+        providerOrder.move(fromOffsets: source, toOffset: destination)
+    }
+
     /// The worst usage percent across all enabled providers.
     var worstUsagePercent: Double {
         providers
@@ -82,15 +97,24 @@ final class UsageManager {
             .max() ?? 0
     }
 
-    /// Usage percent that drives the menu bar icon color.
-    var trackedUsagePercent: Double {
-        guard iconFollowsUsage else { return 0 }
-        if iconTrackProvider.isEmpty {
-            return worstUsagePercent
+    /// Short text for the menu bar label, based on tracked provider.
+    var menuBarDisplayText: String? {
+        guard !iconTrackProvider.isEmpty,
+              let provider = providers.first(where: { $0.kind.rawValue == iconTrackProvider && $0.isEnabled }),
+              let snapshot = provider.snapshot else { return nil }
+
+        switch provider.kind {
+        case .cursor:
+            if let od = snapshot.onDemandSpend, od.amount > 0 {
+                return String(format: "$%.0f", od.amount)
+            }
+            if let spent = snapshot.spentAmount {
+                return String(format: "$%.0f", spent.amount)
+            }
+            return nil
+        case .claude, .codex, .antigravity:
+            return "\(Int(snapshot.worstUsagePercent))%"
         }
-        return providers
-            .first { $0.kind.rawValue == iconTrackProvider && $0.isEnabled }?
-            .snapshot?.worstUsagePercent ?? 0
     }
 
     /// Start the auto-refresh timer.

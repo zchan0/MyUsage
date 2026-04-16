@@ -8,10 +8,7 @@ struct ProviderCard: View {
         VStack(alignment: .leading, spacing: 8) {
             // Header: icon + name + plan badge
             HStack(spacing: 8) {
-                Image(systemName: provider.kind.iconName)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(provider.kind.accentColor)
-                    .frame(width: 20, height: 20)
+                ProviderIcon(kind: provider.kind, size: 20)
 
                 Text(provider.kind.displayName)
                     .font(.system(size: 13, weight: .semibold))
@@ -84,7 +81,12 @@ struct ProviderCard: View {
         }
 
         if let onDemand = snapshot.onDemandSpend {
-            VStack(alignment: .leading, spacing: 3) {
+            if let limit = onDemand.limit, limit > 0 {
+                usageBar(
+                    label: "On-Demand (\(onDemand.formatted))",
+                    percent: onDemand.amount / limit * 100
+                )
+            } else {
                 HStack {
                     Text("On-Demand")
                         .font(.caption2)
@@ -93,9 +95,6 @@ struct ProviderCard: View {
                     Text(onDemand.formatted)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.orange)
-                }
-                if let limit = onDemand.limit, limit > 0 {
-                    ProgressBar(percent: onDemand.amount / limit * 100)
                 }
             }
         }

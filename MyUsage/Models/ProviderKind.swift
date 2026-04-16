@@ -18,23 +18,13 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Accent color for the provider icon.
+    /// Brand color for the provider.
     var accentColor: Color {
         switch self {
-        case .claude: Color(red: 0.65, green: 0.55, blue: 0.98)     // #a78bfa
-        case .codex: Color(red: 0.29, green: 0.87, blue: 0.50)      // #4ade80
-        case .cursor: Color(red: 0.38, green: 0.65, blue: 0.98)     // #60a5fa
-        case .antigravity: Color(red: 0.18, green: 0.83, blue: 0.75) // #2dd4bf
-        }
-    }
-
-    /// SF Symbol name for the provider.
-    var iconName: String {
-        switch self {
-        case .claude: "brain"
-        case .codex: "chevron.left.forwardslash.chevron.right"
-        case .cursor: "cursorarrow.rays"
-        case .antigravity: "atom"
+        case .claude: Color(red: 0.84, green: 0.52, blue: 0.36)     // Anthropic warm orange
+        case .codex: Color(red: 0.29, green: 0.29, blue: 0.29)      // OpenAI dark gray
+        case .cursor: Color(red: 0.38, green: 0.65, blue: 0.98)     // Cursor blue
+        case .antigravity: Color(red: 0.18, green: 0.78, blue: 0.68) // Windsurf teal
         }
     }
 }

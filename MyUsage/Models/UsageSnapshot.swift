@@ -85,12 +85,19 @@ struct UsageSnapshot: Sendable {
 
     // MARK: - Computed
 
+    /// On-demand usage percentage (0–100), nil if no limit set.
+    var onDemandUsagePercent: Double? {
+        guard let od = onDemandSpend, let limit = od.limit, limit > 0 else { return nil }
+        return od.amount / limit * 100
+    }
+
     /// The worst-case (highest) usage percentage across all windows.
     var worstUsagePercent: Double {
         let candidates: [Double?] = [
             sessionUsage?.percentUsed,
             weeklyUsage?.percentUsed,
             totalUsagePercent,
+            onDemandUsagePercent,
             modelQuotas.isEmpty ? nil : modelQuotas.map(\.percentUsed).max()
         ]
         return candidates.compactMap { $0 }.max() ?? 0

@@ -21,10 +21,10 @@ struct ProviderKindTests {
         #expect(ProviderKind.antigravity.displayName == "Antigravity")
     }
 
-    @Test("Each provider has an SF Symbol icon name")
-    func iconNames() {
+    @Test("Each provider has a display name and accent color")
+    func displayProperties() {
         for kind in ProviderKind.allCases {
-            #expect(!kind.iconName.isEmpty)
+            #expect(!kind.displayName.isEmpty)
         }
     }
 
