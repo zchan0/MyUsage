@@ -10,7 +10,8 @@ let package = Package(
             path: "MyUsage",
             exclude: ["Resources/Info.plist"],
             resources: [
-                .copy("Resources/Icons")
+                .copy("Resources/Icons"),
+                .copy("Resources/AppIcon.appiconset")
             ]
         ),
         .testTarget(

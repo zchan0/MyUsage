@@ -2,13 +2,18 @@
 
 Native macOS menu bar app that monitors AI coding tool usage across **Claude Code**, **Codex**, **Cursor**, and **Antigravity** — all in one place.
 
+<!-- TODO: Replace with actual screenshot -->
+<!-- ![MyUsage Screenshot](docs/screenshot.png) -->
+
 ## Features
 
 - **One glance** — All your AI tool usage in a single popover.
+- **Menu bar usage** — Optionally show live usage value (e.g. `$125` for Cursor, `57%` for Claude).
 - **Auto-refresh** — Configurable intervals (1m / 2m / 5m / 15m / manual).
-- **Dynamic icon** — Menu bar icon turns green → yellow → red based on usage.
+- **Brand icons** — Each provider displays its recognizable brand icon.
 - **Per-model quotas** — Antigravity shows individual model limits (Claude, Gemini, etc.).
 - **On-demand tracking** — Cursor shows included budget + on-demand spend separately.
+- **Custom ordering** — Drag to reorder providers in Settings.
 - **Launch at Login** — Set-and-forget via macOS Login Items.
 - **Zero dependencies** — Built entirely with system frameworks (SwiftUI, SQLite3, Security).
 
@@ -69,8 +74,8 @@ Each provider reads local credentials (files, Keychain, or SQLite), calls the re
 
 Open Settings from the gear icon in the popover footer:
 
-- **General** — Refresh interval, Launch at Login
-- **Providers** — Enable/disable individual providers
+- **General** — Refresh interval, menu bar usage display, Launch at Login
+- **Providers** — Enable/disable and drag-to-reorder providers
 - **About** — Version info, GitHub link
 
 ## License
