@@ -21,6 +21,11 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
+# Copy app icon
+if [ -f "${PROJECT_DIR}/MyUsage/Resources/AppIcon.icns" ]; then
+    cp "${PROJECT_DIR}/MyUsage/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
+
 # Copy Info.plist if it exists, otherwise generate one
 if [ -f "${PROJECT_DIR}/MyUsage/Resources/Info.plist" ]; then
     cp "${PROJECT_DIR}/MyUsage/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"

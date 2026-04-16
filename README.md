@@ -2,8 +2,7 @@
 
 Native macOS menu bar app that monitors AI coding tool usage across **Claude Code**, **Codex**, **Cursor**, and **Antigravity** — all in one place.
 
-<!-- TODO: Replace with actual screenshot -->
-<!-- ![MyUsage Screenshot](docs/screenshot.png) -->
+![MyUsage Screenshot](docs/screenshot.png)
 
 ## Features
 

@@ -129,9 +129,15 @@ struct SettingsView: View {
 
     private var aboutTab: some View {
         VStack(spacing: 12) {
-            Image(systemName: "chart.bar.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.tint)
+            if let icon = NSApp.applicationIconImage {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 80, height: 80)
+            } else {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.tint)
+            }
 
             Text("MyUsage")
                 .font(.title2.bold())
