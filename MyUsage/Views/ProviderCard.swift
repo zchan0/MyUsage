@@ -3,6 +3,7 @@ import SwiftUI
 /// A card displaying a single provider's usage information.
 struct ProviderCard: View {
     let provider: any UsageProvider
+    @Environment(UsageManager.self) private var manager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -54,7 +55,46 @@ struct ProviderCard: View {
             perModelContent(snapshot)
         }
 
+        monthlyCostRow(snapshot)
         cardFooter(snapshot)
+    }
+
+    // MARK: - Monthly cost row
+
+    @ViewBuilder
+    private func monthlyCostRow(_ snapshot: UsageSnapshot) -> some View {
+        if manager.showEstimatedCost, let cost = snapshot.monthlyEstimatedCost {
+            let isEstimate = provider.kind != .cursor
+            HStack(spacing: 4) {
+                Image(systemName: "dollarsign.circle")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("This month")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                if isEstimate {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .help(Self.estimateTooltip)
+                }
+                Spacer()
+                Text(Self.formatCost(cost, estimated: isEstimate))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private static let estimateTooltip = """
+    Estimated from this Mac's local CLI session logs × API pricing.
+    Usage from other machines on the same account is not included.
+    """
+
+    private static func formatCost(_ amount: Double, estimated: Bool) -> String {
+        let prefix = estimated ? "~$" : "$"
+        return prefix + String(format: "%.2f", amount)
     }
 
     // MARK: - Claude / Codex: rolling windows

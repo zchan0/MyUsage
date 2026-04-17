@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_NAME="MyUsage"
 BUNDLE_ID="com.zchan0.MyUsage"
-VERSION="0.1.0"
+VERSION="${MYUSAGE_VERSION:-0.1.0}"
 BUILD_DIR="${PROJECT_DIR}/.build/release"
 APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
 
@@ -20,6 +20,12 @@ mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+
+# Copy SPM resource bundle (contains pricing.json, Icons/, AppIcon.appiconset)
+RESOURCE_BUNDLE="${BUILD_DIR}/${APP_NAME}_${APP_NAME}.bundle"
+if [ -d "$RESOURCE_BUNDLE" ]; then
+    cp -R "$RESOURCE_BUNDLE" "${APP_BUNDLE}/Contents/Resources/"
+fi
 
 # Copy app icon
 if [ -f "${PROJECT_DIR}/MyUsage/Resources/AppIcon.icns" ]; then
@@ -68,6 +74,10 @@ fi
 if ! /usr/libexec/PlistBuddy -c "Print :CFBundlePackageType" "${APP_BUNDLE}/Contents/Info.plist" &>/dev/null; then
     /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "${APP_BUNDLE}/Contents/Info.plist"
 fi
+
+# Patch version from env (overrides the copied Info.plist value)
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist" \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
 
 # Ad-hoc code sign
 SIGNING="${MYUSAGE_SIGNING:-adhoc}"

@@ -182,29 +182,42 @@ final class CodexProvider: UsageProvider {
             }
 
             var accessToken = tokens.accessToken
+            var usage: CodexUsageResponse?
 
             // Strategy 1: Try API with existing token first
             do {
-                let usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
-                snapshot = Self.mapToSnapshot(usage)
-                return
+                usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
             } catch ProviderError.apiFailed(let code) where code == 401 || code == 403 {
-                // Token expired — try refresh
+                // Token expired — try refresh below
             } catch {
-                // If needsRefresh was true, try refreshing before giving up
                 guard auth.needsRefresh else { throw error }
             }
 
             // Strategy 2: Refresh token and retry
-            let refreshed = try await refreshToken(tokens.refreshToken)
-            accessToken = refreshed.accessToken
+            if usage == nil {
+                let refreshed = try await refreshToken(tokens.refreshToken)
+                accessToken = refreshed.accessToken
+                usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
+            }
 
-            let usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
-            snapshot = Self.mapToSnapshot(usage)
+            guard let usage else { return }
+            var mapped = Self.mapToSnapshot(usage)
+            mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
+            snapshot = mapped
 
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Scan `~/.codex/sessions` + `archived_sessions` modified since the first
+    /// of the current calendar month and compute estimated spend.
+    nonisolated static func computeMonthlyCost() async -> Double {
+        await Task.detached(priority: .utility) {
+            let since = Date.startOfCurrentMonth()
+            let byModel = CodexLogParser.scan(since: since)
+            return CostCalculator.totalCost(of: byModel, catalog: PricingCatalog.shared)
+        }.value
     }
 
     // MARK: - Detection

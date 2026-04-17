@@ -31,6 +31,11 @@ final class UsageManager {
         didSet { UserDefaults.standard.set(providerOrder, forKey: "providerOrder") }
     }
 
+    /// Whether provider cards display the estimated monthly spend row.
+    var showEstimatedCost: Bool {
+        didSet { UserDefaults.standard.set(showEstimatedCost, forKey: "showEstimatedCost") }
+    }
+
     // MARK: - Private
 
     private var refreshTask: Task<Void, Never>?
@@ -43,6 +48,7 @@ final class UsageManager {
         self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider") ?? ""
         self.providerOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
             ?? ProviderKind.allCases.map(\.rawValue)
+        self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
 
         register(ClaudeProvider())
         register(CodexProvider())

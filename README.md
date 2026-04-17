@@ -30,7 +30,21 @@ Native macOS menu bar app that monitors AI coding tool usage across **Claude Cod
 - macOS 14+ (Sonoma)
 - At least one supported AI tool installed and authenticated
 
-## Build & Run
+## Install
+
+Grab the latest `MyUsage-<version>.zip` from [Releases](https://github.com/zchan0/MyUsage/releases), unzip, and drag `MyUsage.app` into `/Applications`.
+
+The app is **ad-hoc signed** (no paid Apple Developer certificate), so on first launch macOS Gatekeeper will say it's from an "unidentified developer". Bypass once:
+
+- **Right-click** `MyUsage.app` → **Open** → **Open** again in the prompt. macOS will remember the choice.
+- Or, in Terminal:
+  ```bash
+  xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
+  ```
+
+A `sha256` checksum ships alongside each release zip if you want to verify the download.
+
+## Build from source
 
 ```bash
 # Build

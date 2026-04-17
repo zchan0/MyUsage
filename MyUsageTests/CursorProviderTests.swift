@@ -171,6 +171,44 @@ struct CursorProviderTests {
         #expect(snapshot.onDemandSpend == nil)
     }
 
+    @Test("Monthly cost = included + on-demand")
+    func monthlyCostIncludedPlusOnDemand() {
+        // Team plan ($20 budget), included exhausted, $5 on-demand
+        let usage = CursorUsageResponse(
+            billingCycleStart: nil, billingCycleEnd: nil,
+            planUsage: .init(
+                totalSpend: 2500, includedSpend: 2000,
+                remaining: 0, limit: 2000,
+                autoPercentUsed: nil, apiPercentUsed: nil,
+                totalPercentUsed: nil
+            ),
+            spendLimitUsage: .init(
+                totalSpend: 500, individualLimit: 5000,
+                individualUsed: 500, individualRemaining: 4500,
+                pooledLimit: nil, pooledUsed: nil,
+                limitType: "user"
+            )
+        )
+        let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: nil, email: nil, membership: "team")
+        #expect(snapshot.monthlyEstimatedCost == 25.0) // 20 + 5
+    }
+
+    @Test("Monthly cost nil when zero spend")
+    func monthlyCostNilWhenZero() {
+        let usage = CursorUsageResponse(
+            billingCycleStart: nil, billingCycleEnd: nil,
+            planUsage: .init(
+                totalSpend: 0, includedSpend: nil,
+                remaining: nil, limit: nil,
+                autoPercentUsed: nil, apiPercentUsed: nil,
+                totalPercentUsed: nil
+            ),
+            spendLimitUsage: nil
+        )
+        let snapshot = CursorProvider.mapToSnapshot(usage: usage, plan: nil, email: nil, membership: "pro")
+        #expect(snapshot.monthlyEstimatedCost == nil)
+    }
+
     @Test("Billing cycle date from unix ms string")
     func billingCycleDate() {
         let usage = CursorUsageResponse(

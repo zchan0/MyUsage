@@ -11,7 +11,8 @@ let package = Package(
             exclude: ["Resources/Info.plist"],
             resources: [
                 .copy("Resources/Icons"),
-                .copy("Resources/AppIcon.appiconset")
+                .copy("Resources/AppIcon.appiconset"),
+                .process("Resources/pricing.json")
             ]
         ),
         .testTarget(
