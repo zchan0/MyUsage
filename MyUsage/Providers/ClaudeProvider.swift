@@ -143,12 +143,24 @@ final class ClaudeProvider: UsageProvider {
             // 3. Fetch usage
             let usage = try await fetchUsage(accessToken: accessToken)
 
-            // 4. Map to snapshot
-            snapshot = Self.mapToSnapshot(usage, plan: creds.planName)
+            // 4. Map to snapshot + monthly cost (computed off-main)
+            var mapped = Self.mapToSnapshot(usage, plan: creds.planName)
+            mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
+            snapshot = mapped
 
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Scan `~/.claude/projects/**/*.jsonl` modified since the first of the
+    /// current calendar month and compute estimated spend.
+    nonisolated static func computeMonthlyCost() async -> Double {
+        await Task.detached(priority: .utility) {
+            let since = Date.startOfCurrentMonth()
+            let byModel = ClaudeLogParser.scan(since: since)
+            return CostCalculator.totalCost(of: byModel, catalog: PricingCatalog.shared)
+        }.value
     }
 
     // MARK: - Detection

@@ -73,4 +73,12 @@ extension PricingCatalog {
             throw LoadError.decodingFailed(error)
         }
     }
+
+    /// Process-wide shared catalog. Falls back to an empty catalog if the
+    /// bundled JSON is missing or malformed — in that case `cost` returns 0
+    /// everywhere rather than crashing.
+    static let shared: PricingCatalog = {
+        if let catalog = try? PricingCatalog.loadBundled() { return catalog }
+        return PricingCatalog(file: PricingFile(version: 0, updated: nil, models: [:]))
+    }()
 }

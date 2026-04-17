@@ -54,7 +54,34 @@ struct ProviderCard: View {
             perModelContent(snapshot)
         }
 
+        monthlyCostRow(snapshot)
         cardFooter(snapshot)
+    }
+
+    // MARK: - Monthly cost row
+
+    @ViewBuilder
+    private func monthlyCostRow(_ snapshot: UsageSnapshot) -> some View {
+        if let cost = snapshot.monthlyEstimatedCost {
+            HStack(spacing: 4) {
+                Image(systemName: "dollarsign.circle")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("This month")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(Self.formatCost(cost, estimated: provider.kind != .cursor))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private static func formatCost(_ amount: Double, estimated: Bool) -> String {
+        let prefix = estimated ? "~$" : "$"
+        return prefix + String(format: "%.2f", amount)
     }
 
     // MARK: - Claude / Codex: rolling windows
