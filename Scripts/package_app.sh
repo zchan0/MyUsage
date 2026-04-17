@@ -21,6 +21,12 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
+# Copy SPM resource bundle (contains pricing.json, Icons/, AppIcon.appiconset)
+RESOURCE_BUNDLE="${BUILD_DIR}/${APP_NAME}_${APP_NAME}.bundle"
+if [ -d "$RESOURCE_BUNDLE" ]; then
+    cp -R "$RESOURCE_BUNDLE" "${APP_BUNDLE}/Contents/Resources/"
+fi
+
 # Copy app icon
 if [ -f "${PROJECT_DIR}/MyUsage/Resources/AppIcon.icns" ]; then
     cp "${PROJECT_DIR}/MyUsage/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"

@@ -51,6 +51,10 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Display") {
+                Toggle("Show estimated monthly cost", isOn: $mgr.showEstimatedCost)
+            }
+
             Section("System") {
                 Toggle("Launch at Login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
