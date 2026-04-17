@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and publish macOS app
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+      - name: Show tool versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Package .app bundle
+        env:
+          MYUSAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./Scripts/package_app.sh
+
+      - name: Create zip archive
+        run: |
+          ZIP_NAME="MyUsage-${{ steps.version.outputs.version }}.zip"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent MyUsage.app "$ZIP_NAME"
+          shasum -a 256 "$ZIP_NAME" > "${ZIP_NAME}.sha256"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MyUsage ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            Menu bar AI usage monitor for macOS 14+.
+
+            ## Install
+
+            1. Download `${{ env.ZIP_NAME }}` below, unzip.
+            2. Drag `MyUsage.app` to `/Applications/`.
+            3. First launch:
+               - Either: **right-click → Open** (Gatekeeper will prompt once, then remember).
+               - Or in Terminal: `xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app`
+
+            The app is ad-hoc signed (no Apple Developer certificate). macOS flags
+            it as "unidentified developer" on first launch — this is expected.
+
+            `sha256` checksum is attached for verification.
+          files: |
+            MyUsage-${{ steps.version.outputs.version }}.zip
+            MyUsage-${{ steps.version.outputs.version }}.zip.sha256
