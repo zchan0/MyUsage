@@ -314,6 +314,13 @@ final class CursorProvider: UsageProvider {
             )
         }
 
+        // Monthly cost = included spend + on-demand spend (already in USD).
+        let included = snapshot.spentAmount?.amount ?? 0
+        let onDemand = snapshot.onDemandSpend?.amount ?? 0
+        if included > 0 || onDemand > 0 {
+            snapshot.monthlyEstimatedCost = included + onDemand
+        }
+
         return snapshot
     }
 }
