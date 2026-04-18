@@ -18,7 +18,7 @@ struct ProviderIcon: View {
     }
 
     private func loadSVG() -> NSImage? {
-        guard let url = Bundle.module.url(
+        guard let url = AppResources.url(
             forResource: "ProviderIcon-\(kind.rawValue)",
             withExtension: "svg",
             subdirectory: "Icons"

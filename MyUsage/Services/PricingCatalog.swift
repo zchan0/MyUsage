@@ -50,9 +50,10 @@ extension PricingCatalog {
         }
     }
 
-    /// Load the bundled `pricing.json`. Defaults to the SPM module bundle.
-    static func loadBundled(bundle: Bundle = .module) throws -> PricingCatalog {
-        guard let url = bundle.url(forResource: "pricing", withExtension: "json") else {
+    /// Load the bundled `pricing.json`.
+    static func loadBundled(bundle: Bundle? = nil) throws -> PricingCatalog {
+        let resolvedBundle = bundle ?? AppResources.bundle ?? Bundle.main
+        guard let url = resolvedBundle.url(forResource: "pricing", withExtension: "json") else {
             throw LoadError.resourceNotFound
         }
         return try load(from: url)
