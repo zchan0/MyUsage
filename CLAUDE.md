@@ -45,6 +45,30 @@ refactor: short description   # code restructuring
 chore: short description      # build, config, deps
 ```
 
+### Commit & Push Authority
+
+The agent owns the commit + push lifecycle by default. When a task is done
+and verified locally (build + tests green), the agent should, without
+asking for per-operation approval:
+
+1. Split the work into coherent commits using `jj describe` + `jj split`.
+   Granularity is at the agent's discretion — prefer cohesion over hitting
+   an arbitrary commit count, and keep each commit buildable.
+2. Create or move the feature bookmark (`feat/<feature-name>`).
+3. Push with `jj git push` (use `--create` when the remote bookmark
+   doesn't exist yet).
+
+The agent **must** still ask for explicit approval before any of the
+following, because they are hard to undo or affect shared history:
+
+- Pushing to or merging into `main` / `master`.
+- Force push (`--force`, `--force-with-lease`).
+- Creating or moving a release tag (`vX.Y.Z`) or triggering a release workflow.
+- Deleting remote bookmarks / branches / tags.
+- Changing git config, skipping hooks, or rewriting already-pushed history.
+
+If pre-push tests fail, fix the cause and try again — never bypass the check.
+
 ## Testing Strategy
 
 ### Unit Tests (XCTest)
