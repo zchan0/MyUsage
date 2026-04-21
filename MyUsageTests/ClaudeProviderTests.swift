@@ -181,6 +181,39 @@ struct ClaudeProviderTests {
         #expect(withoutRetry.errorDescription == "Rate limited")
     }
 
+    // MARK: - Exponential backoff
+
+    @Test("Backoff is 0 for zero consecutive failures")
+    func backoffZero() {
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 0) == 0)
+    }
+
+    @Test("Backoff doubles starting at 30s")
+    func backoffDoubles() {
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 1) == 30)
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 2) == 60)
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 3) == 120)
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 4) == 240)
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 5) == 480)
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 6) == 960)
+    }
+
+    @Test("Backoff caps at 30 minutes")
+    func backoffCaps() {
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 7) == 1800)
+        #expect(ClaudeProvider.backoffDelay(consecutiveFailures: 20) == 1800)
+    }
+
+    @Test("Transient error message formats underlying + retry seconds")
+    func transientErrorMessageFormat() {
+        let message = ClaudeProvider.transientErrorMessage(
+            underlying: "API error (503)",
+            retryAfter: 60
+        )
+        #expect(message.contains("API error (503)"))
+        #expect(message.contains("Retrying in 60s"))
+    }
+
     // MARK: - Helpers
 
     private func makeCredentials(

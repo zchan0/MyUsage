@@ -32,4 +32,8 @@ final class UsageManagerTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(value, 0)
         }
     }
+
+    func testMinRefreshIntervalFloorIsAtLeastOneMinute() {
+        XCTAssertGreaterThanOrEqual(UsageManager.minRefreshIntervalFloor, 60)
+    }
 }

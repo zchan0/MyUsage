@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Claude Code credential file structure.
 /// Located at `~/.claude/.credentials.json` or Keychain `Claude Code-credentials`.
@@ -119,8 +120,19 @@ final class ClaudeProvider: UsageProvider {
     /// (regardless of `expiresAt`) so we come back with a fresh token.
     private var forceTokenRefreshOnNextCall = false
 
+    /// Consecutive non-429 failures (5xx, network, token refresh, …). Drives
+    /// exponential backoff so outages don't turn into tight retry loops.
+    /// Reset to 0 on any response from the server (200 or 429).
+    private var consecutiveFailures = 0
+
     /// Default cooldown when the server returns 429 without `Retry-After`.
     private static let defaultRateLimitCooldown: TimeInterval = 60
+
+    /// Exponential-backoff base delay for transient failures (seconds).
+    nonisolated private static let backoffBase: TimeInterval = 30
+
+    /// Exponential-backoff cap — don't sleep longer than this (seconds).
+    nonisolated private static let backoffCap: TimeInterval = 30 * 60
 
     // MARK: - Init
 
@@ -164,15 +176,31 @@ final class ClaudeProvider: UsageProvider {
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
             nextAllowedRefreshAt = nil
+            consecutiveFailures = 0
 
         } catch ProviderError.rateLimited(let retryAfter) {
             let delay = retryAfter ?? Self.defaultRateLimitCooldown
             nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
             forceTokenRefreshOnNextCall = true
+            // 429 means we did reach the server — not a transient outage.
+            consecutiveFailures = 0
             error = Self.rateLimitErrorMessage(retryAfter: delay)
+            Logger.claude.warning(
+                "Rate limited by Anthropic, retryAfter=\(Int(delay), privacy: .public)s"
+            )
             // Intentionally keep `snapshot` as-is so the card still shows data.
         } catch {
-            self.error = error.localizedDescription
+            consecutiveFailures += 1
+            let delay = Self.backoffDelay(consecutiveFailures: consecutiveFailures)
+            nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
+            self.error = Self.transientErrorMessage(
+                underlying: error.localizedDescription,
+                retryAfter: delay
+            )
+            Logger.claude.error(
+                "Transient failure (\(error.localizedDescription, privacy: .public)), consecutiveFailures=\(self.consecutiveFailures, privacy: .public), backoff=\(Int(delay), privacy: .public)s"
+            )
+            // Keep `snapshot` as-is so we still show the last known numbers.
         }
     }
 
@@ -181,6 +209,31 @@ final class ClaudeProvider: UsageProvider {
     nonisolated static func rateLimitErrorMessage(retryAfter: TimeInterval) -> String {
         let seconds = max(1, Int(retryAfter.rounded()))
         return "Rate limited. Retry in \(seconds)s. If this persists, run `claude logout && claude login` in Terminal."
+    }
+
+    /// Formats the user-facing message shown during exponential backoff.
+    nonisolated static func transientErrorMessage(
+        underlying: String,
+        retryAfter: TimeInterval
+    ) -> String {
+        let seconds = max(1, Int(retryAfter.rounded()))
+        return "\(underlying). Retrying in \(seconds)s."
+    }
+
+    /// Exponential-backoff delay in seconds for the Nth consecutive failure.
+    ///
+    /// - 1 failure →  30s
+    /// - 2        →  60s
+    /// - 3        → 120s
+    /// - 4        → 240s (4m)
+    /// - 5        → 480s (8m)
+    /// - 6        → 960s (16m)
+    /// - 7+       → capped at `backoffCap` (30m)
+    nonisolated static func backoffDelay(consecutiveFailures: Int) -> TimeInterval {
+        guard consecutiveFailures > 0 else { return 0 }
+        let exponent = Double(consecutiveFailures - 1)
+        let raw = backoffBase * pow(2.0, exponent)
+        return min(raw, backoffCap)
     }
 
     /// Scan `~/.claude/projects/**/*.jsonl` modified since the first of the

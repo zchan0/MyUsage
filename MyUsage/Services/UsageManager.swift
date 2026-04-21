@@ -130,13 +130,19 @@ final class UsageManager {
 
     // MARK: - Timer
 
+    /// Hard floor for the auto-refresh interval. Even if jitter would pull
+    /// the tick below this, we wait at least this long — keeps us under
+    /// Anthropic / OpenAI rate-limit radar.
+    nonisolated static let minRefreshIntervalFloor: TimeInterval = 60
+
     private func restartTimer() {
         refreshTask?.cancel()
         guard let seconds = refreshInterval.seconds else { return }
 
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
-                let delay = Self.jitteredInterval(base: seconds)
+                let jittered = Self.jitteredInterval(base: seconds)
+                let delay = max(Self.minRefreshIntervalFloor, jittered)
                 try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { break }
                 await self?.refreshAll()
@@ -147,6 +153,9 @@ final class UsageManager {
     /// Jitter the configured refresh interval by ±`jitterFraction` so multiple
     /// devices (or multiple launches of the same device) don't all hit
     /// provider APIs on the same second. Default is ±20%.
+    ///
+    /// This is a pure math helper. The timer applies a hard floor of
+    /// `minRefreshIntervalFloor` separately.
     nonisolated static func jitteredInterval(
         base: Double,
         jitterFraction: Double = 0.2
