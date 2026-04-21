@@ -56,7 +56,26 @@ struct ProviderCard: View {
         }
 
         monthlyCostRow(snapshot)
+        if let error = provider.error {
+            staleWarningRow(error)
+        }
         cardFooter(snapshot)
+    }
+
+    /// Inline warning shown below stale data (e.g. during a 429 cooldown) so
+    /// the user still sees the last-known usage but knows it isn't fresh.
+    private func staleWarningRow(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 9))
+                .foregroundStyle(.yellow)
+            Text(message)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+            Spacer()
+        }
+        .padding(.top, 2)
     }
 
     // MARK: - Monthly cost row

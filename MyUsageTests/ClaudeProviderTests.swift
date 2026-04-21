@@ -157,6 +157,30 @@ struct ClaudeProviderTests {
         #expect(snapshot.onDemandSpend == nil)
     }
 
+    // MARK: - Rate-limit messaging
+
+    @Test("Rate-limit error message includes retry seconds and recovery hint")
+    func rateLimitMessageIncludesHint() {
+        let message = ClaudeProvider.rateLimitErrorMessage(retryAfter: 30)
+        #expect(message.contains("Retry in 30s"))
+        #expect(message.contains("claude logout && claude login"))
+    }
+
+    @Test("Rate-limit error message clamps sub-second retry to 1s")
+    func rateLimitMessageClampsToOneSecond() {
+        let message = ClaudeProvider.rateLimitErrorMessage(retryAfter: 0.2)
+        #expect(message.contains("Retry in 1s"))
+    }
+
+    @Test("ProviderError.rateLimited description reflects retry value")
+    func providerErrorRateLimitedDescription() {
+        let withRetry = ProviderError.rateLimited(retryAfter: 45)
+        #expect(withRetry.errorDescription == "Rate limited (retry in 45s)")
+
+        let withoutRetry = ProviderError.rateLimited(retryAfter: nil)
+        #expect(withoutRetry.errorDescription == "Rate limited")
+    }
+
     // MARK: - Helpers
 
     private func makeCredentials(

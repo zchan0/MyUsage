@@ -125,6 +125,55 @@ struct ClaudeLogParserTests {
         #expect(result.isEmpty)
     }
 
+    // MARK: - costUSD breakdown
+
+    @Test("costUSD row contributes to preComputedCost and skips tokens")
+    func costUSDPreferred() {
+        let jsonl = """
+        {"type":"assistant","costUSD":0.1234,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":1000,"output_tokens":500}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
+        #expect(acc.preComputedCost == 0.1234)
+        #expect(acc.tokensByModel.isEmpty)
+    }
+
+    @Test("Row without costUSD falls back to token bucket")
+    func noCostUSDFallsBackToTokens() {
+        let jsonl = """
+        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
+        #expect(acc.preComputedCost == 0)
+        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
+    }
+
+    @Test("Mixed rows split between cost and token buckets")
+    func mixedRows() {
+        let jsonl = """
+        {"type":"assistant","costUSD":0.05,"message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
+        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
+        {"type":"assistant","costUSD":0.10,"message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
+        #expect(abs(acc.preComputedCost - 0.15) < 1e-9)
+        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
+        #expect(acc.tokensByModel["claude-opus-4-5"] == nil)
+    }
+
+    @Test("Zero costUSD is treated as missing and falls back to tokens")
+    func zeroCostUSDFallsBack() {
+        let jsonl = """
+        {"type":"assistant","costUSD":0,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
+        #expect(acc.preComputedCost == 0)
+        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 10, output: 5))
+    }
+
     // MARK: - Start-of-month helper
 
     @Test("startOfCurrentMonth returns day 1 at 00:00 in given calendar")

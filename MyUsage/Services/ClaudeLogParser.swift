@@ -25,6 +25,11 @@ enum ClaudeLogParser {
     private struct Row: Decodable {
         let type: String?
         let message: Message?
+        /// Pre-computed USD cost written by Claude Code v1.x. When present we
+        /// trust it instead of re-pricing tokens locally (matches ccusage's
+        /// `auto` mode).
+        let costUSD: Double?
+
         struct Message: Decodable {
             let model: String?
             let usage: Usage?
@@ -42,6 +47,20 @@ enum ClaudeLogParser {
                 case cacheReadInputTokens = "cache_read_input_tokens"
             }
         }
+    }
+
+    // MARK: - Breakdown (cost-aware)
+
+    /// Output of a cost-aware scan.
+    ///
+    /// - `preComputedCost`: sum of `costUSD` fields from rows that already
+    ///   carry a server-computed dollar amount.
+    /// - `tokensByModel`: tokens from rows that did **not** have `costUSD`;
+    ///   callers should price these via `CostCalculator` and add the result
+    ///   to `preComputedCost` for the final monthly estimate.
+    struct Breakdown: Equatable {
+        var preComputedCost: Double = 0
+        var tokensByModel: UsageByModel = [:]
     }
 
     // MARK: - Default roots
@@ -65,7 +84,33 @@ enum ClaudeLogParser {
 
     /// Scan the given roots. Useful for tests.
     static func scan(roots: [URL], since: Date) -> UsageByModel {
-        var result: UsageByModel = [:]
+        scanBreakdown(roots: roots, since: since).tokensByModel
+    }
+
+    /// Parse a single JSONL file, adding tokens into `into`.
+    /// Errors are swallowed silently — logs may be partial or mid-write.
+    static func parseFile(url: URL, into result: inout UsageByModel) {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
+        parse(data: data, into: &result)
+    }
+
+    /// Parse raw JSONL bytes.
+    static func parse(data: Data, into result: inout UsageByModel) {
+        var breakdown = Breakdown(tokensByModel: result)
+        parseBreakdown(data: data, into: &breakdown)
+        result = breakdown.tokensByModel
+    }
+
+    // MARK: - Cost-aware API
+
+    /// Scan default roots, producing a cost-aware breakdown.
+    static func scanBreakdown(since: Date) -> Breakdown {
+        scanBreakdown(roots: defaultRoots(), since: since)
+    }
+
+    /// Scan the given roots, producing a cost-aware breakdown.
+    static func scanBreakdown(roots: [URL], since: Date) -> Breakdown {
+        var result = Breakdown()
         let fm = FileManager.default
         for root in roots {
             guard fm.fileExists(atPath: root.path) else { continue }
@@ -83,21 +128,20 @@ enum ClaudeLogParser {
                       mtime >= since
                 else { continue }
 
-                parseFile(url: url, into: &result)
+                parseFileBreakdown(url: url, into: &result)
             }
         }
         return result
     }
 
-    /// Parse a single JSONL file, adding tokens into `into`.
-    /// Errors are swallowed silently — logs may be partial or mid-write.
-    static func parseFile(url: URL, into result: inout UsageByModel) {
+    /// Parse a single JSONL file into a cost-aware breakdown.
+    static func parseFileBreakdown(url: URL, into result: inout Breakdown) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
-        parse(data: data, into: &result)
+        parseBreakdown(data: data, into: &result)
     }
 
-    /// Parse raw JSONL bytes.
-    static func parse(data: Data, into result: inout UsageByModel) {
+    /// Parse raw JSONL bytes into a cost-aware breakdown.
+    static func parseBreakdown(data: Data, into result: inout Breakdown) {
         guard let text = String(data: data, encoding: .utf8) else { return }
         let decoder = JSONDecoder()
         var acc = result
@@ -110,13 +154,20 @@ enum ClaudeLogParser {
 
     // MARK: - Single-line dispatch
 
-    private static func handleLine(_ lineData: Data, decoder: JSONDecoder, result: inout UsageByModel) {
+    private static func handleLine(_ lineData: Data, decoder: JSONDecoder, result: inout Breakdown) {
         guard let row = try? decoder.decode(Row.self, from: lineData) else { return }
         guard row.type == "assistant",
               let message = row.message,
               let model = message.model,
               let usage = message.usage
         else { return }
+
+        // Prefer server-computed costUSD when present. Matches ccusage `auto`
+        // mode and insulates us from pricing drift / prompt-cache quirks.
+        if let cost = row.costUSD, cost > 0 {
+            result.preComputedCost += cost
+            return
+        }
 
         let tokens = TokenUsage(
             input: usage.inputTokens ?? 0,
@@ -127,7 +178,7 @@ enum ClaudeLogParser {
         // Skip no-op rows that all sum to 0 (queue-ops, errors, etc.)
         guard tokens.input + tokens.output + tokens.cacheWrite + tokens.cacheRead > 0 else { return }
 
-        result.add(tokens, for: model.lowercased())
+        result.tokensByModel.add(tokens, for: model.lowercased())
     }
 }
 

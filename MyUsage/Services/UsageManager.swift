@@ -136,11 +136,25 @@ final class UsageManager {
 
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(seconds))
+                let delay = Self.jitteredInterval(base: seconds)
+                try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { break }
                 await self?.refreshAll()
             }
         }
+    }
+
+    /// Jitter the configured refresh interval by ±`jitterFraction` so multiple
+    /// devices (or multiple launches of the same device) don't all hit
+    /// provider APIs on the same second. Default is ±20%.
+    nonisolated static func jitteredInterval(
+        base: Double,
+        jitterFraction: Double = 0.2
+    ) -> Double {
+        let clamped = max(0, min(jitterFraction, 1))
+        let spread = base * clamped
+        let offset = Double.random(in: -spread...spread)
+        return max(0, base + offset)
     }
 }
 

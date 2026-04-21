@@ -110,6 +110,18 @@ final class ClaudeProvider: UsageProvider {
 
     private var credentials: ClaudeCredentials?
 
+    /// After a 429, skip API calls until this time. `refresh()` becomes a no-op
+    /// and we keep showing the last good snapshot and error message.
+    private var nextAllowedRefreshAt: Date?
+
+    /// After a 429, the current access token has been counted against
+    /// Anthropic's rate limit bucket. Force a token refresh on the next attempt
+    /// (regardless of `expiresAt`) so we come back with a fresh token.
+    private var forceTokenRefreshOnNextCall = false
+
+    /// Default cooldown when the server returns 429 without `Retry-After`.
+    private static let defaultRateLimitCooldown: TimeInterval = 60
+
     // MARK: - Init
 
     init() {
@@ -120,46 +132,71 @@ final class ClaudeProvider: UsageProvider {
 
     func refresh() async {
         guard isAvailable else { return }
+
+        // Respect cooldown from a prior 429 — keep stale data + error intact.
+        if let until = nextAllowedRefreshAt, until > .now {
+            return
+        }
+
         isLoading = true
-        error = nil
         defer { isLoading = false }
+        error = nil
 
         do {
-            // 1. Load credentials
             guard var creds = loadCredentials(), let oauth = creds.claudeAiOauth else {
                 error = "No credentials found"
                 return
             }
 
-            // 2. Refresh token if expired
+            // Refresh token if expired, or if a previous 429 told us the
+            // current token bucket is already burnt.
             var accessToken = oauth.accessToken
-            if creds.isExpired {
+            if forceTokenRefreshOnNextCall || creds.isExpired {
                 let refreshed = try await refreshToken(oauth.refreshToken)
                 accessToken = refreshed.accessToken
-                // Update stored credentials
                 creds = updateCredentials(creds, with: refreshed)
+                forceTokenRefreshOnNextCall = false
             }
 
-            // 3. Fetch usage
             let usage = try await fetchUsage(accessToken: accessToken)
 
-            // 4. Map to snapshot + monthly cost (computed off-main)
             var mapped = Self.mapToSnapshot(usage, plan: creds.planName)
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
+            nextAllowedRefreshAt = nil
 
+        } catch ProviderError.rateLimited(let retryAfter) {
+            let delay = retryAfter ?? Self.defaultRateLimitCooldown
+            nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
+            forceTokenRefreshOnNextCall = true
+            error = Self.rateLimitErrorMessage(retryAfter: delay)
+            // Intentionally keep `snapshot` as-is so the card still shows data.
         } catch {
             self.error = error.localizedDescription
         }
     }
 
+    /// Formats the user-facing message shown on a 429. Kept internal + static
+    /// so it's easy to unit-test without spinning up the full provider.
+    nonisolated static func rateLimitErrorMessage(retryAfter: TimeInterval) -> String {
+        let seconds = max(1, Int(retryAfter.rounded()))
+        return "Rate limited. Retry in \(seconds)s. If this persists, run `claude logout && claude login` in Terminal."
+    }
+
     /// Scan `~/.claude/projects/**/*.jsonl` modified since the first of the
     /// current calendar month and compute estimated spend.
+    ///
+    /// For rows that already carry a `costUSD` value we trust that number
+    /// directly; for older rows without it, we fall back to token × pricing.
     nonisolated static func computeMonthlyCost() async -> Double {
         await Task.detached(priority: .utility) {
             let since = Date.startOfCurrentMonth()
-            let byModel = ClaudeLogParser.scan(since: since)
-            return CostCalculator.totalCost(of: byModel, catalog: PricingCatalog.shared)
+            let breakdown = ClaudeLogParser.scanBreakdown(since: since)
+            let tokenCost = CostCalculator.totalCost(
+                of: breakdown.tokensByModel,
+                catalog: PricingCatalog.shared
+            )
+            return breakdown.preComputedCost + tokenCost
         }.value
     }
 
@@ -192,6 +229,7 @@ final class ClaudeProvider: UsageProvider {
         var request = URLRequest(url: Self.refreshURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppInfo.claudeUserAgent, forHTTPHeaderField: "User-Agent")
 
         let body: [String: String] = [
             "grant_type": "refresh_token",
@@ -235,10 +273,19 @@ final class ClaudeProvider: UsageProvider {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+        request.setValue(AppInfo.claudeUserAgent, forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let http = response as? HTTPURLResponse
+        let http = response as? HTTPURLResponse
+
+        if http?.statusCode == 429 {
+            let retryAfter = http
+                .flatMap { $0.value(forHTTPHeaderField: "Retry-After") }
+                .flatMap { RetryAfterParser.seconds(from: $0) }
+            throw ProviderError.rateLimited(retryAfter: retryAfter)
+        }
+
+        guard http?.statusCode == 200 else {
             throw ProviderError.apiFailed(statusCode: http?.statusCode ?? -1)
         }
 
@@ -291,12 +338,19 @@ private func parseISO8601(_ string: String) -> Date? {
 enum ProviderError: LocalizedError {
     case tokenRefreshFailed
     case apiFailed(statusCode: Int)
+    case rateLimited(retryAfter: TimeInterval?)
     case notConfigured
 
     var errorDescription: String? {
         switch self {
         case .tokenRefreshFailed: "Token refresh failed"
         case .apiFailed(let code): "API error (\(code))"
+        case .rateLimited(let retry):
+            if let retry, retry > 0 {
+                "Rate limited (retry in \(Int(retry.rounded()))s)"
+            } else {
+                "Rate limited"
+            }
         case .notConfigured: "Not configured"
         }
     }
