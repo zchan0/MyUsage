@@ -6,6 +6,16 @@ enum KeychainHelper {
 
     /// Read a generic password from Keychain by service name.
     static func readGenericPassword(service: String, account: String? = nil) -> Data? {
+        readGenericPasswordResult(service: service, account: account).data
+    }
+
+    /// Read a generic password and expose the raw `OSStatus` for diagnostics.
+    /// Useful to distinguish "not found" (`errSecItemNotFound`) from "access
+    /// denied" / "needs interaction" errors.
+    static func readGenericPasswordResult(
+        service: String,
+        account: String? = nil
+    ) -> (data: Data?, status: OSStatus) {
         var query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -18,11 +28,10 @@ enum KeychainHelper {
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
+        if status == errSecSuccess, let data = result as? Data {
+            return (data, status)
         }
-        return data
+        return (nil, status)
     }
 
     /// Read a generic password as a UTF-8 string.

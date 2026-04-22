@@ -214,6 +214,21 @@ struct ClaudeProviderTests {
         #expect(message.contains("Retrying in 60s"))
     }
 
+    // MARK: - Credential access error
+
+    @Test("errSecItemNotFound yields “run claude login” guidance")
+    func credentialErrorNotFound() {
+        let message = ClaudeProvider.credentialAccessErrorMessage(status: errSecItemNotFound)
+        #expect(message.contains("claude login"))
+    }
+
+    @Test("Other OSStatus yields Keychain ACL guidance with status code")
+    func credentialErrorAccessDenied() {
+        let message = ClaudeProvider.credentialAccessErrorMessage(status: errSecAuthFailed)
+        #expect(message.contains("Keychain"))
+        #expect(message.contains("\(errSecAuthFailed)"))
+    }
+
     // MARK: - Helpers
 
     private func makeCredentials(

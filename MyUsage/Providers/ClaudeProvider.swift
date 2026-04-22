@@ -98,9 +98,11 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Constants
 
+    private static let claudeDirectory: String = {
+        FileManager.default.homeDirectoryForCurrentUser.path + "/.claude"
+    }()
     private static let credentialFilePath: String = {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/.claude/.credentials.json"
+        claudeDirectory + "/.credentials.json"
     }()
     private static let keychainService = "Claude Code-credentials"
     private static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
@@ -143,6 +145,9 @@ final class ClaudeProvider: UsageProvider {
     // MARK: - UsageProvider
 
     func refresh() async {
+        // Re-detect once per refresh so a user who ran `claude login`
+        // after the app launched doesn't need to relaunch.
+        if !isAvailable { detectAvailability() }
         guard isAvailable else { return }
 
         // Respect cooldown from a prior 429 — keep stale data + error intact.
@@ -255,21 +260,73 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Detection
 
+    /// Claude is "available" when we can read credentials from *either* source:
+    /// the legacy `~/.claude/.credentials.json` file or the macOS Keychain item
+    /// `Claude Code-credentials`. Newer Claude Code CLIs on macOS store only in
+    /// Keychain, so a file-only check hides the provider for most users.
+    ///
+    /// When credentials cannot be read but `~/.claude/` exists, we assume the
+    /// user *is* a Claude user whose Keychain item is ACL-restricted to the
+    /// CLI itself, and surface a helpful error instead of "Not configured".
     private func detectAvailability() {
-        isAvailable = FileManager.default.fileExists(atPath: Self.credentialFilePath)
+        // 1) File path first.
+        if let data = FileManager.default.contents(atPath: Self.credentialFilePath),
+           let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
+           creds.claudeAiOauth != nil {
+            isAvailable = true
+            error = nil
+            return
+        }
+
+        // 2) Keychain (with status for diagnostics).
+        let result = KeychainHelper.readGenericPasswordResult(service: Self.keychainService)
+        if let data = result.data,
+           let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
+           creds.claudeAiOauth != nil {
+            isAvailable = true
+            error = nil
+            Logger.claude.info("Claude credentials loaded from Keychain")
+            return
+        }
+
+        isAvailable = false
+
+        // 3) Distinguish "user never installed Claude" from "installed but we
+        //    cannot read the Keychain item".
+        let claudeDirExists = FileManager.default.fileExists(atPath: Self.claudeDirectory)
+        if !claudeDirExists {
+            // Genuinely not a Claude user. Leave error nil → "Not configured".
+            Logger.claude.info("Claude not detected (no ~/.claude directory)")
+            return
+        }
+
+        Logger.claude.error(
+            "Claude credentials unreadable (keychain status=\(result.status, privacy: .public))"
+        )
+        error = Self.credentialAccessErrorMessage(status: result.status)
+    }
+
+    /// User-facing message shown when `~/.claude/` exists but credentials
+    /// cannot be read from either source. Visible via the provider card's
+    /// error row.
+    nonisolated static func credentialAccessErrorMessage(status: OSStatus) -> String {
+        switch status {
+        case errSecItemNotFound:
+            return "Claude Code is installed but no credentials were found. Run `claude login` in a terminal."
+        default:
+            return "Cannot read Claude credentials from Keychain (status \(status)). Open Keychain Access, find “Claude Code-credentials”, and allow MyUsage to access it."
+        }
     }
 
     // MARK: - Credentials
 
     func loadCredentials() -> ClaudeCredentials? {
-        // Try file first
         if let data = FileManager.default.contents(atPath: Self.credentialFilePath) {
             if let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
                creds.claudeAiOauth != nil {
                 return creds
             }
         }
-        // Fallback to Keychain
         return KeychainHelper.readGenericPasswordJSON(
             service: Self.keychainService,
             as: ClaudeCredentials.self

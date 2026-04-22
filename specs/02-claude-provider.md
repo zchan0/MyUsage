@@ -18,6 +18,9 @@ Implement the Claude Code provider: read local credentials, refresh OAuth tokens
   - [x] Token expiry check + auto-refresh
   - [x] Fetch usage API → populate `UsageSnapshot`
   - [x] `isAvailable` based on credential file existence
+    - ⚠️ Later found too narrow: modern Claude Code CLI is Keychain-only.
+      Fixed to detect both sources. See
+      [`docs/claude-not-configured-bug.md`](../docs/claude-not-configured-bug.md).
 - [x] `KeychainHelper.swift` — Read Keychain items by service name
 - [x] Token refresh logic (inline in ClaudeProvider, not separate file)
 - [x] `ProviderCard.swift` — Render Claude card (circular ring + linear bar)
@@ -48,5 +51,5 @@ Implement the Claude Code provider: read local credentials, refresh OAuth tokens
 | 5 | Weekly bar shows percentage | Matches `claude /usage` output | |
 | 6 | Reset countdown is shown | Plausible time (e.g. "2h 15m") | |
 | 7 | Email displayed | Your account email in subtle text | |
-| 8 | Remove `~/.claude/.credentials.json` | Card shows "Not configured" or disappears | |
+| 8 | Remove `~/.claude/.credentials.json` *and* the Keychain item `Claude Code-credentials` | Card shows "Not configured" (if only the file is removed, Keychain is used) | |
 | 9 | Wait for token to expire | App auto-refreshes without error | |

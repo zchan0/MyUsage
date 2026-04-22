@@ -43,3 +43,9 @@ hard timeline.
 
 - `v0.2.0` — Monthly cost estimation (Claude / Codex / Cursor, single device) + automated GitHub Releases.
 - `v0.1.x` — Core providers, settings, polish (specs 01–08).
+
+## Fixes
+
+- Claude card stuck on "Not configured" for Keychain-only users
+  ([`docs/claude-not-configured-bug.md`](docs/claude-not-configured-bug.md)).
+- Claude 429 rate-limit hardening ([`specs/10-fix-claude-429.md`](specs/10-fix-claude-429.md)).
