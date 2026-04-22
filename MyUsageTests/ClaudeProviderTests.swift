@@ -214,6 +214,15 @@ struct ClaudeProviderTests {
         #expect(message.contains("Retrying in 60s"))
     }
 
+    // MARK: - Token expiry
+
+    @Test("Token-expired message points user at `claude` CLI")
+    func tokenExpiredMessage() {
+        let message = ClaudeProvider.tokenExpiredErrorMessage()
+        #expect(message.contains("expired"))
+        #expect(message.contains("`claude`"))
+    }
+
     // MARK: - Credential access error
 
     @Test("errSecItemNotFound yields “run claude login” guidance")

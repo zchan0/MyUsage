@@ -71,19 +71,6 @@ struct ClaudeUsageResponse: Codable, Sendable {
     }
 }
 
-/// Claude OAuth token refresh response.
-struct ClaudeTokenRefreshResponse: Codable, Sendable {
-    let accessToken: String
-    let refreshToken: String?
-    let expiresIn: Int  // seconds
-
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case refreshToken = "refresh_token"
-        case expiresIn = "expires_in"
-    }
-}
-
 /// Claude Code usage provider.
 @Observable
 @MainActor
@@ -105,9 +92,7 @@ final class ClaudeProvider: UsageProvider {
         claudeDirectory + "/.credentials.json"
     }()
     private static let keychainService = "Claude Code-credentials"
-    private static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-    private static let refreshURL = URL(string: "https://platform.claude.com/v1/oauth/token")!
 
     // MARK: - State
 
@@ -116,11 +101,6 @@ final class ClaudeProvider: UsageProvider {
     /// After a 429, skip API calls until this time. `refresh()` becomes a no-op
     /// and we keep showing the last good snapshot and error message.
     private var nextAllowedRefreshAt: Date?
-
-    /// After a 429, the current access token has been counted against
-    /// Anthropic's rate limit bucket. Force a token refresh on the next attempt
-    /// (regardless of `expiresAt`) so we come back with a fresh token.
-    private var forceTokenRefreshOnNextCall = false
 
     /// Consecutive non-429 failures (5xx, network, token refresh, …). Drives
     /// exponential backoff so outages don't turn into tight retry loops.
@@ -160,22 +140,23 @@ final class ClaudeProvider: UsageProvider {
         error = nil
 
         do {
-            guard var creds = loadCredentials(), let oauth = creds.claudeAiOauth else {
+            guard let creds = loadCredentials(), let oauth = creds.claudeAiOauth else {
                 error = "No credentials found"
                 return
             }
 
-            // Refresh token if expired, or if a previous 429 told us the
-            // current token bucket is already burnt.
-            var accessToken = oauth.accessToken
-            if forceTokenRefreshOnNextCall || creds.isExpired {
-                let refreshed = try await refreshToken(oauth.refreshToken)
-                accessToken = refreshed.accessToken
-                creds = updateCredentials(creds, with: refreshed)
-                forceTokenRefreshOnNextCall = false
+            // MyUsage is a passive reader: we never call Anthropic's OAuth refresh
+            // endpoint ourselves, because Anthropic rotates refresh tokens on each
+            // use and we would race the Claude Code CLI, invalidating whichever
+            // side cached the old token. Instead we surface a clear hint and wait
+            // for the CLI to rotate the Keychain entry on its own schedule.
+            if creds.isExpired {
+                error = Self.tokenExpiredErrorMessage()
+                Logger.claude.info("Access token expired; waiting for Claude CLI to refresh Keychain")
+                return
             }
 
-            let usage = try await fetchUsage(accessToken: accessToken)
+            let usage = try await fetchUsage(accessToken: oauth.accessToken)
 
             var mapped = Self.mapToSnapshot(usage, plan: creds.planName)
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
@@ -186,7 +167,6 @@ final class ClaudeProvider: UsageProvider {
         } catch ProviderError.rateLimited(let retryAfter) {
             let delay = retryAfter ?? Self.defaultRateLimitCooldown
             nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
-            forceTokenRefreshOnNextCall = true
             // 429 means we did reach the server — not a transient outage.
             consecutiveFailures = 0
             error = Self.rateLimitErrorMessage(retryAfter: delay)
@@ -214,6 +194,13 @@ final class ClaudeProvider: UsageProvider {
     nonisolated static func rateLimitErrorMessage(retryAfter: TimeInterval) -> String {
         let seconds = max(1, Int(retryAfter.rounded()))
         return "Rate limited. Retry in \(seconds)s. If this persists, run `claude logout && claude login` in Terminal."
+    }
+
+    /// Shown when the cached access token has expired and we're waiting for the
+    /// Claude Code CLI to rotate the Keychain entry. MyUsage deliberately does
+    /// not call `/v1/oauth/token` itself — see the commit removing that path.
+    nonisolated static func tokenExpiredErrorMessage() -> String {
+        "Claude access token expired. Run `claude` once in Terminal so the CLI refreshes the Keychain entry."
     }
 
     /// Formats the user-facing message shown during exponential backoff.
@@ -331,47 +318,6 @@ final class ClaudeProvider: UsageProvider {
             service: Self.keychainService,
             as: ClaudeCredentials.self
         )
-    }
-
-    // MARK: - Token Refresh
-
-    private func refreshToken(_ refreshToken: String) async throws -> ClaudeTokenRefreshResponse {
-        var request = URLRequest(url: Self.refreshURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(AppInfo.claudeUserAgent, forHTTPHeaderField: "User-Agent")
-
-        let body: [String: String] = [
-            "grant_type": "refresh_token",
-            "refresh_token": refreshToken,
-            "client_id": Self.clientID,
-            "scope": "user:profile user:inference user:sessions:claude_code user:mcp_servers"
-        ]
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw ProviderError.tokenRefreshFailed
-        }
-
-        return try JSONDecoder().decode(ClaudeTokenRefreshResponse.self, from: data)
-    }
-
-    private func updateCredentials(
-        _ existing: ClaudeCredentials,
-        with refreshed: ClaudeTokenRefreshResponse
-    ) -> ClaudeCredentials {
-        guard let oldOAuth = existing.claudeAiOauth else { return existing }
-        let newExpiresAt = Int64(Date.now.timeIntervalSince1970 * 1000) + Int64(refreshed.expiresIn * 1000)
-        let newOAuth = ClaudeCredentials.ClaudeOAuthInfo(
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken ?? oldOAuth.refreshToken,
-            expiresAt: newExpiresAt,
-            scopes: oldOAuth.scopes,
-            subscriptionType: oldOAuth.subscriptionType,
-            rateLimitTier: oldOAuth.rateLimitTier
-        )
-        return ClaudeCredentials(claudeAiOauth: newOAuth)
     }
 
     // MARK: - Usage Fetch
