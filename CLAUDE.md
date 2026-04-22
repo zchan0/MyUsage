@@ -58,13 +58,16 @@ asking for per-operation approval:
 3. Push with `jj git push` (use `--create` when the remote bookmark
    doesn't exist yet).
 
+Pushing to `main` is allowed without per-push approval as long as it is a
+**fast-forward** merge of commits that already pass build + tests locally.
+If a merge would not be fast-forward (diverged main), stop and ask.
+
 The agent **must** still ask for explicit approval before any of the
 following, because they are hard to undo or affect shared history:
 
-- Pushing to or merging into `main` / `master`.
 - Force push (`--force`, `--force-with-lease`).
 - Creating or moving a release tag (`vX.Y.Z`) or triggering a release workflow.
-- Deleting remote bookmarks / branches / tags.
+- Deleting remote bookmarks / branches / tags that the agent did not create.
 - Changing git config, skipping hooks, or rewriting already-pushed history.
 
 If pre-push tests fail, fix the cause and try again — never bypass the check.
