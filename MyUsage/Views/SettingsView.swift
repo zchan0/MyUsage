@@ -20,12 +20,17 @@ struct SettingsView: View {
                     Label("Providers", systemImage: "square.stack.3d.up")
                 }
 
+            DevicesTab()
+                .tabItem {
+                    Label("Devices", systemImage: "laptopcomputer.and.iphone")
+                }
+
             aboutTab
                 .tabItem {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 420, height: 340)
+        .frame(width: 540, height: 400)
     }
 
     // MARK: - General

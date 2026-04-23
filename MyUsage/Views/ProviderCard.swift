@@ -80,28 +80,64 @@ struct ProviderCard: View {
 
     // MARK: - Monthly cost row
 
+    /// For Claude / Codex this row displays the *aggregate* monthly cost
+    /// (all synced devices, including this Mac) and exposes a ⊕ badge +
+    /// popover with the per-device breakdown. Cursor / Antigravity keep
+    /// the original local-only row — they're excluded from the ledger.
     @ViewBuilder
     private func monthlyCostRow(_ snapshot: UsageSnapshot) -> some View {
-        if manager.showEstimatedCost, let cost = snapshot.monthlyEstimatedCost {
-            let isEstimate = provider.kind != .cursor
-            HStack(spacing: 4) {
-                Image(systemName: "dollarsign.circle")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text("This month")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                if isEstimate {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .help(Self.estimateTooltip)
-                }
-                Spacer()
-                Text(Self.formatCost(cost, estimated: isEstimate))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
+        if manager.showEstimatedCost {
+            if provider.kind == .claude || provider.kind == .codex {
+                aggregateMonthlyCostRow(fallbackLocal: snapshot.monthlyEstimatedCost)
+            } else if let cost = snapshot.monthlyEstimatedCost {
+                localMonthlyCostRow(cost, isEstimate: provider.kind != .cursor)
             }
+        }
+    }
+
+    private func localMonthlyCostRow(_ cost: Double, isEstimate: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "dollarsign.circle")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text("This month")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if isEstimate {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .help(Self.estimateTooltip)
+            }
+            Spacer()
+            Text(Self.formatCost(cost, estimated: isEstimate))
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func aggregateMonthlyCostRow(fallbackLocal: Double?) -> some View {
+        let monthKey = LedgerCalendar.monthKey(for: .now)
+        let contributions = manager.ledger.contributions(
+            provider: provider.kind,
+            monthKey: monthKey
+        )
+        let aggregate = manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0
+        let hasPeers = contributions.contains { !$0.isSelf }
+        let displayed: Double = {
+            if aggregate > 0 { return aggregate }
+            return fallbackLocal ?? 0
+        }()
+
+        if displayed == 0 && !hasPeers { EmptyView() } else {
+            AggregateMonthlyCostRow(
+                providerKind: provider.kind,
+                displayed: displayed,
+                peerCount: max(0, contributions.count - 1),
+                contributions: contributions
+            )
             .padding(.top, 2)
         }
     }
@@ -111,7 +147,12 @@ struct ProviderCard: View {
     Usage from other machines on the same account is not included.
     """
 
-    private static func formatCost(_ amount: Double, estimated: Bool) -> String {
+    static let aggregateTooltip = """
+    Sum of estimated costs across all Macs synced via iCloud Drive.
+    Click the ⊕ badge to see the per-device breakdown.
+    """
+
+    static func formatCost(_ amount: Double, estimated: Bool = true) -> String {
         let prefix = estimated ? "~$" : "$"
         return prefix + String(format: "%.2f", amount)
     }
