@@ -134,6 +134,36 @@ enum ClaudeLogParser {
         return result
     }
 
+    /// Latest `contentModificationDate` across all in-scope JSONL files,
+    /// or `nil` if no such files exist. Used by the cost cache as the
+    /// invalidation key — cheap stat-only walk, no parsing.
+    static func maxMtime(roots: [URL] = defaultRoots(), since: Date) -> Date? {
+        let fm = FileManager.default
+        var best: Date?
+        for root in roots {
+            guard fm.fileExists(atPath: root.path) else { continue }
+            guard let enumerator = fm.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for case let url as URL in enumerator {
+                guard url.pathExtension == "jsonl" else { continue }
+                guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
+                      values.isRegularFile == true,
+                      let mtime = values.contentModificationDate,
+                      mtime >= since
+                else { continue }
+
+                if best.map({ mtime > $0 }) ?? true {
+                    best = mtime
+                }
+            }
+        }
+        return best
+    }
+
     /// Parse a single JSONL file into a cost-aware breakdown.
     static func parseFileBreakdown(url: URL, into result: inout Breakdown) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }

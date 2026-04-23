@@ -125,6 +125,62 @@ struct ClaudeLogParserTests {
         #expect(result.isEmpty)
     }
 
+    // MARK: - maxMtime
+
+    @Test("maxMtime returns nil for empty / missing roots")
+    func maxMtimeEmpty() {
+        let fake = URL(fileURLWithPath: "/tmp/__nope_\(UUID().uuidString)__")
+        #expect(ClaudeLogParser.maxMtime(roots: [fake], since: .distantPast) == nil)
+    }
+
+    @Test("maxMtime returns the latest in-scope mtime")
+    func maxMtimeLatest() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory
+            .appendingPathComponent("claude-mtime-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let a = root.appendingPathComponent("a.jsonl")
+        let b = root.appendingPathComponent("b.jsonl")
+        let c = root.appendingPathComponent("c.jsonl")
+        try "{}".write(to: a, atomically: true, encoding: .utf8)
+        try "{}".write(to: b, atomically: true, encoding: .utf8)
+        try "{}".write(to: c, atomically: true, encoding: .utf8)
+
+        let t1 = Date(timeIntervalSince1970: 1_700_000_000)
+        let t2 = Date(timeIntervalSince1970: 1_700_000_100)
+        let t3 = Date(timeIntervalSince1970: 1_700_000_050)
+        try fm.setAttributes([.modificationDate: t1], ofItemAtPath: a.path)
+        try fm.setAttributes([.modificationDate: t2], ofItemAtPath: b.path)
+        try fm.setAttributes([.modificationDate: t3], ofItemAtPath: c.path)
+
+        let max = ClaudeLogParser.maxMtime(roots: [root], since: .distantPast)
+        #expect(max != nil)
+        #expect(abs((max ?? .distantPast).timeIntervalSince(t2)) < 1)
+    }
+
+    @Test("maxMtime ignores files older than since and non-jsonl files")
+    func maxMtimeFilter() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory
+            .appendingPathComponent("claude-mtime-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let old = root.appendingPathComponent("old.jsonl")
+        let txt = root.appendingPathComponent("new.txt")
+        try "{}".write(to: old, atomically: true, encoding: .utf8)
+        try "hi".write(to: txt, atomically: true, encoding: .utf8)
+
+        let ancient = Date(timeIntervalSinceNow: -60 * 24 * 3600)
+        try fm.setAttributes([.modificationDate: ancient], ofItemAtPath: old.path)
+
+        let cutoff = Date(timeIntervalSinceNow: -24 * 3600)
+        // Only ancient jsonl exists and it's older than cutoff; txt is filtered by extension.
+        #expect(ClaudeLogParser.maxMtime(roots: [root], since: cutoff) == nil)
+    }
+
     // MARK: - costUSD breakdown
 
     @Test("costUSD row contributes to preComputedCost and skips tokens")

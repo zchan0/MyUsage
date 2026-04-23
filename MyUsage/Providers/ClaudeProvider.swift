@@ -145,6 +145,20 @@ final class ClaudeProvider: UsageProvider {
                 return
             }
 
+            // Cache-first: seed the snapshot from disk before any slow path runs
+            // so a cold start (or a run that will fail below) never shows a
+            // blank card. See `specs/11-claude-data-sources.md`.
+            let fingerprint = ClaudeUsageCache.fingerprint(refreshToken: oauth.refreshToken)
+            if snapshot == nil,
+               let cached = ClaudeUsageCache.read(matching: fingerprint) {
+                snapshot = Self.mapToSnapshot(
+                    cached.response,
+                    plan: creds.planName,
+                    fetchedAt: cached.fetchedAt
+                )
+                Logger.claude.info("Seeded Claude snapshot from disk cache")
+            }
+
             // MyUsage is a passive reader: we never call Anthropic's OAuth refresh
             // endpoint ourselves, because Anthropic rotates refresh tokens on each
             // use and we would race the Claude Code CLI, invalidating whichever
@@ -158,7 +172,19 @@ final class ClaudeProvider: UsageProvider {
 
             let usage = try await fetchUsage(accessToken: oauth.accessToken)
 
-            var mapped = Self.mapToSnapshot(usage, plan: creds.planName)
+            do {
+                try ClaudeUsageCache.write(
+                    response: usage,
+                    fingerprint: fingerprint,
+                    at: .now
+                )
+            } catch {
+                Logger.claude.error(
+                    "Failed to write usage cache: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+
+            var mapped = Self.mapToSnapshot(usage, plan: creds.planName, fetchedAt: .now)
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
             nextAllowedRefreshAt = nil
@@ -231,18 +257,73 @@ final class ClaudeProvider: UsageProvider {
     /// Scan `~/.claude/projects/**/*.jsonl` modified since the first of the
     /// current calendar month and compute estimated spend.
     ///
-    /// For rows that already carry a `costUSD` value we trust that number
-    /// directly; for older rows without it, we fall back to token × pricing.
+    /// Cache-gated: the per-file mtime walk is cheap; a full parse only
+    /// happens when a JSONL has been appended to since the last scan or the
+    /// calendar month has rolled over. See `specs/11-claude-data-sources.md`.
     nonisolated static func computeMonthlyCost() async -> Double {
         await Task.detached(priority: .utility) {
-            let since = Date.startOfCurrentMonth()
-            let breakdown = ClaudeLogParser.scanBreakdown(since: since)
-            let tokenCost = CostCalculator.totalCost(
-                of: breakdown.tokensByModel,
-                catalog: PricingCatalog.shared
+            Self.computeMonthlyCostSync(
+                roots: ClaudeLogParser.defaultRoots(),
+                now: .now,
+                cacheURL: ClaudeCostCache.defaultFileURL
             )
-            return breakdown.preComputedCost + tokenCost
         }.value
+    }
+
+    /// Testable synchronous core of `computeMonthlyCost`. Accepts injectable
+    /// roots / now / cache URL so unit tests can use temp fixtures without
+    /// touching the real `~/.claude/projects` or `~/Library/Caches`.
+    nonisolated static func computeMonthlyCostSync(
+        roots: [URL],
+        now: Date,
+        cacheURL: URL
+    ) -> Double {
+        let since = Date.startOfCurrentMonth(now: now)
+        let month = ClaudeCostCache.monthKey(for: now)
+
+        // 1) Stat pass — cheap, no parse. `nil` means no in-scope files.
+        let maxMtime = ClaudeLogParser.maxMtime(roots: roots, since: since)
+
+        // 2) Cache hit? Require matching month AND matching max mtime.
+        if let cached = ClaudeCostCache.read(from: cacheURL),
+           cached.month == month,
+           let mtime = maxMtime,
+           abs(cached.maxSourceMtime.timeIntervalSinceReferenceDate
+               - mtime.timeIntervalSinceReferenceDate) < 1e-6 {
+            return cached.totalUSD
+        }
+
+        // 3) Miss — full scan.
+        let breakdown = ClaudeLogParser.scanBreakdown(roots: roots, since: since)
+        let tokenCost = CostCalculator.totalCost(
+            of: breakdown.tokensByModel,
+            catalog: PricingCatalog.shared
+        )
+        let total = breakdown.preComputedCost + tokenCost
+
+        // 4) Persist (best-effort). Skip when no in-scope files, since we
+        //    have nothing to pin the cache to for invalidation.
+        if let mtime = maxMtime {
+            let counts = breakdown.tokensByModel.mapValues(ClaudeCostCache.CachedTokenCounts.init)
+            let payload = ClaudeCostCache.Payload(
+                v: ClaudeCostCache.currentVersion,
+                month: month,
+                totalUSD: total,
+                preComputedCost: breakdown.preComputedCost,
+                tokensByModel: counts,
+                maxSourceMtime: mtime,
+                computedAt: now
+            )
+            do {
+                try ClaudeCostCache.write(payload, to: cacheURL)
+            } catch {
+                Logger.claude.error(
+                    "Failed to write cost cache: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
+
+        return total
     }
 
     // MARK: - Detection
@@ -350,10 +431,17 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Snapshot Mapping
 
-    nonisolated static func mapToSnapshot(_ response: ClaudeUsageResponse, plan: String?) -> UsageSnapshot {
+    /// `fetchedAt` is the wall-clock time the `response` came off the wire,
+    /// typically `.now` for a fresh fetch or the cached value for a
+    /// replayed snapshot. It drives the "Last refreshed N min ago" label.
+    nonisolated static func mapToSnapshot(
+        _ response: ClaudeUsageResponse,
+        plan: String?,
+        fetchedAt: Date = .now
+    ) -> UsageSnapshot {
         var snapshot = UsageSnapshot()
         snapshot.planName = plan
-        snapshot.lastRefreshed = .now
+        snapshot.lastRefreshed = fetchedAt
 
         if let fh = response.fiveHour {
             snapshot.sessionUsage = UsageWindow(
