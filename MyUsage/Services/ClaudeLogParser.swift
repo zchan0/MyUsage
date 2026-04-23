@@ -29,6 +29,10 @@ enum ClaudeLogParser {
         /// trust it instead of re-pricing tokens locally (matches ccusage's
         /// `auto` mode).
         let costUSD: Double?
+        /// ISO 8601 timestamp at the top level of each JSONL row (Claude Code
+        /// writes this for assistant / user messages). Used by the ledger
+        /// to bucket costs by UTC day. Falls back to file mtime when missing.
+        let timestamp: String?
 
         struct Message: Decodable {
             let model: String?
@@ -168,6 +172,110 @@ enum ClaudeLogParser {
     static func parseFileBreakdown(url: URL, into result: inout Breakdown) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
         parseBreakdown(data: data, into: &result)
+    }
+
+    // MARK: - Per-day cost breakdown (ledger)
+
+    /// Scan default roots, producing a `YYYY-MM-DD` (UTC) → USD map for all
+    /// JSONL files modified since `since`. Used by the multi-device ledger
+    /// (spec 12) — each day is one ledger entry.
+    static func scanDailyCost(
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> [String: Double] {
+        scanDailyCost(roots: defaultRoots(), since: since, catalog: catalog)
+    }
+
+    /// Testable core of `scanDailyCost`.
+    static func scanDailyCost(
+        roots: [URL],
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> [String: Double] {
+        var result: [String: Double] = [:]
+        let fm = FileManager.default
+        for root in roots {
+            guard fm.fileExists(atPath: root.path) else { continue }
+            guard let enumerator = fm.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for case let url as URL in enumerator {
+                guard url.pathExtension == "jsonl" else { continue }
+                guard let values = try? url.resourceValues(
+                    forKeys: [.contentModificationDateKey, .isRegularFileKey]),
+                      values.isRegularFile == true,
+                      let mtime = values.contentModificationDate,
+                      mtime >= since
+                else { continue }
+
+                parseFileDaily(url: url, mtime: mtime, into: &result, catalog: catalog)
+            }
+        }
+        return result
+    }
+
+    private static func parseFileDaily(
+        url: URL,
+        mtime: Date,
+        into result: inout [String: Double],
+        catalog: PricingCatalog
+    ) {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
+              let text = String(data: data, encoding: .utf8)
+        else { return }
+
+        let decoder = JSONDecoder()
+        let fallbackDay = LedgerCalendar.dayKey(for: mtime)
+        var acc = result
+
+        text.enumerateLines { line, _ in
+            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { return }
+            guard let row = try? decoder.decode(Row.self, from: lineData) else { return }
+            guard row.type == "assistant",
+                  let message = row.message,
+                  let model = message.model,
+                  let usage = message.usage
+            else { return }
+
+            let day = row.timestamp
+                .flatMap(Self.parseTimestamp)
+                .map(LedgerCalendar.dayKey) ?? fallbackDay
+
+            if let cost = row.costUSD, cost > 0 {
+                acc[day, default: 0] += cost
+                return
+            }
+
+            let tokens = TokenUsage(
+                input: usage.inputTokens ?? 0,
+                output: usage.outputTokens ?? 0,
+                cacheWrite: usage.cacheCreationInputTokens ?? 0,
+                cacheRead: usage.cacheReadInputTokens ?? 0
+            )
+            let total = tokens.input + tokens.output + tokens.cacheWrite + tokens.cacheRead
+            guard total > 0 else { return }
+
+            let usd = CostCalculator.cost(
+                usage: tokens,
+                model: model.lowercased(),
+                catalog: catalog
+            )
+            guard usd > 0 else { return }
+
+            acc[day, default: 0] += usd
+        }
+        result = acc
+    }
+
+    private static func parseTimestamp(_ raw: String) -> Date? {
+        let frac = ISO8601DateFormatter()
+        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = frac.date(from: raw) { return d }
+        let basic = ISO8601DateFormatter()
+        return basic.date(from: raw)
     }
 
     /// Parse raw JSONL bytes into a cost-aware breakdown.

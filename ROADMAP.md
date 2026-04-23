@@ -15,9 +15,10 @@ hard timeline.
 ### 2. Usage ledger + multi-device sync
 - **Problem**: Monthly cost is currently estimated from *this Mac's* local CLI logs. Users on multiple machines see each device's cost in isolation.
 - **Spec**: [`specs/12-usage-ledger.md`](specs/12-usage-ledger.md)
-- **Approach**: local SQLite ledger on each device, append-only JSONL per device in `~/Library/Mobile Documents/com~apple~CloudDocs/MyUsage/devices/<device-id>/`, watched via `NSMetadataQuery`. Peer devices merge rows into their own SQLite; device-scoped primary keys eliminate write conflicts.
-- **Claude scope**: only JSONL-derived monthly cost rides the ledger. 5h/7d utilization stays account-level from `/api/oauth/usage` (cached per spec 11).
-- **Out of scope for v1**: self-hosted sync server, real-time streaming, retroactive re-pricing (entries store USD at time of recording).
+- **Scope**: **only Claude and Codex monthly cost** go through the ledger. Cursor stays on its account-level billing API; Antigravity has no local cost source. Account-level signals (5h / 7d / extra usage) never enter the ledger — they're already unified upstream.
+- **Approach**: local SQLite ledger per device (never synced), append-only JSONL per device in `~/Library/Mobile Documents/com~apple~CloudDocs/MyUsage/devices/<device-id>/`, watched via `NSMetadataQuery`. Each device is the sole writer of its own folder, so physical conflicts are impossible. Peer devices merge rows into their own SQLite.
+- **UI**: cards show aggregate with a `⊕ N` badge when ≥ 2 devices are synced; clicking the cost row opens a per-device breakdown popover. Settings → Devices lists every contributor.
+- **Out of scope for v1**: self-hosted sync server, real-time streaming, retroactive re-pricing (entries store USD at time of recording), iOS companion app, CloudKit (needs entitlements we don't have).
 
 ### 3. Multi-account aggregation
 - **Problem**: Users may have separate Claude Pro + Claude Team subscriptions, or personal + work Cursor. Today MyUsage assumes one account per provider.
@@ -46,7 +47,9 @@ hard timeline.
 Resolved in spec 12:
 - Ledger format → both (SQLite local, JSONL wire).
 - Token counts vs USD → USD only; re-pricing is explicitly not a goal.
-- Cross-device conflicts → impossible by construction (device-scoped primary keys).
+- Cross-device conflicts → impossible by construction (one writer per device folder).
+- Ledger scope → Claude + Codex cost only; Cursor / Antigravity stay off the ledger.
+- Transport → per-device JSONL under iCloud Drive's public `com~apple~CloudDocs/` path (no entitlement, works with ad-hoc signing). CloudKit / CoreData-with-CloudKit explicitly ruled out.
 
 ## Completed
 

@@ -161,9 +161,16 @@ final class CodexProvider: UsageProvider {
         return paths
     }
 
+    // MARK: - State
+
+    /// Optional multi-device ledger (spec 12). Written after each successful
+    /// `computeMonthlyCost`.
+    private weak var ledger: LedgerSync?
+
     // MARK: - Init
 
-    init() {
+    init(ledger: LedgerSync? = nil) {
+        self.ledger = ledger
         detectAvailability()
     }
 
@@ -205,9 +212,23 @@ final class CodexProvider: UsageProvider {
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
 
+            await recordDailyCostsToLedger()
+
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func recordDailyCostsToLedger() async {
+        guard let ledger else { return }
+        let byDay = await Task.detached(priority: .utility) {
+            CodexLogParser.scanDailyCost(
+                roots: CodexLogParser.defaultRoots(),
+                since: Date.startOfCurrentMonth()
+            )
+        }.value
+        guard !byDay.isEmpty else { return }
+        await ledger.recordDailyCosts(provider: .codex, byDay: byDay)
     }
 
     /// Scan `~/.codex/sessions` + `archived_sessions` modified since the first

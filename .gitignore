@@ -41,3 +41,8 @@ MyUsage.app/
 # Misc
 *.swp
 *~
+
+# SQLite artifacts from misconfigured in-memory paths
+:memory:
+:memory:-shm
+:memory:-wal

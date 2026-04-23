@@ -98,6 +98,10 @@ final class ClaudeProvider: UsageProvider {
 
     private var credentials: ClaudeCredentials?
 
+    /// Optional multi-device ledger. When present, each successful cost
+    /// calculation writes per-day totals into the ledger (spec 12).
+    private weak var ledger: LedgerSync?
+
     /// After a 429, skip API calls until this time. `refresh()` becomes a no-op
     /// and we keep showing the last good snapshot and error message.
     private var nextAllowedRefreshAt: Date?
@@ -118,7 +122,8 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Init
 
-    init() {
+    init(ledger: LedgerSync? = nil) {
+        self.ledger = ledger
         detectAvailability()
     }
 
@@ -189,6 +194,11 @@ final class ClaudeProvider: UsageProvider {
             snapshot = mapped
             nextAllowedRefreshAt = nil
             consecutiveFailures = 0
+
+            // Write per-day totals into the multi-device ledger (spec 12).
+            // Off the hot path of the user-visible snapshot so a slow scan
+            // never blocks the card update.
+            await recordDailyCostsToLedger()
 
         } catch ProviderError.rateLimited(let retryAfter) {
             let delay = retryAfter ?? Self.defaultRateLimitCooldown
@@ -324,6 +334,20 @@ final class ClaudeProvider: UsageProvider {
         }
 
         return total
+    }
+
+    // MARK: - Ledger
+
+    private func recordDailyCostsToLedger() async {
+        guard let ledger else { return }
+        let byDay = await Task.detached(priority: .utility) {
+            ClaudeLogParser.scanDailyCost(
+                roots: ClaudeLogParser.defaultRoots(),
+                since: Date.startOfCurrentMonth()
+            )
+        }.value
+        guard !byDay.isEmpty else { return }
+        await ledger.recordDailyCosts(provider: .claude, byDay: byDay)
     }
 
     // MARK: - Detection

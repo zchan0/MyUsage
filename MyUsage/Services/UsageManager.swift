@@ -12,6 +12,11 @@ final class UsageManager {
     private(set) var isRefreshing = false
     private(set) var lastRefreshed: Date?
 
+    /// Multi-device usage ledger — see `specs/12-usage-ledger.md`.
+    /// Lives on the manager so every provider can read/write through a single
+    /// instance and the UI can observe aggregate state.
+    let ledger: LedgerSync
+
     // MARK: - Settings
 
     var refreshInterval: RefreshInterval {
@@ -42,18 +47,21 @@ final class UsageManager {
 
     // MARK: - Init
 
-    init() {
+    init(ledger: LedgerSync = LedgerSync()) {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
         self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider") ?? ""
         self.providerOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
             ?? ProviderKind.allCases.map(\.rawValue)
         self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
+        self.ledger = ledger
 
-        register(ClaudeProvider())
-        register(CodexProvider())
+        register(ClaudeProvider(ledger: ledger))
+        register(CodexProvider(ledger: ledger))
         register(CursorProvider())
         register(AntigravityProvider())
+
+        Task { await ledger.start() }
     }
 
     // MARK: - Public API
