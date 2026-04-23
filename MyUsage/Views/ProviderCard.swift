@@ -121,10 +121,18 @@ struct ProviderCard: View {
     @ViewBuilder
     private func rollingWindowContent(_ snapshot: UsageSnapshot) -> some View {
         if let session = snapshot.sessionUsage {
-            usageBar(label: "Session (5h)", percent: session.percentUsed)
+            usageBar(
+                label: "Session (5h)",
+                percent: session.percentUsed,
+                resetCountdown: session.resetCountdown
+            )
         }
         if let weekly = snapshot.weeklyUsage {
-            usageBar(label: "Weekly (7d)", percent: weekly.percentUsed)
+            usageBar(
+                label: "Weekly (7d)",
+                percent: weekly.percentUsed,
+                resetCountdown: weekly.resetCountdown
+            )
         }
     }
 
@@ -192,7 +200,9 @@ struct ProviderCard: View {
     private func resetText(_ snapshot: UsageSnapshot) -> String? {
         switch provider.kind {
         case .claude, .codex:
-            return snapshot.sessionUsage?.resetCountdown
+            // Claude/Codex show per-window countdowns inline under each
+            // usage bar, so the footer no longer duplicates the 5h reset.
+            return nil
         case .cursor:
             guard let cycleEnd = snapshot.billingCycleEnd else { return nil }
             let daysLeft = Calendar.current.dateComponents([.day], from: .now, to: cycleEnd).day ?? 0
@@ -205,7 +215,11 @@ struct ProviderCard: View {
 
     // MARK: - Shared components
 
-    private func usageBar(label: String, percent: Double) -> some View {
+    private func usageBar(
+        label: String,
+        percent: Double,
+        resetCountdown: String? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text(label)
@@ -218,6 +232,12 @@ struct ProviderCard: View {
             }
 
             ProgressBar(percent: percent)
+
+            if let resetCountdown {
+                Label(resetCountdown, systemImage: "clock")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 
