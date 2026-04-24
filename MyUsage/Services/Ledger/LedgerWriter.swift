@@ -2,7 +2,7 @@ import Foundation
 import os
 
 /// Serializes ledger writes: upsert into SQLite first, then append to the
-/// per-device JSONL in iCloud Drive (best-effort). Also rewrites the
+/// per-device JSONL in the configured sync folder (best-effort). Also rewrites the
 /// compact `manifest.json` summary so peers can show per-device totals
 /// without reparsing our JSONL.
 ///
@@ -10,6 +10,17 @@ import os
 /// `devices/<selfID>/*`. That guarantees no cross-device file conflicts
 /// by construction.
 actor LedgerWriter {
+    enum SyncWriteIssue: Equatable, Sendable {
+        case unavailable
+        case readOnly
+        case failed(String)
+    }
+
+    struct WriteResult: Sendable {
+        let applied: [LedgerEntry]
+        let issue: SyncWriteIssue?
+    }
+
 
     private let store: LedgerStore
     private let deviceID: String
@@ -24,7 +35,7 @@ actor LedgerWriter {
         store: LedgerStore,
         deviceID: String = DeviceIdentity.currentID(),
         deviceName: String = DeviceIdentity.displayName(),
-        syncRoot: SyncRoot = UbiquitySyncRoot()
+        syncRoot: SyncRoot = SyncFolderRoot()
     ) {
         self.store = store
         self.deviceID = deviceID
@@ -48,7 +59,7 @@ actor LedgerWriter {
         dailyCostsByDay: [String: Double],
         accountID: String = "default",
         now: Date = .now
-    ) async -> [LedgerEntry] {
+    ) async -> WriteResult {
         let entries = dailyCostsByDay.map { (day, cost) in
             LedgerEntry(
                 deviceId: deviceID,
@@ -64,8 +75,8 @@ actor LedgerWriter {
 
     /// Lower-level entry point: upsert a list of entries.
     @discardableResult
-    func append(_ entries: [LedgerEntry]) async -> [LedgerEntry] {
-        guard !entries.isEmpty else { return [] }
+    func append(_ entries: [LedgerEntry]) async -> WriteResult {
+        guard !entries.isEmpty else { return WriteResult(applied: [], issue: nil) }
 
         let applied: [LedgerEntry]
         do {
@@ -74,20 +85,23 @@ actor LedgerWriter {
             Logger.ledger.error(
                 "Ledger upsert failed: \(error.localizedDescription, privacy: .public)"
             )
-            return []
+            return WriteResult(applied: [], issue: .failed(error.localizedDescription))
         }
-        guard !applied.isEmpty else { return [] }
+        guard !applied.isEmpty else { return WriteResult(applied: [], issue: nil) }
 
-        await exportJSONL(applied)
-        await rewriteManifest()
+        let exportIssue = await exportJSONL(applied)
+        let manifestIssue = await rewriteManifest()
 
-        return applied
+        return WriteResult(
+            applied: applied,
+            issue: manifestIssue ?? exportIssue
+        )
     }
 
-    // MARK: - iCloud export
+    // MARK: - Sync folder export
 
-    private func exportJSONL(_ entries: [LedgerEntry]) async {
-        guard syncRoot.isAvailable, let root = syncRoot.rootURL else { return }
+    private func exportJSONL(_ entries: [LedgerEntry]) async -> SyncWriteIssue? {
+        guard syncRoot.isAvailable, let root = syncRoot.rootURL else { return .unavailable }
 
         let folder = SyncLayout.deviceFolder(in: root, deviceID: deviceID)
         let file = SyncLayout.ledgerFile(in: root, deviceID: deviceID)
@@ -99,9 +113,9 @@ actor LedgerWriter {
             )
         } catch {
             Logger.ledger.error(
-                "Ledger export failed: cannot create folder \(folder.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                "Ledger export failed: cannot create folder \(folder.path, privacy: .private): \(error.localizedDescription, privacy: .public)"
             )
-            return
+            return writeIssue(for: error)
         }
 
         var buffer = Data()
@@ -114,19 +128,21 @@ actor LedgerWriter {
                 Logger.ledger.error(
                     "Ledger JSONL encode failed: \(error.localizedDescription, privacy: .public)"
                 )
+                return .failed(error.localizedDescription)
             }
         }
-        guard !buffer.isEmpty else { return }
+        guard !buffer.isEmpty else { return nil }
 
         if !FileManager.default.fileExists(atPath: file.path) {
             do {
                 try buffer.write(to: file, options: .atomic)
             } catch {
                 Logger.ledger.error(
-                    "Ledger JSONL write failed: \(error.localizedDescription, privacy: .public)"
+                    "Ledger JSONL write failed for \(file.path, privacy: .private): \(error.localizedDescription, privacy: .public)"
                 )
+                return writeIssue(for: error)
             }
-            return
+            return nil
         }
 
         do {
@@ -136,13 +152,15 @@ actor LedgerWriter {
             try handle.close()
         } catch {
             Logger.ledger.error(
-                "Ledger JSONL append failed: \(error.localizedDescription, privacy: .public)"
+                "Ledger JSONL append failed for \(file.path, privacy: .private): \(error.localizedDescription, privacy: .public)"
             )
+            return writeIssue(for: error)
         }
+        return nil
     }
 
-    private func rewriteManifest() async {
-        guard syncRoot.isAvailable, let root = syncRoot.rootURL else { return }
+    private func rewriteManifest() async -> SyncWriteIssue? {
+        guard syncRoot.isAvailable, let root = syncRoot.rootURL else { return .unavailable }
 
         let byProvider: [String: [String: Double]]
         let rowCount: Int
@@ -159,7 +177,7 @@ actor LedgerWriter {
             Logger.ledger.error(
                 "Ledger manifest query failed: \(error.localizedDescription, privacy: .public)"
             )
-            return
+            return .failed(error.localizedDescription)
         }
 
         let manifest = LedgerManifest(
@@ -182,9 +200,27 @@ actor LedgerWriter {
             try LedgerManifestCodec.write(manifest, to: file)
         } catch {
             Logger.ledger.error(
-                "Ledger manifest write failed: \(error.localizedDescription, privacy: .public)"
+                "Ledger manifest write failed for \(file.path, privacy: .private): \(error.localizedDescription, privacy: .public)"
             )
+            return writeIssue(for: error)
         }
+        return nil
+    }
+
+    private func writeIssue(for error: Error) -> SyncWriteIssue {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain {
+            switch nsError.code {
+            case NSFileWriteNoPermissionError,
+                 NSFileReadNoPermissionError,
+                 NSFileWriteVolumeReadOnlyError,
+                 NSFileWriteUnknownError:
+                return .readOnly
+            default:
+                break
+            }
+        }
+        return .failed(error.localizedDescription)
     }
 }
 

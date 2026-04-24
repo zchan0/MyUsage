@@ -77,13 +77,13 @@ struct DevicesTab: View {
 
     private var emptyState: some View {
         VStack(spacing: 6) {
-            Image(systemName: "icloud")
+            Image(systemName: "folder.badge.person.crop")
                 .font(.system(size: 24))
                 .foregroundStyle(.tertiary)
             Text("No synced devices yet")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("Sign in to iCloud Drive on each Mac to sync monthly costs.")
+            Text("Point each Mac at the same Sync folder to aggregate monthly costs.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -165,7 +165,7 @@ struct DevicesTab: View {
     }
 
     private var footnote: some View {
-        Text("Costs are the sum of Claude Code + Codex monthly totals reported by each Mac. Each Mac only writes to its own folder in iCloud Drive.")
+        Text("Costs are the sum of Claude Code + Codex monthly totals reported by each Mac. Each Mac only writes to its own subfolder inside the shared Sync folder.")
             .font(.caption2)
             .foregroundStyle(.tertiary)
     }

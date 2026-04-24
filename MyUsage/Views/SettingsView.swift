@@ -60,6 +60,37 @@ struct SettingsView: View {
                 Toggle("Show estimated monthly cost", isOn: $mgr.showEstimatedCost)
             }
 
+            Section("Sync") {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Folder")
+                    Spacer()
+                    Text(manager.ledger.syncFolderDisplayPath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Button("Choose…") {
+                        Task { await manager.ledger.chooseSyncFolder() }
+                    }
+                }
+
+                HStack(alignment: .center, spacing: 6) {
+                    Circle()
+                        .fill(syncStatusColor(manager.ledger.syncFolderStatusKind))
+                        .frame(width: 8, height: 8)
+                    Text(manager.ledger.syncFolderStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if manager.ledger.canRevealSyncFolder {
+                    Button("Reveal in Finder") {
+                        manager.ledger.revealSyncFolderInFinder()
+                    }
+                    .font(.caption)
+                }
+            }
+
             Section("System") {
                 Toggle("Launch at Login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
@@ -135,6 +166,19 @@ struct SettingsView: View {
     }
 
     // MARK: - About
+
+    private func syncStatusColor(_ kind: LedgerSync.SyncFolderStatusKind) -> Color {
+        switch kind {
+        case .idle:
+            return .secondary
+        case .available:
+            return .green
+        case .warning:
+            return .orange
+        case .error:
+            return .red
+        }
+    }
 
     private var aboutTab: some View {
         VStack(spacing: 12) {

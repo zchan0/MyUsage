@@ -111,7 +111,7 @@ struct DeviceBreakdownPopover: View {
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
             }
 
-            Text("Synced via iCloud Drive. Estimated from each Mac's local session logs × API pricing.")
+            Text("Synced via the shared Sync folder. Estimated from each Mac's local session logs × API pricing.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .padding(.top, 2)

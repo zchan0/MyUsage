@@ -148,7 +148,7 @@ struct ProviderCard: View {
     """
 
     static let aggregateTooltip = """
-    Sum of estimated costs across all Macs synced via iCloud Drive.
+    Sum of estimated costs across all Macs sharing the same Sync folder.
     Click the ⊕ badge to see the per-device breakdown.
     """
 

@@ -19,7 +19,7 @@ actor LedgerReader {
     init(
         store: LedgerStore,
         selfDeviceID: String = DeviceIdentity.currentID(),
-        syncRoot: SyncRoot = UbiquitySyncRoot()
+        syncRoot: SyncRoot = SyncFolderRoot()
     ) {
         self.store = store
         self.selfDeviceID = selfDeviceID
@@ -35,22 +35,24 @@ actor LedgerReader {
     }
 
     /// Scan the sync root for peer folders and import any new rows.
-    /// Silently no-ops when iCloud Drive is disabled.
+    /// Silently no-ops when the configured sync folder is unavailable.
     @discardableResult
     func importAllPeers() async -> ImportReport {
         guard syncRoot.isAvailable, let root = syncRoot.rootURL else {
             return ImportReport(peers: [], applied: 0)
         }
 
+        let devicesRoot = SyncLayout.devicesFolder(in: root)
+
         let fm = FileManager.default
-        guard fm.fileExists(atPath: root.path) else {
+        guard fm.fileExists(atPath: devicesRoot.path) else {
             return ImportReport(peers: [], applied: 0)
         }
 
         let children: [URL]
         do {
             children = try fm.contentsOfDirectory(
-                at: root,
+                at: devicesRoot,
                 includingPropertiesForKeys: [.isDirectoryKey],
                 options: [.skipsHiddenFiles]
             )

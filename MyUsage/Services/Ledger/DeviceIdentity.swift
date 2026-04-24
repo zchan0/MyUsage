@@ -5,8 +5,8 @@ import Foundation
 /// display name is best-effort and only surfaces in the "Devices" UI.
 ///
 /// Wiping `~/Library/Preferences` produces a new device ID — the old device's
-/// rows stay in iCloud until the user removes them from Settings → Devices,
-/// which is acceptable per `specs/12-usage-ledger.md`.
+/// rows stay in the shared sync folder until the user removes them from
+/// Settings → Devices, which is acceptable per `specs/12-usage-ledger.md`.
 enum DeviceIdentity {
 
     static let idKey = "MyUsage.deviceID"

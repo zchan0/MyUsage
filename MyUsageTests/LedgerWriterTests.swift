@@ -50,7 +50,8 @@ struct LedgerWriterTests {
             provider: .claude,
             dailyCostsByDay: ["2026-04-17": 1.23, "2026-04-18": 4.56]
         )
-        #expect(applied.count == 2)
+        #expect(applied.applied.count == 2)
+        #expect(applied.issue == nil)
 
         let ledgerData = try Data(contentsOf: h.ledgerFile())
         let lines = String(data: ledgerData, encoding: .utf8)!
@@ -73,13 +74,15 @@ struct LedgerWriterTests {
             provider: .claude,
             dailyCostsByDay: ["2026-04-17": 1.23]
         )
-        #expect(first.count == 1)
+        #expect(first.applied.count == 1)
+        #expect(first.issue == nil)
 
         let second = await h.writer.recordDailyCosts(
             provider: .claude,
             dailyCostsByDay: ["2026-04-17": 1.23]
         )
-        #expect(second.isEmpty)
+        #expect(second.applied.isEmpty)
+        #expect(second.issue == nil)
 
         let ledgerData = try Data(contentsOf: h.ledgerFile())
         let lines = String(data: ledgerData, encoding: .utf8)!
