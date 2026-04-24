@@ -50,9 +50,12 @@ final class UsageManager {
     init(ledger: LedgerSync = LedgerSync()) {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
-        self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider") ?? ""
-        self.providerOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
-            ?? ProviderKind.allCases.map(\.rawValue)
+        let storedOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
+        self.providerOrder = storedOrder ?? ProviderKind.allCases.map(\.rawValue)
+        self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider")
+            ?? storedOrder?.first
+            ?? ProviderKind.allCases.first?.rawValue
+            ?? ""
         self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
         self.ledger = ledger
 
@@ -114,7 +117,7 @@ final class UsageManager {
     /// Short text for the menu bar label, based on tracked provider.
     var menuBarDisplayText: String? {
         guard !iconTrackProvider.isEmpty,
-              let provider = providers.first(where: { $0.kind.rawValue == iconTrackProvider && $0.isEnabled }),
+              let provider = providers.first(where: { $0.kind.rawValue == iconTrackProvider }),
               let snapshot = provider.snapshot else { return nil }
 
         switch provider.kind {

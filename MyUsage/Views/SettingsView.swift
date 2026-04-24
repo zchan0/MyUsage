@@ -47,9 +47,9 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Menu Bar Icon") {
-                Picker("Show usage", selection: $mgr.iconTrackProvider) {
-                    Text("Icon only").tag("")
+            Section("MenuBar Icon") {
+                Picker("Track provider", selection: $mgr.iconTrackProvider) {
+                    Text("None").tag("")
                     ForEach(manager.providers, id: \.kind) { provider in
                         Text(provider.kind.displayName).tag(provider.kind.rawValue)
                     }
