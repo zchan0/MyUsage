@@ -1,5 +1,6 @@
-# Specs (local only)
-specs/
+# Specs (local working docs). Published specs are listed explicitly below.
+specs/*
+!specs/12a-sync-folder.md
 
 # Xcode
 *.xcodeproj/project.xcworkspace/
