@@ -5,9 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_NAME="MyUsage"
 BUNDLE_ID="com.zchan0.MyUsage"
-VERSION="${MYUSAGE_VERSION:-0.1.0}"
 BUILD_DIR="${PROJECT_DIR}/.build/release"
 APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
+SOURCE_PLIST="${PROJECT_DIR}/MyUsage/Resources/Info.plist"
+
+if [ -f "$SOURCE_PLIST" ]; then
+    DEFAULT_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$SOURCE_PLIST")"
+    DEFAULT_BUILD="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$SOURCE_PLIST")"
+else
+    DEFAULT_VERSION="0.1.0"
+    DEFAULT_BUILD="1"
+fi
+
+VERSION="${MYUSAGE_VERSION:-$DEFAULT_VERSION}"
+BUILD_NUMBER="${MYUSAGE_BUILD:-$DEFAULT_BUILD}"
 
 cd "$PROJECT_DIR"
 
@@ -78,6 +89,8 @@ fi
 # Patch version from env (overrides the copied Info.plist value)
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist" \
     || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${APP_BUNDLE}/Contents/Info.plist" \
+    || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${BUILD_NUMBER}" "${APP_BUNDLE}/Contents/Info.plist"
 
 # Ad-hoc code sign
 SIGNING="${MYUSAGE_SIGNING:-adhoc}"
@@ -90,4 +103,5 @@ else
 fi
 
 echo "==> Done: ${APP_BUNDLE}"
+echo "    Version: ${VERSION} (${BUILD_NUMBER})"
 echo "    Run: open ${APP_BUNDLE}"

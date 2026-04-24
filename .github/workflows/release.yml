@@ -35,16 +35,10 @@ jobs:
         run: swift test
 
       - name: Package .app bundle
-        env:
-          MYUSAGE_VERSION: ${{ steps.version.outputs.version }}
-        run: ./Scripts/package_app.sh
-
-      - name: Create zip archive
         run: |
-          ZIP_NAME="MyUsage-${{ steps.version.outputs.version }}.zip"
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent MyUsage.app "$ZIP_NAME"
-          shasum -a 256 "$ZIP_NAME" > "${ZIP_NAME}.sha256"
-          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+          chmod +x ./Scripts/prepare_release.sh ./Scripts/package_app.sh
+          ./Scripts/prepare_release.sh --version "${{ steps.version.outputs.version }}" --no-update-plist
+          echo "ZIP_NAME=MyUsage-${{ steps.version.outputs.version }}.zip" >> "$GITHUB_ENV"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

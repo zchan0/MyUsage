@@ -1,95 +1,107 @@
 # MyUsage
 
-Native macOS menu bar app that monitors AI coding tool usage across **Claude Code**, **Codex**, **Cursor**, and **Antigravity** — all in one place.
+Native macOS menu bar app for tracking AI coding tool usage across Claude Code, Codex, Cursor, and Antigravity.
+
+Chinese version: [README.zh-CN.md](README.zh-CN.md)
 
 ![MyUsage Screenshot](docs/screenshot.png)
 
-## Features
+## Highlights
 
-- **One glance** — All your AI tool usage in a single popover.
-- **Menu bar usage** — Optionally show live usage value (e.g. `$125` for Cursor, `57%` for Claude).
-- **Auto-refresh** — Configurable intervals (1m / 2m / 5m / 15m / manual).
-- **Brand icons** — Each provider displays its recognizable brand icon.
-- **Per-model quotas** — Antigravity shows individual model limits (Claude, Gemini, etc.).
-- **On-demand tracking** — Cursor shows included budget + on-demand spend separately.
-- **Custom ordering** — Drag to reorder providers in Settings.
-- **Launch at Login** — Set-and-forget via macOS Login Items.
-- **Zero dependencies** — Built entirely with system frameworks (SwiftUI, SQLite3, Security).
+- Unified usage view for multiple AI coding tools in one menu bar popover.
+- Optional menu bar tracking for a selected provider.
+- Configurable refresh interval (1m / 2m / 5m / 15m / manual).
+- Provider ordering, enable/disable toggles, and quick status checks.
+- Estimated monthly cost display (Claude Code + Codex).
+- Shared sync folder + Devices tab to aggregate costs from multiple Macs.
+- Built with system frameworks only (SwiftUI, SQLite3, Security), no third-party dependencies.
 
 ## Supported Providers
 
-| Provider | Data Source | What's Shown |
-|----------|-----------|--------------|
-| **Claude Code** | OAuth API (`~/.claude/.credentials.json` / Keychain) | 5h session + 7d weekly usage, extra usage credits |
-| **Codex** | OAuth API (`~/.codex/auth.json` / Keychain) | 5h session + 7d weekly usage, credits balance |
-| **Cursor** | SQLite + Connect RPC (`state.vscdb`) | Included budget, on-demand spend, billing cycle |
-| **Antigravity** | Local language server process probe | Per-model quota (remaining fraction + reset time) |
+| Provider | Data Source | What You See |
+| --- | --- | --- |
+| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) | Current 5h session, 7d window, extra usage |
+| Codex | OAuth API (`~/.codex/auth.json` / Keychain) | Current 5h session, 7d window, credits |
+| Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included usage, on-demand spend, billing cycle |
+| Antigravity | Local language server process probe | Per-model quota and reset time |
 
 ## Requirements
 
 - macOS 14+ (Sonoma)
-- At least one supported AI tool installed and authenticated
+- At least one supported tool installed and signed in
 
 ## Install
 
-Grab the latest `MyUsage-<version>.zip` from [Releases](https://github.com/zchan0/MyUsage/releases), unzip, and drag `MyUsage.app` into `/Applications`.
+Download the latest `MyUsage-<version>.zip` from [GitHub Releases](https://github.com/zchan0/MyUsage/releases), unzip it, then move `MyUsage.app` to `/Applications`.
 
-The app is **ad-hoc signed** (no paid Apple Developer certificate), so on first launch macOS Gatekeeper will say it's from an "unidentified developer". Bypass once:
+MyUsage is ad-hoc signed (no paid Apple Developer certificate), so Gatekeeper will warn on first launch:
 
-- **Right-click** `MyUsage.app` → **Open** → **Open** again in the prompt. macOS will remember the choice.
-- Or, in Terminal:
-  ```bash
-  xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
-  ```
-
-A `sha256` checksum ships alongside each release zip if you want to verify the download.
-
-## Build from source
+- Right-click `MyUsage.app` -> `Open` -> `Open` once.
+- Or run:
 
 ```bash
-# Build
-swift build -c release
+xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
+```
 
-# Package as .app bundle
+Each release includes a `.sha256` file for checksum verification.
+
+## Quick Usage
+
+1. Launch MyUsage from `/Applications`.
+2. Click the menu bar icon to open the usage popover.
+3. Use the refresh button for manual sync.
+4. Open Settings for:
+   - `General`: refresh interval, menu bar tracking, estimated cost toggle, sync folder, launch at login
+   - `Providers`: reorder providers and toggle each provider on/off
+   - `Devices`: inspect aggregated monthly cost by device and forget stale peers
+   - `About`: app version and project link
+
+## Build from Source
+
+```bash
+# Release build + app bundle
 ./Scripts/package_app.sh
 
-# Open
+# Or build release binary only
+swift build -c release
+
+# Open packaged app
 open MyUsage.app
 ```
 
-Or open in Xcode via the SwiftPM workspace:
+Open in Xcode (SwiftPM workspace):
 
 ```bash
 open .swiftpm/xcode/package.xcworkspace
 ```
 
-## Project Structure
+## Release Flow
 
-```
-MyUsage/
-├── MyUsageApp.swift              # @main, MenuBarExtra setup
-├── Models/                       # ProviderKind, UsageSnapshot
-├── Providers/                    # Claude, Codex, Cursor, Antigravity
-├── Services/                     # UsageManager, KeychainHelper
-├── Views/                        # MenuBarIcon, UsagePopover, ProviderCard, SettingsView
-└── Utilities/                    # ProcessHelper, SQLiteHelper, Logger
+- Update source version/build in `MyUsage/Resources/Info.plist`.
+- Prepare release artifacts with:
+
+```bash
+./Scripts/prepare_release.sh --version 0.4.0 --build 2
 ```
 
-## How It Works
+This script updates/validates bundle version fields, packages `MyUsage.app`, and outputs:
 
-Each provider reads local credentials (files, Keychain, or SQLite), calls the respective usage API, and maps the response into a unified `UsageSnapshot`. The `UsageManager` orchestrates refresh timing and publishes state to the SwiftUI views.
+- `MyUsage-<version>.zip`
+- `MyUsage-<version>.zip.sha256`
 
-- **Claude / Codex** — OAuth token refresh + REST API
-- **Cursor** — SQLite token read + Connect RPC (protobuf-over-HTTP)
-- **Antigravity** — Process discovery via `ps` → port probe via `lsof` → Connect RPC to local language server
+## Architecture Notes
 
-## Settings
+- `UsageManager` drives refresh orchestration and UI state.
+- Provider adapters normalize external/local data into a shared snapshot model.
+- Device sync writes each Mac's monthly totals into its own subfolder in the selected sync directory.
 
-Open Settings from the gear icon in the popover footer:
+More details: [docs/architecture.md](docs/architecture.md)
 
-- **General** — Refresh interval, menu bar usage display, Launch at Login
-- **Providers** — Enable/disable and drag-to-reorder providers
-- **About** — Version info, GitHub link
+## Privacy and Data
+
+- MyUsage reads local credential/state files and keychain entries needed by each provider integration.
+- Network requests are sent only to provider endpoints required for usage retrieval.
+- Multi-device sync uses a user-selected local/shared folder; MyUsage does not run its own cloud backend.
 
 ## License
 

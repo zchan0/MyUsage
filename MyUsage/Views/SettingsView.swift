@@ -195,8 +195,7 @@ struct SettingsView: View {
             Text("MyUsage")
                 .font(.title2.bold())
 
-            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1"
-            Text("Version \(version)")
+            Text("Version \(AppInfo.version)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
