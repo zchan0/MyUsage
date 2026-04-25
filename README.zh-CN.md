@@ -61,3 +61,12 @@ swift build -c release
 - 应用会读取本地凭据/状态文件与 Keychain 中必要信息来拉取各 provider 用量。
 - 网络请求仅用于访问对应 provider 的接口。
 - 多设备聚合依赖你手动选择的本地/共享同步目录，不依赖 MyUsage 自建云服务。
+
+## 后续方向
+
+不是承诺，只是可能性。如果哪一项对你特别重要，欢迎在 GitHub 开 issue：
+
+- **Token 级别用量统计** — 按模型、按 prompt 缓存命中率展开月度费用。
+- **UI 重设计** — 更紧凑、更 macOS 原生的视觉。
+- **签名 + 公证打包** — 在新 Mac 上首次打开不再被 Gatekeeper 拦截。
+- **应用内更新提醒** — Sparkle 或简单地与 GitHub Releases 比对版本号。

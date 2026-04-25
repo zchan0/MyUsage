@@ -103,6 +103,19 @@ More details: [docs/architecture.md](docs/architecture.md)
 - Network requests are sent only to provider endpoints required for usage retrieval.
 - Multi-device sync uses a user-selected local/shared folder; MyUsage does not run its own cloud backend.
 
+## Roadmap
+
+Possible directions, not commitments. Open an issue if any of these would
+make MyUsage materially more useful for you:
+
+- **Token-level usage** — break monthly cost down by model and prompt
+  cache hit rate, in addition to the dollar totals already shown.
+- **UI redesign** — denser layout, native macOS look refresh.
+- **Notarized + signed releases** — so the .app opens without Gatekeeper
+  warnings on a fresh Mac.
+- **In-app update notifications** — Sparkle or a lightweight "new version
+  available" check against GitHub Releases.
+
 ## License
 
 MIT
