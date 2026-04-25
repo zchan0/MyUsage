@@ -1,6 +1,7 @@
 # Specs (local working docs). Published specs are listed explicitly below.
 specs/*
 !specs/12a-sync-folder.md
+!specs/13-devices-sync-ui.md
 !specs/14-stable-device-id.md
 
 # Xcode

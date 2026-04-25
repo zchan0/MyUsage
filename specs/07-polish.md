@@ -20,7 +20,7 @@ Final polish: error states, animations, app icon, and launch preparation.
 - [x] Loading states (spinner + "Loading…" while fetching)
 - [x] Smooth animations on data updates (progress bar/ring transitions)
 - [x] Dynamic menu bar icon tint (green/yellow/red based on worst provider)
-- [ ] App icon design (`Assets.xcassets`) — deferred
+- [x] App icon design (`Resources/AppIcon.appiconset/`) — squircle with a 4-bar gradient (green → cyan → blue → purple) on a soft-blue background
 - [x] "About" section in Settings (version, GitHub link)
 - [x] `.gitignore` for Xcode artifacts
 - [x] README.md
