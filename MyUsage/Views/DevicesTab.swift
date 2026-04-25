@@ -72,6 +72,7 @@ struct DevicesTab: View {
             }
             .buttonStyle(.plain)
             .disabled(isLoading)
+            .help("Publish this Mac's ledger files and import peer updates now.")
         }
     }
 
@@ -177,7 +178,7 @@ struct DevicesTab: View {
         defer { isLoading = false }
 
         if force {
-            await manager.ledger.refresh()
+            await manager.ledger.syncNow()
         }
 
         let monthKey = LedgerCalendar.monthKey(for: .now)

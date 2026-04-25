@@ -183,4 +183,20 @@ struct LedgerStoreTests {
         #expect(totals["codex"]?["2026-04"] == 2)
         #expect(totals.count == 2)
     }
+
+    @Test("entriesForDevice returns stable latest rows for snapshot publishing")
+    func entriesForDevice() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "A", provider: .codex, day: "2026-04-02", costUSD: 2, recordedAt: now),
+            LedgerEntry(deviceId: "B", provider: .claude, day: "2026-04-01", costUSD: 9, recordedAt: now),
+            LedgerEntry(deviceId: "A", provider: .claude, day: "2026-04-01", costUSD: 1, recordedAt: now)
+        ])
+
+        let entries = try store.entries(forDevice: "A")
+        #expect(entries.map(\.provider) == ["claude", "codex"])
+        #expect(entries.map(\.day) == ["2026-04-01", "2026-04-02"])
+        #expect(entries.map(\.costUSD) == [1, 2])
+    }
 }

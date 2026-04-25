@@ -113,6 +113,62 @@ struct LedgerWriterTests {
         #expect(manifest?.monthlyTotals["claude"]?["2026-04"] == 2.50)
     }
 
+    @Test("publishSnapshot rewrites full local ledger into sync folder")
+    func publishSnapshotRewritesFullLedger() async throws {
+        let (h, tmp) = try makeHarness()
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        _ = try h.store.upsert([
+            LedgerEntry(
+                deviceId: h.deviceID,
+                provider: .claude,
+                day: "2026-04-17",
+                costUSD: 1.23,
+                recordedAt: Date(timeIntervalSince1970: 1_000_000)
+            ),
+            LedgerEntry(
+                deviceId: h.deviceID,
+                provider: .codex,
+                day: "2026-04-18",
+                costUSD: 4.56,
+                recordedAt: Date(timeIntervalSince1970: 1_000_001)
+            )
+        ])
+        try FileManager.default.createDirectory(
+            at: h.ledgerFile().deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "stale\n".data(using: .utf8)!.write(to: h.ledgerFile(), options: .atomic)
+
+        let issue = await h.writer.publishSnapshot()
+        #expect(issue == nil)
+
+        let ledgerData = try Data(contentsOf: h.ledgerFile())
+        let lines = String(data: ledgerData, encoding: .utf8)!
+            .split(separator: "\n", omittingEmptySubsequences: true)
+        #expect(lines.count == 2)
+
+        let manifest = LedgerManifestCodec.read(from: h.manifestFile())
+        #expect(manifest?.rowCount == 2)
+        #expect(manifest?.monthlyTotals["claude"]?["2026-04"] == 1.23)
+        #expect(manifest?.monthlyTotals["codex"]?["2026-04"] == 4.56)
+    }
+
+    @Test("publishSnapshot creates empty artifacts for a new device")
+    func publishSnapshotCreatesEmptyArtifacts() async throws {
+        let (h, tmp) = try makeHarness()
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let issue = await h.writer.publishSnapshot()
+        #expect(issue == nil)
+        #expect(FileManager.default.fileExists(atPath: h.ledgerFile().path))
+        #expect((try Data(contentsOf: h.ledgerFile())).isEmpty)
+
+        let manifest = LedgerManifestCodec.read(from: h.manifestFile())
+        #expect(manifest?.deviceId == h.deviceID)
+        #expect(manifest?.rowCount == 0)
+    }
+
     @Test("Manifest round-trip")
     func manifestCodecRoundTrip() throws {
         let tmp = FileManager.default.temporaryDirectory

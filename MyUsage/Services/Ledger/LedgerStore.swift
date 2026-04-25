@@ -387,6 +387,51 @@ final class LedgerStore: @unchecked Sendable {
         return ids
     }
 
+    /// All latest rows authored by a device, in a stable order suitable for
+    /// rewriting that device's sync JSONL from the local SQLite source of truth.
+    func entries(forDevice deviceID: String) throws -> [LedgerEntry] {
+        let sql = """
+            SELECT device_id, account_id, provider, day, cost_usd,
+                   source_hash, recorded_at, schema_ver
+            FROM ledger_entries
+            WHERE device_id = ?1
+            ORDER BY provider, account_id, day, source_hash;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, deviceID, -1, SQLITE_TRANSIENT_DEST)
+
+        var entries: [LedgerEntry] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let deviceCStr = sqlite3_column_text(stmt, 0),
+                  let accountCStr = sqlite3_column_text(stmt, 1),
+                  let providerCStr = sqlite3_column_text(stmt, 2),
+                  let dayCStr = sqlite3_column_text(stmt, 3),
+                  let sourceCStr = sqlite3_column_text(stmt, 5)
+            else { continue }
+
+            entries.append(LedgerEntry(
+                deviceId: String(cString: deviceCStr),
+                accountId: String(cString: accountCStr),
+                providerRaw: String(cString: providerCStr),
+                day: String(cString: dayCStr),
+                costUSD: sqlite3_column_double(stmt, 4),
+                sourceHash: String(cString: sourceCStr),
+                recordedAt: sqlite3_column_int64(stmt, 6),
+                v: Int(sqlite3_column_int64(stmt, 7))
+            ))
+        }
+        return entries
+    }
+
     /// Delete all rows authored by a given device. Used by the "Remove"
     /// action in Settings → Devices — removes the peer *locally* only.
     func deleteRows(forDevice deviceId: String) throws {

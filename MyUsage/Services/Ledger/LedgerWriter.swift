@@ -98,6 +98,27 @@ actor LedgerWriter {
         )
     }
 
+    /// Rewrite this Mac's sync artifacts from the SQLite source of truth.
+    /// Used when the sync folder is selected, the app starts, or the user
+    /// manually requests a sync. This heals missing/stale files even when no
+    /// provider cost changed since the last scan.
+    @discardableResult
+    func publishSnapshot() async -> SyncWriteIssue? {
+        let entries: [LedgerEntry]
+        do {
+            entries = try store.entries(forDevice: deviceID)
+        } catch {
+            Logger.ledger.error(
+                "Ledger snapshot query failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return .failed(error.localizedDescription)
+        }
+
+        let exportIssue = await rewriteJSONL(entries)
+        let manifestIssue = await rewriteManifest()
+        return manifestIssue ?? exportIssue
+    }
+
     // MARK: - Sync folder export
 
     private func exportJSONL(_ entries: [LedgerEntry]) async -> SyncWriteIssue? {
@@ -159,6 +180,37 @@ actor LedgerWriter {
         return nil
     }
 
+    private func rewriteJSONL(_ entries: [LedgerEntry]) async -> SyncWriteIssue? {
+        guard syncRoot.isAvailable, let root = syncRoot.rootURL else { return .unavailable }
+
+        let folder = SyncLayout.deviceFolder(in: root, deviceID: deviceID)
+        let file = SyncLayout.ledgerFile(in: root, deviceID: deviceID)
+
+        let buffer: Data
+        do {
+            buffer = try encodeJSONL(entries)
+        } catch {
+            Logger.ledger.error(
+                "Ledger snapshot encode failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return .failed(error.localizedDescription)
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: folder,
+                withIntermediateDirectories: true
+            )
+            try buffer.write(to: file, options: .atomic)
+        } catch {
+            Logger.ledger.error(
+                "Ledger snapshot write failed for \(file.path, privacy: .private): \(error.localizedDescription, privacy: .public)"
+            )
+            return writeIssue(for: error)
+        }
+        return nil
+    }
+
     private func rewriteManifest() async -> SyncWriteIssue? {
         guard syncRoot.isAvailable, let root = syncRoot.rootURL else { return .unavailable }
 
@@ -205,6 +257,16 @@ actor LedgerWriter {
             return writeIssue(for: error)
         }
         return nil
+    }
+
+    private func encodeJSONL(_ entries: [LedgerEntry]) throws -> Data {
+        var buffer = Data()
+        for entry in entries {
+            var line = try jsonlEncoder.encode(entry)
+            line.append(0x0A)  // LF
+            buffer.append(line)
+        }
+        return buffer
     }
 
     private func writeIssue(for error: Error) -> SyncWriteIssue {

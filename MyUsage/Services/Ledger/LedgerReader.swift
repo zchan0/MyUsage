@@ -190,7 +190,13 @@ actor LedgerReader {
 
         while cursor < bytes.count {
             guard let lfIndex = bytes[cursor...].firstIndex(of: 0x0A) else {
-                // No more LFs — the rest is a partial final line.
+                // No more LFs. If the remainder is valid JSON, accept it as a
+                // complete final line; otherwise keep it for the next sweep.
+                let lineData = data.subdata(in: cursor..<bytes.count)
+                if let entry = decodeEntry(lineData) {
+                    entries.append(entry)
+                    consumed = bytes.count
+                }
                 break
             }
 

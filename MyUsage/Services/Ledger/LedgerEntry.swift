@@ -78,6 +78,57 @@ struct LedgerEntry: Sendable, Equatable, Codable {
         case sourceHash
         case recordedAt
     }
+
+    private enum LegacyCodingKeys: String, CodingKey {
+        case device_id
+        case account_id
+        case costUsd
+        case cost_usd
+        case source_hash
+        case recorded_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let current = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
+
+        self.v = try current.decodeIfPresent(Int.self, forKey: .v) ?? LedgerEntry.wireVersion
+        self.deviceId = try current.decodeIfPresent(String.self, forKey: .deviceId)
+            ?? legacy.decode(String.self, forKey: .device_id)
+        self.accountId = try current.decodeIfPresent(String.self, forKey: .accountId)
+            ?? legacy.decodeIfPresent(String.self, forKey: .account_id)
+            ?? "default"
+        self.provider = try current.decode(String.self, forKey: .provider)
+        self.day = try current.decode(String.self, forKey: .day)
+        self.costUSD = try current.decodeIfPresent(Double.self, forKey: .costUSD)
+            ?? legacy.decodeIfPresent(Double.self, forKey: .costUsd)
+            ?? legacy.decode(Double.self, forKey: .cost_usd)
+        self.sourceHash = try current.decodeIfPresent(String.self, forKey: .sourceHash)
+            ?? legacy.decodeIfPresent(String.self, forKey: .source_hash)
+            ?? self.day
+        self.recordedAt = try current.decodeIfPresent(Int64.self, forKey: .recordedAt)
+            ?? legacy.decode(Int64.self, forKey: .recorded_at)
+    }
+
+    init(
+        deviceId: String,
+        accountId: String,
+        providerRaw: String,
+        day: String,
+        costUSD: Double,
+        sourceHash: String,
+        recordedAt: Int64,
+        v: Int = LedgerEntry.wireVersion
+    ) {
+        self.deviceId = deviceId
+        self.accountId = accountId
+        self.provider = providerRaw
+        self.day = day
+        self.costUSD = costUSD
+        self.sourceHash = sourceHash
+        self.recordedAt = recordedAt
+        self.v = v
+    }
 }
 
 /// Canonical UTC calendar used for day bucketing. Kept as a single source of

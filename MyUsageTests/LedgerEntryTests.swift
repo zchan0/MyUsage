@@ -19,6 +19,31 @@ struct LedgerEntryTests {
         #expect(decoded == entry)
     }
 
+    @Test("LedgerEntry accepts legacy sync key spellings")
+    func legacyKeySpellings() throws {
+        let raw = """
+        {"v":1,"device_id":"dev-A","account_id":"default","provider":"claude","day":"2026-04-17","cost_usd":1.25,"source_hash":"2026-04-17","recorded_at":1700000000}
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(LedgerEntry.self, from: raw)
+        #expect(decoded.deviceId == "dev-A")
+        #expect(decoded.accountId == "default")
+        #expect(decoded.provider == "claude")
+        #expect(decoded.costUSD == 1.25)
+        #expect(decoded.sourceHash == "2026-04-17")
+        #expect(decoded.recordedAt == 1_700_000_000)
+    }
+
+    @Test("LedgerEntry accepts costUsd from older camel-case encoders")
+    func legacyCostUsdSpelling() throws {
+        let raw = """
+        {"v":1,"deviceId":"dev-A","accountId":"default","provider":"claude","day":"2026-04-17","costUsd":2.5,"sourceHash":"2026-04-17","recordedAt":1700000000}
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(LedgerEntry.self, from: raw)
+        #expect(decoded.costUSD == 2.5)
+    }
+
     @Test("LedgerEntry default sourceHash equals day")
     func defaultSourceHash() {
         let entry = LedgerEntry(
@@ -59,3 +84,4 @@ struct LedgerEntryTests {
         #expect(LedgerCalendar.monthKey(for: date) == "2026-04")
     }
 }
+

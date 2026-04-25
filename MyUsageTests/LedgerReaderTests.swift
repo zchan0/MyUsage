@@ -191,11 +191,49 @@ struct LedgerReaderTests {
             LedgerEntry(deviceId: "p", provider: .claude, day: "2026-04-02",
                         costUSD: 2, recordedAt: Date(timeIntervalSince1970: 2))
         )
-        buffer.append(partial)  // No trailing LF.
+        buffer.append(partial.dropLast())  // Truncated and no trailing LF.
 
         let (entries, consumed) = await s.reader.parseJSONL(data: buffer)
         #expect(entries.count == 1)
         #expect(consumed == complete.count + 1)
+    }
+
+    @Test("Valid final line without LF is consumed")
+    func finalLineWithoutNewlineConsumed() async {
+        let s = try! makeSetup()
+        defer { try? FileManager.default.removeItem(at: s.root) }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let complete = try! encoder.encode(
+            LedgerEntry(deviceId: "p", provider: .claude, day: "2026-04-01",
+                        costUSD: 1, recordedAt: Date(timeIntervalSince1970: 1))
+        )
+
+        let (entries, consumed) = await s.reader.parseJSONL(data: complete)
+        #expect(entries.count == 1)
+        #expect(consumed == complete.count)
+    }
+
+    @Test("Peer file without final LF imports")
+    func importsFileWithoutFinalNewline() async throws {
+        let s = try makeSetup()
+        defer { try? FileManager.default.removeItem(at: s.root) }
+
+        let peerID = "peer-A"
+        let peerFile = SyncLayout.ledgerFile(in: s.root, deviceID: peerID)
+        try FileManager.default.createDirectory(
+            at: peerFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let raw = """
+        {"accountId":"default","costUSD":3.21,"day":"2026-04-17","deviceId":"peer-A","provider":"claude","recordedAt":1000000,"sourceHash":"2026-04-17","v":1}
+        """.data(using: .utf8)!
+        try raw.write(to: peerFile, options: .atomic)
+
+        let report = await s.reader.importAllPeers()
+        #expect(report.applied == 1)
+        #expect(try s.store.monthlyTotal(provider: .claude, monthKey: "2026-04") == 3.21)
     }
 
     @Test("Unknown wire-version rows are skipped")

@@ -128,6 +128,7 @@ final class LedgerSync {
         configuredSyncRoot?.migrateLegacyIfNeeded()
         lastWriteIssue = nil
         reloadSyncFolderState()
+        await publishLocalSnapshot()
         await refresh()
         restartWatching()
     }
@@ -165,6 +166,13 @@ final class LedgerSync {
         }
         reloadAggregates()
         reloadSyncFolderState()
+    }
+
+    /// Force a bidirectional sync pass without waiting for a provider refresh:
+    /// rewrite this Mac's ledger files, then import peers.
+    func syncNow() async {
+        await publishLocalSnapshot()
+        await refresh()
     }
 
     /// Record the current device's daily costs for a provider. Thin wrapper
@@ -236,6 +244,7 @@ final class LedgerSync {
             lastWriteIssue = nil
             reloadSyncFolderState()
             restartWatching()
+            await publishLocalSnapshot()
             await refresh()
         } catch {
             Logger.ledger.error(
@@ -412,7 +421,22 @@ final class LedgerSync {
 
     private func handleWake() async {
         restartWatching()
+        await publishLocalSnapshot()
         await refresh()
+    }
+
+    private func publishLocalSnapshot() async {
+        guard syncRoot.rootURL != nil else {
+            reloadSyncFolderState()
+            return
+        }
+
+        let issue = await writer.publishSnapshot()
+        lastWriteIssue = issue
+        if issue == nil {
+            lastFolderChangeAt = .now
+        }
+        reloadSyncFolderState()
     }
 
     private func reloadSyncFolderState() {
