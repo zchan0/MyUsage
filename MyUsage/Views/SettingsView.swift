@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import ServiceManagement
 
@@ -206,9 +207,127 @@ struct SettingsView: View {
 
             Link("GitHub", destination: URL(string: "https://github.com/zchan0/MyUsage")!)
                 .font(.caption)
+
+            Divider().padding(.vertical, 4)
+
+            VStack(spacing: 6) {
+                Text("Help & Feedback")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Button("Report an Issue", action: SupportActions.openIssueWithDiagnostics)
+                    Button(crashLogButtonTitle, action: copyLatestCrashLog)
+                }
+                .controlSize(.small)
+
+                Text(crashLogStatus ?? "Includes app version + macOS version. No data is sent automatically.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .frame(minHeight: 14)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+    }
+
+    @State private var crashLogStatus: String?
+
+    private var crashLogButtonTitle: String { "Copy Latest Crash Log" }
+
+    private func copyLatestCrashLog() {
+        switch SupportActions.copyLatestCrashLogToClipboard() {
+        case .copied(let filename):
+            crashLogStatus = "Copied \(filename) to clipboard."
+        case .none:
+            crashLogStatus = "No MyUsage crash logs found — nothing to report."
+        case .failed(let message):
+            crashLogStatus = "Could not read crash log: \(message)"
+        }
+    }
+}
+
+// MARK: - Support actions
+
+private enum SupportActions {
+    enum CrashLogResult {
+        case copied(filename: String)
+        case none
+        case failed(String)
+    }
+
+    static func openIssueWithDiagnostics() {
+        var components = URLComponents(string: "https://github.com/zchan0/MyUsage/issues/new")!
+        components.queryItems = [
+            URLQueryItem(name: "title", value: "[bug] "),
+            URLQueryItem(name: "body", value: issueBody())
+        ]
+        if let url = components.url {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    static func copyLatestCrashLogToClipboard() -> CrashLogResult {
+        let reportsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/DiagnosticReports", isDirectory: true)
+
+        let candidates: [URL]
+        do {
+            candidates = try FileManager.default.contentsOfDirectory(
+                at: reportsDir,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            ).filter { url in
+                let name = url.lastPathComponent
+                guard name.hasPrefix("MyUsage") else { return false }
+                let ext = url.pathExtension.lowercased()
+                return ext == "ips" || ext == "crash"
+            }
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+
+        guard let latest = candidates.max(by: { a, b in
+            (a.modificationDate ?? .distantPast) < (b.modificationDate ?? .distantPast)
+        }) else {
+            return .none
+        }
+
+        do {
+            let contents = try String(contentsOf: latest, encoding: .utf8)
+            let payload = "\(issueBody())\n\n---\n\n\(contents)"
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(payload, forType: .string)
+            return .copied(filename: latest.lastPathComponent)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    private static func issueBody() -> String {
+        let macOS = ProcessInfo.processInfo.operatingSystemVersionString
+        return """
+        **What happened?**
+        <!-- describe the issue -->
+
+        **Steps to reproduce**
+        1.
+        2.
+
+        **Expected vs actual**
+
+        ---
+        - MyUsage version: \(AppInfo.version)
+        - macOS: \(macOS)
+        """
+    }
+}
+
+private extension URL {
+    var modificationDate: Date? {
+        (try? resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 }
 
