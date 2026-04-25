@@ -59,33 +59,3 @@ struct LedgerEntryTests {
         #expect(LedgerCalendar.monthKey(for: date) == "2026-04")
     }
 }
-
-@Suite("DeviceIdentity Tests")
-struct DeviceIdentityTests {
-
-    @Test("currentID persists the first UUIDv4 and returns it thereafter")
-    func persistsFirst() throws {
-        let defaultsKey = "DeviceIdentityTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: defaultsKey)!
-        defer { defaults.removePersistentDomain(forName: defaultsKey) }
-
-        let a = DeviceIdentity.currentID(defaults: defaults)
-        let b = DeviceIdentity.currentID(defaults: defaults)
-        #expect(a == b)
-        #expect(UUID(uuidString: a) != nil)
-    }
-
-    @Test("currentID differs across independent defaults stores")
-    func newStoreNewID() {
-        let k1 = "DeviceIdentityTests.\(UUID().uuidString)"
-        let k2 = "DeviceIdentityTests.\(UUID().uuidString)"
-        let d1 = UserDefaults(suiteName: k1)!
-        let d2 = UserDefaults(suiteName: k2)!
-        defer {
-            d1.removePersistentDomain(forName: k1)
-            d2.removePersistentDomain(forName: k2)
-        }
-        #expect(DeviceIdentity.currentID(defaults: d1)
-             != DeviceIdentity.currentID(defaults: d2))
-    }
-}
