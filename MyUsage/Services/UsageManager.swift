@@ -12,7 +12,7 @@ final class UsageManager {
     private(set) var isRefreshing = false
     private(set) var lastRefreshed: Date?
 
-    /// Multi-device usage ledger — see `specs/12-usage-ledger.md`.
+    /// Multi-device usage ledger — see `specs/12a-sync-folder.md`.
     /// Lives on the manager so every provider can read/write through a single
     /// instance and the UI can observe aggregate state.
     let ledger: LedgerSync

@@ -5,7 +5,7 @@ import os
 ///
 /// The reader is **strictly read-only** for peer folders — it never writes
 /// into another device's folder, enforcing the "one writer per device"
-/// invariant described in `specs/12-usage-ledger.md`.
+/// invariant described in `specs/12a-sync-folder.md`.
 ///
 /// Resume-friendly: we remember each peer's byte offset in `peer_state`, so
 /// subsequent calls only parse the newly appended tail.
