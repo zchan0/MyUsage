@@ -209,6 +209,62 @@ struct LedgerSyncIntegrationTests {
         #expect(lines.count == 1)
     }
 
+    // MARK: - Forget peer cleanup
+
+    @Test("forgetPeer deletes the peer's folder in the sync root")
+    @MainActor
+    func forgetPeerRemovesRemoteFolder() async throws {
+        let (devs, tmp, syncRoot) = try makeDevices(2)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let a = devs[0]
+        let b = devs[1]
+
+        await a.writer.recordDailyCosts(
+            provider: .claude,
+            dailyCostsByDay: ["2026-04-17": 2.0]
+        )
+        _ = await b.reader.importAllPeers()
+
+        let aFolder = SyncLayout.deviceFolder(in: tmp, deviceID: a.id)
+        #expect(FileManager.default.fileExists(atPath: aFolder.path))
+
+        // B "forgets" A. The LedgerSync wrapper owns this behavior because
+        // it spans SQLite + sync folder.
+        let bSync = LedgerSync(store: b.store, syncRoot: syncRoot)
+        bSync.forgetPeer(deviceID: a.id)
+
+        #expect(!FileManager.default.fileExists(atPath: aFolder.path),
+                "remote folder should be deleted")
+        let bRowsForA = try b.store.entries(forDevice: a.id)
+        #expect(bRowsForA.isEmpty, "local rows for A should be dropped")
+    }
+
+    @Test("Forgotten peer can publish again and reappear")
+    @MainActor
+    func forgottenPeerCanReappear() async throws {
+        let (devs, tmp, syncRoot) = try makeDevices(2)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let a = devs[0]
+        let b = devs[1]
+
+        await a.writer.recordDailyCosts(
+            provider: .claude,
+            dailyCostsByDay: ["2026-04-17": 2.0]
+        )
+        _ = await b.reader.importAllPeers()
+
+        let bSync = LedgerSync(store: b.store, syncRoot: syncRoot)
+        bSync.forgetPeer(deviceID: a.id)
+
+        // A publishes again — the Forget on B is not a permanent block.
+        _ = await a.writer.publishSnapshot()
+        let aFolder = SyncLayout.deviceFolder(in: tmp, deviceID: a.id)
+        #expect(FileManager.default.fileExists(atPath: aFolder.path))
+
+        _ = await b.reader.importAllPeers()
+        #expect(try b.store.monthlyTotal(provider: .claude, monthKey: "2026-04") == 2.0)
+    }
+
     // MARK: - Reinstall regression — the bug that motivated spec 14
 
     @Test("Reinstalling on the same hardware does not create a duplicate device folder")

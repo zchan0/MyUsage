@@ -82,14 +82,25 @@ MyUsage.deviceID` followed by a relaunch; the old folder under
 `<sync>/devices/<old-uuid>/` then needs to be removed by hand or via
 Settings → Devices → Forget.
 
-## Follow-ups (not in this change)
+## Follow-ups
+
+### Done in v0.5.0
+
+- **Forget peer now deletes the remote folder too.** Previously Forget only
+  dropped local SQLite rows, so the peer reappeared on the next 30-second
+  poll — effectively a no-op. `LedgerSync.forgetPeer` now also removes
+  `<sync-root>/devices/<id>/`; the Devices tab fronts it with a
+  confirmation dialog. If the peer is still active and publishes again,
+  a fresh folder is created — that's the correct behavior, not a bug.
+- **Multi-device integration test suite** (`LedgerSyncIntegrationTests`)
+  pins the cross-device contract end-to-end, including a regression
+  test that reinstalling on the same hardware does not create a
+  duplicate device folder.
+
+### Open
 
 - **UI hint for orphans.** Devices tab could detect rows with the same
   `deviceName` as the current Mac but a different ID and offer a
   one-click "Merge into this Mac" that removes the row locally *and*
-  deletes the remote folder (with confirmation, since deleting peer files
-  is otherwise outside the writer's contract).
-- **Automated peer-folder cleanup on Forget.** Currently Settings → Devices
-  → Forget only drops local SQLite rows. Optionally extending it to delete
-  the corresponding `<sync>/devices/<uuid>/` would close the loop, with a
-  warning that other Macs lose access to that history too.
+  deletes the remote folder. Useful only for users still carrying
+  pre-v0.5.0 orphans; can wait until someone reports needing it.

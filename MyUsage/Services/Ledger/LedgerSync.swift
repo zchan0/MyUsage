@@ -204,9 +204,12 @@ final class LedgerSync {
         monthlyByDevice[monthKey]?[provider] ?? []
     }
 
-    /// Forget a peer device locally — drops its rows from SQLite and
-    /// stops counting its contributions. The remote file is left alone
-    /// (not ours to touch).
+    /// Forget a peer device: drop its rows from SQLite and delete its
+    /// folder under `<sync-root>/devices/<id>/` so it stops reappearing
+    /// on every poll. If the peer is still running and publishes again,
+    /// a fresh folder will be created — that's the expected behavior.
+    /// Local cleanup always runs; remote cleanup is best-effort and
+    /// failures are logged but do not roll back the local delete.
     func forgetPeer(deviceID: String) {
         guard deviceID != selfDeviceID else { return }
         do {
@@ -217,6 +220,20 @@ final class LedgerSync {
             )
             return
         }
+
+        if syncRoot.isAvailable, let root = syncRoot.rootURL {
+            let folder = SyncLayout.deviceFolder(in: root, deviceID: deviceID)
+            if FileManager.default.fileExists(atPath: folder.path) {
+                do {
+                    try FileManager.default.removeItem(at: folder)
+                } catch {
+                    Logger.ledger.error(
+                        "Forget peer remote cleanup failed: \(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            }
+        }
+
         peerNames.removeValue(forKey: deviceID)
         reloadAggregates()
     }

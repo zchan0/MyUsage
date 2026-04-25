@@ -8,6 +8,7 @@ struct DevicesTab: View {
 
     @State private var rows: [DeviceRow] = []
     @State private var isLoading = false
+    @State private var forgetTarget: DeviceRow?
 
     struct DeviceRow: Identifiable, Equatable {
         let deviceId: String
@@ -40,6 +41,23 @@ struct DevicesTab: View {
         }
         .padding()
         .task { await reload() }
+        .confirmationDialog(
+            forgetTarget.map { "Forget \($0.displayName)?" } ?? "Forget device?",
+            isPresented: Binding(
+                get: { forgetTarget != nil },
+                set: { if !$0 { forgetTarget = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: forgetTarget
+        ) { row in
+            Button("Forget", role: .destructive) {
+                manager.ledger.forgetPeer(deviceID: row.deviceId)
+                Task { await reload() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Stops counting this device on this Mac and removes its files from the Sync folder. If the device is still active, it will reappear next time it publishes.")
+        }
     }
 
     // MARK: - Subviews
@@ -140,13 +158,12 @@ struct DevicesTab: View {
                 Spacer().frame(width: forgetColumnWidth)
             } else {
                 Button("Forget") {
-                    manager.ledger.forgetPeer(deviceID: row.deviceId)
-                    Task { await reload() }
+                    forgetTarget = row
                 }
                 .font(.caption)
                 .buttonStyle(.borderless)
                 .frame(width: forgetColumnWidth, alignment: .trailing)
-                .help("Stop counting this device's contributions locally. The remote file is left untouched.")
+                .help("Stop counting this device and remove its files from the Sync folder.")
             }
         }
         .padding(.vertical, 2)
@@ -166,7 +183,7 @@ struct DevicesTab: View {
     }
 
     private var footnote: some View {
-        Text("Costs are the sum of Claude Code + Codex monthly totals reported by each Mac. Each Mac only writes to its own subfolder inside the shared Sync folder.")
+        Text("Costs are the sum of Claude Code + Codex monthly totals reported by each Mac. Each Mac only writes to its own subfolder inside the shared Sync folder. Forget removes both the local row and the device's folder in the Sync folder.")
             .font(.caption2)
             .foregroundStyle(.tertiary)
     }
