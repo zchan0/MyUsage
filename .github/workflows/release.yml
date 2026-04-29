@@ -40,28 +40,61 @@ jobs:
           ./Scripts/prepare_release.sh --version "${{ steps.version.outputs.version }}" --no-update-plist
           echo "ZIP_NAME=MyUsage-${{ steps.version.outputs.version }}.zip" >> "$GITHUB_ENV"
 
+      - name: Compose release notes from CHANGELOG.md
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Extract the section for this tag from CHANGELOG.md. The section
+          # is bounded by `## v$VERSION` (start) and the next `## v...`
+          # heading (end, exclusive).
+          awk -v ver="$VERSION" '
+            $0 ~ "^## v" ver " " { found = 1; print; next }
+            $0 ~ "^## v" ver "$" { found = 1; print; next }
+            found && /^## v[0-9]/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+
+          # If the changelog is missing this version, fall back to a generic
+          # one-liner so the release page never ships empty. Echo a warning
+          # so we notice during the run.
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::warning::CHANGELOG.md has no section for v$VERSION; using fallback body"
+            echo "MyUsage $VERSION — see commit history for details." > release-notes.md
+          fi
+
+          # Append the install block (kept in the workflow so we can edit
+          # it without touching CHANGELOG.md release-by-release).
+          cat >> release-notes.md <<EOF
+
+          ---
+
+          ## Install
+
+          1. Download \`${ZIP_NAME}\` below, unzip.
+          2. Drag \`MyUsage.app\` to \`/Applications/\`.
+          3. First launch:
+             - Either: **right-click → Open** (Gatekeeper will prompt once, then remember).
+             - Or in Terminal: \`xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app\`
+
+          The app is ad-hoc signed (no Apple Developer certificate). macOS flags
+          it as "unidentified developer" on first launch — this is expected.
+
+          \`sha256\` checksum is attached for verification.
+          EOF
+
+          echo "----- release-notes.md -----"
+          cat release-notes.md
+          echo "----------------------------"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: MyUsage ${{ github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
-          body: |
-            Menu bar AI usage monitor for macOS 14+.
-
-            ## Install
-
-            1. Download `${{ env.ZIP_NAME }}` below, unzip.
-            2. Drag `MyUsage.app` to `/Applications/`.
-            3. First launch:
-               - Either: **right-click → Open** (Gatekeeper will prompt once, then remember).
-               - Or in Terminal: `xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app`
-
-            The app is ad-hoc signed (no Apple Developer certificate). macOS flags
-            it as "unidentified developer" on first launch — this is expected.
-
-            `sha256` checksum is attached for verification.
+          generate_release_notes: false
+          body_path: release-notes.md
           files: |
             MyUsage-${{ steps.version.outputs.version }}.zip
             MyUsage-${{ steps.version.outputs.version }}.zip.sha256
