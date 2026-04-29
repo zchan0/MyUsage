@@ -7,6 +7,34 @@ All notable changes are listed here. Each release section is bilingual
 
 ---
 
+## v0.6.1 — 2026-04-29
+
+### Fixed
+- **Claude plan label was missing or stale** for users on the latest
+  Claude CLI. Recent CLI builds stopped writing `subscriptionType` /
+  `rateLimitTier` into `~/.claude/.credentials.json`, so the popover
+  card showed nothing on a fresh refresh, and a stale "Pro" pill on
+  any device that hadn't refreshed since the upgrade. The plan label
+  is now derived from `/api/oauth/profile` (Max / Pro / Team /
+  Enterprise), with the credentials field kept as a fallback for
+  older CLIs.
+
+### Docs
+- README & README.zh-CN: lift the app icon above the title and refresh
+  the screenshot to the v0.6.0 popover.
+
+### 中文
+
+- **修复 Claude 计划标签丢失或过期的问题**：新版 Claude CLI 不再把
+  `subscriptionType` / `rateLimitTier` 写进 `~/.claude/.credentials.json`，
+  导致 popover 卡上要么不显示，要么停留在升级前缓存的旧 "Pro"。
+  现在改成从 `/api/oauth/profile` 拉取（Max / Pro / Team / Enterprise），
+  老版 CLI 的 credentials 字段作为兜底。
+- README 和 README.zh-CN：把 app 图标提到标题上方居中展示，截图换成
+  v0.6.0 的新 popover。
+
+---
+
 ## v0.6.0 — 2026-04-29
 
 ### Changed
