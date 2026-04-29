@@ -10,6 +10,7 @@ import SwiftUI
 ///     hairline above
 struct UsagePopover: View {
     @Environment(UsageManager.self) private var manager
+    @Environment(UpdateChecker.self) private var updateChecker
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,15 +67,29 @@ struct UsagePopover: View {
             Button {
                 Task { await manager.refreshAll() }
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 13))
-                    .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0))
-                    .animation(
-                        manager.isRefreshing
-                            ? .linear(duration: 1).repeatForever(autoreverses: false)
-                            : .default,
-                        value: manager.isRefreshing
-                    )
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13))
+                        .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0))
+                        .animation(
+                            manager.isRefreshing
+                                ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                : .default,
+                            value: manager.isRefreshing
+                        )
+
+                    if updateChecker.updateAvailable != nil {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 2)
+                            )
+                            .offset(x: 4, y: -3)
+                            .help("An update is available — open Settings → About to view it.")
+                    }
+                }
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
@@ -140,4 +155,5 @@ struct UsagePopover: View {
 #Preview {
     UsagePopover()
         .environment(UsageManager())
+        .environment(UpdateChecker())
 }

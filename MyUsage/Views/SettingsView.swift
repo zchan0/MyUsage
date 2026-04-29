@@ -8,6 +8,7 @@ import ServiceManagement
 /// glass sections so the chrome reads consistently with the popover.
 struct SettingsView: View {
     @Environment(UsageManager.self) private var manager
+    @Environment(UpdateChecker.self) private var updateChecker
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var crashLogStatus: String?
 
@@ -266,6 +267,10 @@ struct SettingsView: View {
     private var aboutTab: some View {
         ScrollView {
             VStack(spacing: 16) {
+                if let release = updateChecker.updateAvailable {
+                    updateBanner(release)
+                }
+
                 VStack(spacing: 10) {
                     if let icon = NSApp.applicationIconImage {
                         Image(nsImage: icon)
@@ -329,6 +334,42 @@ struct SettingsView: View {
             .padding(16)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    /// Banner shown at the top of the About tab when `UpdateChecker` has
+     /// flagged a newer release on GitHub. Tinted card so it pops without
+     /// being noisy; click "Open Release" to jump to the GitHub page.
+    private func updateBanner(_ release: UpdateChecker.ReleaseInfo) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.tint)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Update available — \(release.tag)")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Currently running v\(AppInfo.version)")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("Open Release") {
+                NSWorkspace.shared.open(release.url)
+            }
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.accentColor.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 0.5)
+        )
     }
 
     private func copyLatestCrashLog() {
@@ -429,4 +470,5 @@ private extension URL {
 #Preview {
     SettingsView()
         .environment(UsageManager())
+        .environment(UpdateChecker())
 }
