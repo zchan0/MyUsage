@@ -41,6 +41,24 @@ final class UsageManager {
         didSet { UserDefaults.standard.set(showEstimatedCost, forKey: "showEstimatedCost") }
     }
 
+    /// Master toggle for limit-pressure notifications.
+    var notificationsEnabled: Bool {
+        didSet { UserDefaults.standard.set(notificationsEnabled, forKey: "notificationsEnabled") }
+    }
+
+    /// Percent threshold at which a "warn"-level notification fires the
+    /// first time a limit crosses up. Default 80 — intentionally above the
+    /// visual `LimitSafety.warnThreshold` (75) so the bar turns amber
+    /// before users get pinged.
+    var notifyWarnThreshold: Double {
+        didSet { UserDefaults.standard.set(notifyWarnThreshold, forKey: "notifyWarnThreshold") }
+    }
+
+    /// Percent threshold for the "crit" notification (default 95).
+    var notifyCritThreshold: Double {
+        didSet { UserDefaults.standard.set(notifyCritThreshold, forKey: "notifyCritThreshold") }
+    }
+
     // MARK: - Private
 
     private var refreshTask: Task<Void, Never>?
@@ -57,6 +75,9 @@ final class UsageManager {
             ?? ProviderKind.allCases.first?.rawValue
             ?? ""
         self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
+        self.notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
+        self.notifyWarnThreshold = (UserDefaults.standard.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
+        self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
         self.ledger = ledger
 
         register(ClaudeProvider(ledger: ledger))
@@ -81,6 +102,17 @@ final class UsageManager {
         for provider in providers where provider.isEnabled {
             await provider.refresh()
         }
+
+        // Evaluate limit pressure and dispatch notifications for any
+        // tier upgrades observed since the previous refresh. Idempotent
+        // by ID, so no duplicates within the same window.
+        let observations = LimitNotifier.observations(from: providers)
+        await LimitNotifier.shared.evaluate(
+            observations: observations,
+            warnThreshold: notifyWarnThreshold,
+            critThreshold: notifyCritThreshold,
+            enabled: notificationsEnabled
+        )
     }
 
     /// Register a provider, restoring persisted enabled state.

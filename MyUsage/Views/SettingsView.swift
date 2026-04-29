@@ -77,6 +77,8 @@ struct SettingsView: View {
                     }
                 }
 
+                notificationsCard
+
                 syncCard
 
                 SettingsCard("System") {
@@ -104,6 +106,92 @@ struct SettingsView: View {
             .padding(16)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Notifications card
+
+    /// Notifications fire after each refresh when any limit crosses up
+     /// into a new pressure tier (warn or crit). Idempotent — same tier
+     /// doesn't re-fire until the limit window resets / user retreats.
+    private var notificationsCard: some View {
+        @Bindable var mgr = manager
+        return SettingsCard("Notifications") {
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsRow(
+                    "Notify when limits get tight",
+                    caption: "Sends a macOS notification the first time a limit crosses each threshold."
+                ) {
+                    Toggle("", isOn: $mgr.notificationsEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+
+                CardDivider()
+
+                SettingsRow(
+                    "Warn at",
+                    caption: "First-tier alert. Bar visually turns amber from 75%; this is when a notification fires."
+                ) {
+                    thresholdStepper(
+                        value: $mgr.notifyWarnThreshold,
+                        in: 50...90,
+                        ceiling: { mgr.notifyCritThreshold - 1 }
+                    )
+                }
+
+                CardDivider()
+
+                SettingsRow(
+                    "Critical at",
+                    caption: "Stronger alert prefixed with ⚠︎. Bar visually turns red from 90%."
+                ) {
+                    thresholdStepper(
+                        value: $mgr.notifyCritThreshold,
+                        in: 80...99,
+                        floor: { mgr.notifyWarnThreshold + 1 }
+                    )
+                }
+
+                CardDivider()
+
+                SettingsRow(
+                    "Send a test notification",
+                    caption: "Confirms macOS notifications are enabled for MyUsage."
+                ) {
+                    Button("Test") {
+                        Task { await LimitNotifier.shared.fireTestNotification() }
+                    }
+                    .controlSize(.small)
+                    .disabled(!mgr.notificationsEnabled)
+                }
+            }
+        }
+    }
+
+    /// Stepper that clamps to a per-row range and additionally enforces
+    /// `warn < crit` via the optional dynamic floor / ceiling closures.
+    private func thresholdStepper(
+        value: Binding<Double>,
+        in range: ClosedRange<Double>,
+        floor: (() -> Double)? = nil,
+        ceiling: (() -> Double)? = nil
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text("\(Int(value.wrappedValue))%")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .frame(minWidth: 38, alignment: .trailing)
+            Stepper("", value: Binding(
+                get: { value.wrappedValue },
+                set: { newValue in
+                    var v = max(range.lowerBound, min(range.upperBound, newValue))
+                    if let f = floor?() { v = max(v, f) }
+                    if let c = ceiling?() { v = min(v, c) }
+                    value.wrappedValue = v
+                }
+            ), in: range, step: 1)
+            .labelsHidden()
+        }
     }
 
     // MARK: - Sync card

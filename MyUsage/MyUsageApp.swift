@@ -26,5 +26,8 @@ struct MyUsageApp: App {
         // Fire-and-forget — debounced inside UpdateChecker so this is
         // safe even if the app launches multiple times in 24h.
         Task { await UpdateChecker.shared.checkIfNeeded() }
+        // Ask for notification permission on first launch. macOS only
+        // shows the prompt once; subsequent calls are cheap no-ops.
+        Task { await LimitNotifier.shared.requestAuthorizationIfNeeded() }
     }
 }
