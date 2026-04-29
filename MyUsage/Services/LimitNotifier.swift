@@ -219,22 +219,6 @@ final class LimitNotifier {
         }
     }
 
-    /// Send a sample notification. Used by the Settings "Test" button so
-    /// the user can verify the permission grant + sound actually work.
-    func fireTestNotification() async {
-        let content = UNMutableNotificationContent()
-        content.title = "MyUsage notifications are on"
-        content.body = "You'll be alerted when any tracked limit crosses your threshold."
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: "myusage.test.\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-        try? await center.add(request)
-    }
-
     // MARK: - Private
 
     private func dispatch(observation obs: LimitObservation, tier: Tier) async {

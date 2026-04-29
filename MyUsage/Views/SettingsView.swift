@@ -152,18 +152,6 @@ struct SettingsView: View {
                     )
                 }
 
-                CardDivider()
-
-                SettingsRow(
-                    "Send a test notification",
-                    caption: "Confirms macOS notifications are enabled for MyUsage."
-                ) {
-                    Button("Test") {
-                        Task { await LimitNotifier.shared.fireTestNotification() }
-                    }
-                    .controlSize(.small)
-                    .disabled(!mgr.notificationsEnabled)
-                }
             }
         }
     }

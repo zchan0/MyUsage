@@ -7,6 +7,76 @@ All notable changes are listed here. Each release section is bilingual
 
 ---
 
+## v0.7.0 — 2026-04-30
+
+### Added
+- **Limit-pressure notifications.** Get a macOS notification the moment
+  any tracked limit (Claude/Codex 5h or weekly, Cursor included or
+  on-demand, each Antigravity model) crosses an upgrade threshold.
+  Defaults: warn 80%, crit 95%. Both are user-tunable in Settings →
+  General → Notifications. Idempotent — same percent across two
+  refreshes never double-fires; tier resets once usage retreats so
+  the next climb fires fresh.
+- **Update-available check.** On launch, MyUsage polls GitHub Releases
+  (debounced to once per 24h) and surfaces a newer tag in two places:
+  a small accent dot on the popover refresh icon, and a tinted banner
+  at the top of Settings → About with an "Open Release" button. No
+  auto-download; click through to GitHub for the .app.
+- **Provider reordering** in Settings → Providers, restored after the
+  v0.6.0 visual refactor stripped `.onMove`. Up/down arrows on each
+  row, disabled at the ends.
+
+### Fixed
+- ClaudeProvider profile-fetch errors are now logged instead of
+  silently swallowed — falling back to the credentials.planName
+  field, but visible in `log stream --category Claude`.
+
+### Changed
+- Release notes on GitHub Releases now embed the matching CHANGELOG
+  section instead of the same hardcoded install body for every tag.
+  Install instructions appended below.
+- Documentation: `DevicesTab.swift` docstring points at the actual
+  `specs/12a-sync-folder.md` (the unpublished `spec 12` reference
+  was a dead link).
+
+### Operations
+- New `.github/workflows/ci.yml`: every PR + push to main now runs
+  `swift test` and `xcodebuild build` against macOS 15 / Xcode 16.
+
+### 中文
+
+- **新增 limit 压力通知**：任意一条受跟踪的 limit（Claude / Codex
+  的 5 小时或每周窗口、Cursor 的 Included / On-demand、Antigravity
+  的每个模型）跨过提醒阈值时，macOS 系统通知会立即弹出。默认 80%
+  告警 / 95% 严重，可在 设置 → 通用 → 通知 里调。带幂等：同一个
+  百分比连续两次刷新不会重复弹；用量回落后状态自动复位，下次再升
+  会重新触发。
+- **新增升级提示**：启动时（每 24 小时最多一次）会去 GitHub Releases
+  查最新版本，发现更新时菜单栏 popover 的刷新图标右上角会有蓝点，
+  设置 → 关于 顶上会出现"Update available"横幅 + 一键打开 release
+  页的按钮。不会自动下载，需要手动到 GitHub 取 .app。
+- **恢复 provider 排序**：v0.6.0 视觉重构时把 `.onMove` 拆掉了；
+  现在 设置 → Providers 每行加了上下箭头按钮，到顶/底自动禁用。
+
+### 修复
+
+- Claude 的 profile API 拉取失败现在会记到 log（之前是 `try?`
+  静默吞掉），通过 `log stream --category Claude` 可见。
+
+### 变更
+
+- GitHub Releases 页的发布说明现在自动从 CHANGELOG.md 抽对应版本
+  的段落，而不是每次都一样的硬编码安装说明（安装说明仍附在下面）。
+- DevicesTab.swift 的注释指向真实存在的 `specs/12a-sync-folder.md`
+  （之前 `spec 12` 是死链）。
+
+### 工程
+
+- 新增 `.github/workflows/ci.yml`：每个 PR 和 push 到 main 现在都
+  会跑 `swift test` + `xcodebuild build`（macOS 15 / Xcode 16）。
+
+---
+
 ## v0.6.1 — 2026-04-29
 
 ### Fixed
