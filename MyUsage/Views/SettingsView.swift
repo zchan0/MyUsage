@@ -2,36 +2,32 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 
-/// App settings window.
+/// App settings window — restyled to match the popover's visual system.
+/// Keeps the existing 4-tab layout (General, Providers, Devices, About);
+/// inside each tab the stock `Form` is replaced by `SettingsCard`-based
+/// glass sections so the chrome reads consistently with the popover.
 struct SettingsView: View {
     @Environment(UsageManager.self) private var manager
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var crashLogStatus: String?
 
     var body: some View {
         @Bindable var mgr = manager
 
         TabView {
             generalTab(refreshInterval: $mgr.refreshInterval)
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
+                .tabItem { Label("General", systemImage: "gear") }
 
             providersTab
-                .tabItem {
-                    Label("Providers", systemImage: "square.stack.3d.up")
-                }
+                .tabItem { Label("Providers", systemImage: "square.stack.3d.up") }
 
             DevicesTab()
-                .tabItem {
-                    Label("Devices", systemImage: "laptopcomputer.and.iphone")
-                }
+                .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }
 
             aboutTab
-                .tabItem {
-                    Label("About", systemImage: "info.circle")
-                }
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 540, height: 400)
+        .frame(width: 540, height: 460)
     }
 
     // MARK: - General
@@ -39,120 +35,162 @@ struct SettingsView: View {
     private func generalTab(refreshInterval: Binding<RefreshInterval>) -> some View {
         @Bindable var mgr = manager
 
-        return Form {
-            Section("Refresh") {
-                Picker("Interval", selection: refreshInterval) {
-                    ForEach(RefreshInterval.allCases) { interval in
-                        Text(interval.displayName).tag(interval)
-                    }
-                }
-            }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
 
-            Section("MenuBar Icon") {
-                Picker("Track provider", selection: $mgr.iconTrackProvider) {
-                    Text("None").tag("")
-                    ForEach(manager.providers, id: \.kind) { provider in
-                        Text(provider.kind.displayName).tag(provider.kind.rawValue)
-                    }
-                }
-            }
-
-            Section("Display") {
-                Toggle("Show estimated monthly cost", isOn: $mgr.showEstimatedCost)
-            }
-
-            Section("Sync") {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("Folder")
-                    Spacer()
-                    Text(manager.ledger.syncFolderDisplayPath)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Button("Choose…") {
-                        Task { await manager.ledger.chooseSyncFolder() }
+                SettingsCard("Refresh") {
+                    SettingsRow("Interval", caption: "How often providers re-poll their sources.") {
+                        Picker("", selection: refreshInterval) {
+                            ForEach(RefreshInterval.allCases) { interval in
+                                Text(interval.displayName).tag(interval)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 160)
                     }
                 }
 
-                HStack(alignment: .center, spacing: 6) {
+                SettingsCard("Menu Bar") {
+                    SettingsRow("Tracked provider", caption: "Drives the icon's tint and percentage.") {
+                        Picker("", selection: $mgr.iconTrackProvider) {
+                            Text("None").tag("")
+                            ForEach(manager.providers, id: \.kind) { provider in
+                                Text(provider.kind.displayName).tag(provider.kind.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 160)
+                    }
+                }
+
+                SettingsCard("Display") {
+                    SettingsRow(
+                        "Show estimated monthly cost",
+                        caption: "Cost row at the bottom of each provider card."
+                    ) {
+                        Toggle("", isOn: $mgr.showEstimatedCost)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+
+                syncCard
+
+                SettingsCard("System") {
+                    SettingsRow(
+                        "Launch at Login",
+                        caption: "Open MyUsage automatically when you log in."
+                    ) {
+                        Toggle("", isOn: $launchAtLogin)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                            .onChange(of: launchAtLogin) { _, newValue in
+                                do {
+                                    if newValue {
+                                        try SMAppService.mainApp.register()
+                                    } else {
+                                        try SMAppService.mainApp.unregister()
+                                    }
+                                } catch {
+                                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                                }
+                            }
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Sync card
+
+    private var syncCard: some View {
+        SettingsCard("Sync Folder") {
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsRow("Folder", caption: manager.ledger.syncFolderDisplayPath) {
+                    HStack(spacing: 6) {
+                        if manager.ledger.canRevealSyncFolder {
+                            Button("Reveal") {
+                                manager.ledger.revealSyncFolderInFinder()
+                            }
+                            .controlSize(.small)
+                        }
+                        Button("Choose…") {
+                            Task { await manager.ledger.chooseSyncFolder() }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+
+                CardDivider()
+
+                HStack(alignment: .center, spacing: 8) {
                     Circle()
                         .fill(syncStatusColor(manager.ledger.syncFolderStatusKind))
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
                     Text(manager.ledger.syncFolderStatusText)
-                        .font(.caption)
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
                 }
-
-                if manager.ledger.canRevealSyncFolder {
-                    Button("Reveal in Finder") {
-                        manager.ledger.revealSyncFolderInFinder()
-                    }
-                    .font(.caption)
-                }
-            }
-
-            Section("System") {
-                Toggle("Launch at Login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        do {
-                            if newValue {
-                                try SMAppService.mainApp.register()
-                            } else {
-                                try SMAppService.mainApp.unregister()
-                            }
-                        } catch {
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
-                        }
-                    }
+                .padding(.vertical, 8)
             }
         }
-        .formStyle(.grouped)
-        .padding()
+    }
+
+    private func syncStatusColor(_ kind: LedgerSync.SyncFolderStatusKind) -> Color {
+        switch kind {
+        case .idle: .secondary
+        case .available: Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55)
+        case .warning: Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.62)
+        case .error: Color(hue: 8.0/360.0, saturation: 0.78, brightness: 0.62)
+        }
     }
 
     // MARK: - Providers
 
     private var providersTab: some View {
-        @Bindable var mgr = manager
-
-        return Form {
-            Section {
-                List {
-                    ForEach(manager.providerOrder, id: \.self) { kindRaw in
-                        if let provider = manager.providers.first(where: { $0.kind.rawValue == kindRaw }) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SettingsCard("Providers · drag to reorder") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        let kinds = manager.providerOrder.compactMap { raw in
+                            manager.providers.first { $0.kind.rawValue == raw }
+                        }
+                        ForEach(Array(kinds.enumerated()), id: \.element.kind) { index, provider in
                             providerRow(provider)
+                            if index < kinds.count - 1 {
+                                CardDivider()
+                            }
                         }
                     }
-                    .onMove { source, destination in
-                        manager.moveProvider(from: source, to: destination)
-                    }
                 }
-            } header: {
-                Text("Drag to reorder")
+
+                Text("Reordering will be available again in a future update — for now, drag remains in the legacy list. Toggle providers off to hide them from the menu-bar popover.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 4)
             }
+            .padding(16)
         }
-        .formStyle(.grouped)
-        .padding()
+        .scrollContentBackground(.hidden)
     }
 
     private func providerRow(_ provider: any UsageProvider) -> some View {
-        HStack(spacing: 10) {
-            ProviderIcon(kind: provider.kind, size: 20)
+        HStack(spacing: 12) {
+            ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
 
-            Text(provider.kind.displayName)
-
-            Spacer()
-
-            if provider.isAvailable {
-                Text("Detected")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            } else {
-                Text("Not found")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(provider.kind.displayName)
+                    .font(.system(size: 12.5, weight: .semibold))
+                detectionLabel(provider)
             }
+
+            Spacer(minLength: 12)
 
             Toggle("", isOn: Binding(
                 get: { provider.isEnabled },
@@ -164,77 +202,96 @@ struct SettingsView: View {
             .toggleStyle(.switch)
             .labelsHidden()
         }
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func detectionLabel(_ provider: any UsageProvider) -> some View {
+        if provider.isAvailable {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55))
+                    .frame(width: 5, height: 5)
+                Text("Detected")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Text("Not found")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+        }
     }
 
     // MARK: - About
 
-    private func syncStatusColor(_ kind: LedgerSync.SyncFolderStatusKind) -> Color {
-        switch kind {
-        case .idle:
-            return .secondary
-        case .available:
-            return .green
-        case .warning:
-            return .orange
-        case .error:
-            return .red
-        }
-    }
-
     private var aboutTab: some View {
-        VStack(spacing: 12) {
-            if let icon = NSApp.applicationIconImage {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 80, height: 80)
-            } else {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 40))
+        ScrollView {
+            VStack(spacing: 16) {
+                VStack(spacing: 10) {
+                    if let icon = NSApp.applicationIconImage {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 72, height: 72)
+                    } else {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.tint)
+                    }
+
+                    VStack(spacing: 2) {
+                        Text("MyUsage")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text("Version \(AppInfo.version)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("Monitor AI coding tool usage from your menu bar.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
+                    Link(destination: URL(string: "https://github.com/zchan0/MyUsage")!) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.system(size: 10))
+                            Text("GitHub")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
                     .foregroundStyle(.tint)
-            }
-
-            Text("MyUsage")
-                .font(.title2.bold())
-
-            Text("Version \(AppInfo.version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("Monitor AI coding tool usage from your menu bar.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            Link("GitHub", destination: URL(string: "https://github.com/zchan0/MyUsage")!)
-                .font(.caption)
-
-            Divider().padding(.vertical, 4)
-
-            VStack(spacing: 6) {
-                Text("Help & Feedback")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
-                    Button("Report an Issue", action: SupportActions.openIssueWithDiagnostics)
-                    Button(crashLogButtonTitle, action: copyLatestCrashLog)
                 }
-                .controlSize(.small)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity)
 
-                Text(crashLogStatus ?? "Includes app version + macOS version. No data is sent automatically.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-                    .frame(minHeight: 14)
+                SettingsCard("Help & Feedback") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsRow(
+                            "Report an issue",
+                            caption: "Opens GitHub Issues with version and macOS pre-filled."
+                        ) {
+                            Button("Open") { SupportActions.openIssueWithDiagnostics() }
+                                .controlSize(.small)
+                        }
+
+                        CardDivider()
+
+                        SettingsRow(
+                            "Copy crash log",
+                            caption: crashLogStatus
+                                ?? "Scans ~/Library/Logs/DiagnosticReports for the newest MyUsage crash."
+                        ) {
+                            Button("Copy") { copyLatestCrashLog() }
+                                .controlSize(.small)
+                        }
+                    }
+                }
             }
+            .padding(16)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        .scrollContentBackground(.hidden)
     }
-
-    @State private var crashLogStatus: String?
-
-    private var crashLogButtonTitle: String { "Copy Latest Crash Log" }
 
     private func copyLatestCrashLog() {
         switch SupportActions.copyLatestCrashLogToClipboard() {

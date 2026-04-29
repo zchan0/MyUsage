@@ -3,6 +3,10 @@ import SwiftUI
 /// Settings → Devices. Lists every Mac that has contributed to the ledger,
 /// with per-month totals and a Forget button for peers whose rows should
 /// stop counting locally. See spec 12.
+///
+/// Restyled to match the popover / SettingsCard visual system: glass card
+/// containing a column-aligned device list, mono cost numerals, hairline
+/// dividers between rows. Header shows last-sync time + manual Sync Now.
 struct DevicesTab: View {
     @Environment(UsageManager.self) private var manager
 
@@ -22,24 +26,22 @@ struct DevicesTab: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            headerRow
-
-            if rows.isEmpty {
-                emptyState
-            } else {
-                columnHeader
-                List {
-                    ForEach(rows) { row in
-                        deviceListRow(row)
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                if rows.isEmpty {
+                    emptyCard
+                } else {
+                    devicesCard
                 }
-                .listStyle(.inset)
-            }
 
-            footnote
+                Text("Costs are the sum of Claude Code + Codex monthly totals reported by each Mac. Each Mac only writes to its own subfolder. Forget removes both the local row and the device's folder in the Sync folder.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 4)
+            }
+            .padding(16)
         }
-        .padding()
+        .scrollContentBackground(.hidden)
         .task { await reload() }
         .confirmationDialog(
             forgetTarget.map { "Forget \($0.displayName)?" } ?? "Forget device?",
@@ -60,26 +62,70 @@ struct DevicesTab: View {
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Cards
 
-    private var headerRow: some View {
+    private var devicesCard: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 0) {
+                cardHeader
+                CardDivider()
+                columnHeader
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 { CardDivider() }
+                    deviceListRow(row)
+                }
+            }
+        }
+    }
+
+    private var emptyCard: some View {
+        SettingsCard {
+            VStack(spacing: 8) {
+                Image(systemName: "folder.badge.person.crop")
+                    .font(.system(size: 26))
+                    .foregroundStyle(.tertiary)
+                Text("No synced devices yet")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Point each Mac at the same Sync folder to aggregate monthly costs.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Sync now") {
+                    Task { await reload(force: true) }
+                }
+                .controlSize(.small)
+                .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, minHeight: 140)
+            .padding(.vertical, 16)
+        }
+    }
+
+    private var cardHeader: some View {
         HStack(spacing: 8) {
             Text("Devices")
-                .font(.headline)
-            Spacer()
+                .font(.system(size: 13, weight: .semibold))
+
             if let last = manager.ledger.lastSyncedAt {
-                Text(last, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                (
+                    Text(last, style: .relative)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
                     + Text(" since last sync")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                        .font(.system(size: 10))
+                )
+                .foregroundStyle(.secondary.opacity(0.7))
             }
+
+            Spacer()
+
             Button {
                 Task { await reload(force: true) }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .rotationEffect(.degrees(isLoading ? 360 : 0))
                     .animation(
                         isLoading
@@ -89,103 +135,113 @@ struct DevicesTab: View {
                     )
             }
             .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
             .disabled(isLoading)
             .help("Publish this Mac's ledger files and import peer updates now.")
         }
+        .padding(.vertical, 8)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "folder.badge.person.crop")
-                .font(.system(size: 24))
-                .foregroundStyle(.tertiary)
-            Text("No synced devices yet")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text("Point each Mac at the same Sync folder to aggregate monthly costs.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, minHeight: 140)
-    }
+    // MARK: - Column layout
 
-    /// Width of each numeric column. Keeps rows + header aligned without
-    /// switching to `Table`, which is noticeably heavier in Settings.
-    private let costColumnWidth: CGFloat = 64
-    private let forgetColumnWidth: CGFloat = 60
+    /// Column widths for the device list. Kept narrow so 4 columns fit
+    /// in the 540pt Settings window without crowding the device-name slot.
+    private let claudeColWidth: CGFloat = 64
+    private let codexColWidth: CGFloat = 64
+    private let totalColWidth: CGFloat = 64
+    private let actionColWidth: CGFloat = 56
 
     private var columnHeader: some View {
         HStack(spacing: 10) {
             Text("Device")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("Claude")
-                .frame(width: costColumnWidth, alignment: .trailing)
+                .frame(width: claudeColWidth, alignment: .trailing)
             Text("Codex")
-                .frame(width: costColumnWidth, alignment: .trailing)
+                .frame(width: codexColWidth, alignment: .trailing)
             Text("Total")
-                .frame(width: costColumnWidth, alignment: .trailing)
-            Spacer().frame(width: forgetColumnWidth)
+                .frame(width: totalColWidth, alignment: .trailing)
+            Spacer().frame(width: actionColWidth)
         }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 6)
+        .font(.system(size: 9, weight: .semibold))
+        .tracking(0.6)
+        .textCase(.uppercase)
+        .foregroundStyle(.secondary.opacity(0.7))
+        .padding(.vertical, 6)
     }
 
     private func deviceListRow(_ row: DeviceRow) -> some View {
         HStack(spacing: 10) {
             HStack(spacing: 10) {
-                Image(systemName: row.isSelf ? "laptopcomputer" : "desktopcomputer")
+                Image(systemName: deviceSymbol(for: row))
+                    .font(.system(size: 13))
                     .foregroundStyle(row.isSelf
                         ? AnyShapeStyle(.tint)
                         : AnyShapeStyle(.secondary))
+                    .frame(width: 18)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.isSelf ? "\(row.displayName) (this Mac)" : row.displayName)
-                        .font(.system(size: 12))
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 5) {
+                        Text(row.displayName)
+                            .font(.system(size: 12.5, weight: .medium))
+                        if row.isSelf {
+                            Text("THIS MAC")
+                                .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                                .tracking(0.5)
+                                .foregroundStyle(.tint)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(
+                                    .tint.opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                )
+                        }
+                    }
                     Text(row.deviceId.prefix(8))
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: 9.5, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            costCell(row.claudeUSD)
-            costCell(row.codexUSD)
-            costCell(row.totalUSD, emphasised: true)
+            costCell(row.claudeUSD, width: claudeColWidth)
+            costCell(row.codexUSD, width: codexColWidth)
+            costCell(row.totalUSD, width: totalColWidth, emphasised: true)
 
             if row.isSelf {
-                Spacer().frame(width: forgetColumnWidth)
+                Spacer().frame(width: actionColWidth)
             } else {
-                Button("Forget") {
-                    forgetTarget = row
-                }
-                .font(.caption)
-                .buttonStyle(.borderless)
-                .frame(width: forgetColumnWidth, alignment: .trailing)
-                .help("Stop counting this device and remove its files from the Sync folder.")
+                Button("Forget") { forgetTarget = row }
+                    .font(.system(size: 11))
+                    .buttonStyle(.borderless)
+                    .frame(width: actionColWidth, alignment: .trailing)
+                    .help("Stop counting this device and remove its files from the Sync folder.")
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 8)
     }
 
-    private func costCell(_ amount: Double, emphasised: Bool = false) -> some View {
+    private func costCell(_ amount: Double, width: CGFloat, emphasised: Bool = false) -> some View {
         Text(amount > 0 ? ProviderCard.formatCost(amount) : "—")
             .font(.system(
                 size: 11,
-                weight: emphasised ? .semibold : .medium,
+                weight: emphasised ? .semibold : .regular,
                 design: .monospaced
             ))
+            .monospacedDigit()
             .foregroundStyle(emphasised
                 ? AnyShapeStyle(.primary)
                 : AnyShapeStyle(.secondary))
-            .frame(width: costColumnWidth, alignment: .trailing)
+            .frame(width: width, alignment: .trailing)
     }
 
-    private var footnote: some View {
-        Text("Costs are the sum of Claude Code + Codex monthly totals reported by each Mac. Each Mac only writes to its own subfolder inside the shared Sync folder. Forget removes both the local row and the device's folder in the Sync folder.")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+    private func deviceSymbol(for row: DeviceRow) -> String {
+        let name = row.displayName.lowercased()
+        if name.contains("mac mini") || name.contains("mini") { return "macmini" }
+        if name.contains("studio") { return "macstudio" }
+        if name.contains("imac") { return "desktopcomputer" }
+        if row.isSelf { return "laptopcomputer" }
+        return "desktopcomputer"
     }
 
     // MARK: - Data
