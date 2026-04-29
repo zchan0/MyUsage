@@ -448,3 +448,73 @@ struct ClaudeProviderTests {
         ))
     }
 }
+
+@Suite("ClaudeProfile Tests")
+struct ClaudeProfileTests {
+
+    @Test("planName prefers has_claude_max")
+    func maxAccount() throws {
+        let raw = """
+        {"account":{"has_claude_max":true,"has_claude_pro":false,"email":"x@y"},
+         "organization":{"organization_type":"claude_max","rate_limit_tier":"default_claude_max_5x"}}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(ClaudeProfile.self, from: raw)
+        #expect(profile.planName == "Max")
+    }
+
+    @Test("planName falls back to has_claude_pro")
+    func proAccount() throws {
+        let raw = """
+        {"account":{"has_claude_max":false,"has_claude_pro":true,"email":"x@y"},
+         "organization":{"organization_type":"claude_pro","rate_limit_tier":"default_claude_pro"}}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(ClaudeProfile.self, from: raw)
+        #expect(profile.planName == "Pro")
+    }
+
+    @Test("planName derives Team from organization_type when account flags are nil")
+    func teamFromOrgType() throws {
+        let raw = """
+        {"account":{"email":"x@y"},
+         "organization":{"organization_type":"claude_team","rate_limit_tier":"team"}}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(ClaudeProfile.self, from: raw)
+        #expect(profile.planName == "Team")
+    }
+
+    @Test("planName is nil when nothing is signaled")
+    func nilWhenUnknown() throws {
+        let raw = """
+        {"account":{"email":"x@y"},
+         "organization":{"organization_type":null,"rate_limit_tier":null}}
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(ClaudeProfile.self, from: raw)
+        #expect(profile.planName == nil)
+    }
+
+    @Test("decodes the real /api/oauth/profile shape")
+    func realResponseShape() throws {
+        // Mirrors the payload observed in the wild that triggered the
+        // v0.6.0 bug: credentials.subscriptionType is null but
+        // profile.has_claude_max is true.
+        let raw = """
+        {
+          "account": {
+            "uuid": "ce190740",
+            "email": "u@e.com",
+            "has_claude_max": true,
+            "has_claude_pro": false
+          },
+          "organization": {
+            "uuid": "a4daae40",
+            "organization_type": "claude_max",
+            "rate_limit_tier": "default_claude_max_5x"
+          },
+          "application": { "slug": "claude-code" }
+        }
+        """.data(using: .utf8)!
+        let profile = try JSONDecoder().decode(ClaudeProfile.self, from: raw)
+        #expect(profile.planName == "Max")
+        #expect(profile.account?.email == "u@e.com")
+    }
+}

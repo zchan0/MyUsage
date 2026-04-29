@@ -71,6 +71,54 @@ struct ClaudeUsageResponse: Codable, Sendable {
     }
 }
 
+/// `/api/oauth/profile` response — canonical source for the user's plan
+/// label since recent Claude CLI builds stopped writing `subscriptionType`
+/// / `rateLimitTier` into `~/.claude/.credentials.json`. Both fields now
+/// arrive as `null`, so the previous credentials-only path collapsed to
+/// a missing plan badge in the popover.
+struct ClaudeProfile: Codable, Sendable {
+    let account: Account?
+    let organization: Organization?
+
+    struct Account: Codable, Sendable {
+        let hasClaudeMax: Bool?
+        let hasClaudePro: Bool?
+        let email: String?
+
+        enum CodingKeys: String, CodingKey {
+            case hasClaudeMax = "has_claude_max"
+            case hasClaudePro = "has_claude_pro"
+            case email
+        }
+    }
+
+    struct Organization: Codable, Sendable {
+        let organizationType: String?
+        let rateLimitTier: String?
+
+        enum CodingKeys: String, CodingKey {
+            case organizationType = "organization_type"
+            case rateLimitTier = "rate_limit_tier"
+        }
+    }
+
+    /// Display label used by the popover provider card. Account-level
+    /// `has_claude_max` / `has_claude_pro` are checked first because
+    /// they're the most direct signals; organization type is a fallback
+    /// for team/enterprise tiers.
+    var planName: String? {
+        if account?.hasClaudeMax == true { return "Max" }
+        if account?.hasClaudePro == true { return "Pro" }
+        if let orgType = organization?.organizationType?.lowercased() {
+            if orgType.contains("max") { return "Max" }
+            if orgType.contains("pro") { return "Pro" }
+            if orgType.contains("team") { return "Team" }
+            if orgType.contains("enterprise") { return "Enterprise" }
+        }
+        return nil
+    }
+}
+
 /// Claude Code usage provider.
 @Observable
 @MainActor
@@ -93,10 +141,16 @@ final class ClaudeProvider: UsageProvider {
     }()
     private static let keychainService = "Claude Code-credentials"
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+    private static let profileURL = URL(string: "https://api.anthropic.com/api/oauth/profile")!
 
     // MARK: - State
 
     private var credentials: ClaudeCredentials?
+
+    /// Cached profile; fetched lazily on the first successful refresh and
+    /// reused for the rest of the process lifetime. Plan upgrades / downgrades
+    /// are rare enough that "relaunch to pick up the new tier" is acceptable.
+    private var cachedProfile: ClaudeProfile?
 
     /// Optional multi-device ledger. When present, each successful cost
     /// calculation writes per-day totals into the ledger (spec 12).
@@ -158,7 +212,7 @@ final class ClaudeProvider: UsageProvider {
                let cached = ClaudeUsageCache.read(matching: fingerprint) {
                 snapshot = Self.mapToSnapshot(
                     cached.response,
-                    plan: creds.planName,
+                    plan: planLabel(creds: creds),
                     fetchedAt: cached.fetchedAt
                 )
                 Logger.claude.info("Seeded Claude snapshot from disk cache")
@@ -175,6 +229,13 @@ final class ClaudeProvider: UsageProvider {
                 return
             }
 
+            // Lazy-load the profile once per process so we have an
+             // authoritative plan label even when the credentials file
+             // ships nulls (current Claude CLI behavior).
+            if cachedProfile == nil {
+                cachedProfile = try? await fetchProfile(accessToken: oauth.accessToken)
+            }
+
             let usage = try await fetchUsage(accessToken: oauth.accessToken)
 
             do {
@@ -189,7 +250,7 @@ final class ClaudeProvider: UsageProvider {
                 )
             }
 
-            var mapped = Self.mapToSnapshot(usage, plan: creds.planName, fetchedAt: .now)
+            var mapped = Self.mapToSnapshot(usage, plan: planLabel(creds: creds), fetchedAt: .now)
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
             nextAllowedRefreshAt = nil
@@ -423,6 +484,33 @@ final class ClaudeProvider: UsageProvider {
             service: Self.keychainService,
             as: ClaudeCredentials.self
         )
+    }
+
+    // MARK: - Plan label
+
+    /// Profile-first, credentials-fallback. Profile reflects the user's
+    /// real subscription (Max / Pro / Team / …) even when the local
+    /// credentials file no longer carries `subscriptionType`.
+    private func planLabel(creds: ClaudeCredentials) -> String? {
+        cachedProfile?.planName ?? creds.planName
+    }
+
+    // MARK: - Profile Fetch
+
+    private func fetchProfile(accessToken: String) async throws -> ClaudeProfile {
+        var request = URLRequest(url: Self.profileURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+        request.setValue(AppInfo.claudeUserAgent, forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let http = response as? HTTPURLResponse
+        guard http?.statusCode == 200 else {
+            throw ProviderError.apiFailed(statusCode: http?.statusCode ?? -1)
+        }
+        return try JSONDecoder().decode(ClaudeProfile.self, from: data)
     }
 
     // MARK: - Usage Fetch
