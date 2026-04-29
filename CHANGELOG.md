@@ -5,18 +5,60 @@ All notable changes are listed here. Each release section is bilingual
 
 ## Unreleased
 
-### Added
-- Settings → About → Help & Feedback. Two buttons: "Report an Issue" opens
-  a GitHub issue with version + macOS info pre-filled. "Copy Latest Crash
-  Log" scans `~/Library/Logs/DiagnosticReports` for the newest MyUsage
-  crash and copies it to the clipboard.
+---
+
+## v0.6.0 — 2026-04-29
 
 ### Changed
+- **Popover redesign.** Provider cards are now glass surfaces with a
+  brand-color icon tile; progress bars use a shared safety palette
+  (healthy / warn ≥ 75% / crit ≥ 90%) instead of brand color, so
+  pressure reads consistently across providers. Each row carries the
+  percent + reset countdown in fixed-width monospaced columns so
+  multiple limits in one card line up vertically. Plan label is now a
+  small monospaced pill (matches the ⊕ devices pill).
+- **Header reflow.** App name on the left; updated-time + refresh
+  button grouped on the right. Inner dividers between cards removed.
+- **Footer simplified.** Quit button removed from the popover footer
+  (Cmd-Q from the Settings window still terminates).
+- **Settings restyled.** General / Providers / Devices / About tabs
+  rebuilt with a new SettingsCard / SettingsRow primitive that mirrors
+  the popover's glass card. Sync status indicator uses the same
+  safety palette as the popover. Provider rows in the Providers tab
+  use the same brand-tile icon as the popover.
+- **Devices tab restyled.** Column-aligned device list inside a glass
+  card with hairline separators, "THIS MAC" tint pill on the self
+  row, monospaced cost columns. Empty state offers a "Sync now"
+  button.
+
+### Added
+- Settings → About → Help & Feedback. Two buttons: "Report an Issue"
+  opens a GitHub issue with version + macOS info pre-filled. "Copy
+  Latest Crash Log" scans `~/Library/Logs/DiagnosticReports` for the
+  newest MyUsage crash and copies it to the clipboard.
+
+### Fixed
 - Doc-comment references to the unpublished `specs/12-usage-ledger.md`
   now point at the existing `specs/12a-sync-folder.md`.
 
 ### 中文
 
+- **Popover 视觉大改**：每个 provider 卡变玻璃面板 + 品牌色图标方块；
+  进度条改用统一的安全色（< 75% 中性 / 75–89% 琥珀 / ≥ 90% 红），
+  品牌色不再出现在条上，多 provider 之间的"压力"信号更一致。每行的
+  百分比 + 重置倒计时改成等宽 mono 列对齐，同卡内多条 limit 之间
+  上下对齐。Plan 标签变成 mono 小胶囊，跟 ⊕ devices pill 同形系。
+- **头部重排**：App 名在左，更新时间 + 刷新按钮放在右侧成对。卡片
+  之间的分割线去掉了，每张卡自带边框。
+- **底部精简**：popover 底部的 Quit 按钮已移除（Settings 窗口的
+  Cmd-Q 仍可退出）。
+- **Settings 全套重构**：四个 tab (General / Providers / Devices /
+  About) 用新的 SettingsCard 玻璃卡 + SettingsRow（label + 副文 + 控件）
+  重写，跟 popover 视觉系统一致。Sync 状态指示灯用同一套安全色。
+  Providers 列表里每个 provider 用跟 popover 一致的品牌色图标方块。
+- **Devices tab 重写**：列对齐的设备列表放在玻璃卡里，行间用 hairline
+  分隔，本机用蓝色 "THIS MAC" 小标识，cost 列用 mono 数字。空状态
+  增加 "Sync now" 按钮。
 - 新增 设置 → 关于 → 帮助与反馈：「Report an Issue」按钮一键打开 GitHub
   Issue 模板，自动带上版本号和 macOS 版本；「Copy Latest Crash Log」
   扫描 `~/Library/Logs/DiagnosticReports` 找到最新的 MyUsage 崩溃日志
