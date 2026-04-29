@@ -1,8 +1,16 @@
-# MyUsage（中文说明）
+<p align="center">
+  <img src="MyUsage/Resources/AppIcon.appiconset/icon_256x256.png" width="128" height="128" alt="MyUsage app icon">
+</p>
 
-MyUsage 是一个 macOS 菜单栏应用，用来统一查看 Claude Code、Codex、Cursor、Antigravity 的使用情况。
+<h1 align="center">MyUsage（中文说明）</h1>
 
-英文主文档：[`README.md`](README.md)
+<p align="center">
+  MyUsage 是一个 macOS 菜单栏应用，用来统一查看 Claude Code、Codex、Cursor、Antigravity 的使用情况。
+</p>
+
+<p align="center">
+  <a href="README.md">English README</a>
+</p>
 
 ## 特色能力
 

@@ -1,8 +1,16 @@
-# MyUsage
+<p align="center">
+  <img src="MyUsage/Resources/AppIcon.appiconset/icon_256x256.png" width="128" height="128" alt="MyUsage app icon">
+</p>
 
-Native macOS menu bar app for tracking AI coding tool usage across Claude Code, Codex, Cursor, and Antigravity.
+<h1 align="center">MyUsage</h1>
 
-Chinese version: [README.zh-CN.md](README.zh-CN.md)
+<p align="center">
+  Native macOS menu bar app for tracking AI coding tool usage across Claude Code, Codex, Cursor, and Antigravity.
+</p>
+
+<p align="center">
+  <a href="README.zh-CN.md">中文说明</a>
+</p>
 
 ![MyUsage Screenshot](docs/screenshot.png)
 
