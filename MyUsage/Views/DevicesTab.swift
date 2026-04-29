@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Settings → Devices. Lists every Mac that has contributed to the ledger,
 /// with per-month totals and a Forget button for peers whose rows should
-/// stop counting locally. See spec 12.
+/// stop counting locally. See `specs/12a-sync-folder.md`.
 ///
 /// Restyled to match the popover / SettingsCard visual system: glass card
 /// containing a column-aligned device list, mono cost numerals, hairline

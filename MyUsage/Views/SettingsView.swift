@@ -156,13 +156,13 @@ struct SettingsView: View {
     private var providersTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                SettingsCard("Providers · drag to reorder") {
+                SettingsCard("Providers") {
                     VStack(alignment: .leading, spacing: 0) {
                         let kinds = manager.providerOrder.compactMap { raw in
                             manager.providers.first { $0.kind.rawValue == raw }
                         }
                         ForEach(Array(kinds.enumerated()), id: \.element.kind) { index, provider in
-                            providerRow(provider)
+                            providerRow(provider, at: index, total: kinds.count)
                             if index < kinds.count - 1 {
                                 CardDivider()
                             }
@@ -170,7 +170,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Reordering will be available again in a future update — for now, drag remains in the legacy list. Toggle providers off to hide them from the menu-bar popover.")
+                Text("Use the arrow buttons to reorder. Toggle providers off to hide them from the menu-bar popover.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 4)
@@ -180,7 +180,7 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
     }
 
-    private func providerRow(_ provider: any UsageProvider) -> some View {
+    private func providerRow(_ provider: any UsageProvider, at index: Int, total: Int) -> some View {
         HStack(spacing: 12) {
             ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
 
@@ -191,6 +191,8 @@ struct SettingsView: View {
             }
 
             Spacer(minLength: 12)
+
+            reorderButtons(at: index, total: total)
 
             Toggle("", isOn: Binding(
                 get: { provider.isEnabled },
@@ -203,6 +205,42 @@ struct SettingsView: View {
             .labelsHidden()
         }
         .padding(.vertical, 8)
+    }
+
+    /// Up / down arrow pair for moving a provider in the popover order.
+    /// Replaces the previous `List`-based drag handle (drag inside a custom
+    /// VStack-in-glass-card layout isn't supported without rebuilding the
+    /// drop targets ourselves).
+    private func reorderButtons(at index: Int, total: Int) -> some View {
+        HStack(spacing: 2) {
+            Button {
+                manager.moveProvider(from: IndexSet([index]), to: index - 1)
+            } label: {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(index == 0 ? 0.3 : 1)
+            .disabled(index == 0)
+            .help("Move up")
+
+            Button {
+                // SwiftUI's IndexSet move semantics: to-index is the
+                // post-removal target, so down-by-one needs +2.
+                manager.moveProvider(from: IndexSet([index]), to: index + 2)
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(index == total - 1 ? 0.3 : 1)
+            .disabled(index == total - 1)
+            .help("Move down")
+        }
     }
 
     @ViewBuilder

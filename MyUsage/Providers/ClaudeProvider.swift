@@ -230,10 +230,19 @@ final class ClaudeProvider: UsageProvider {
             }
 
             // Lazy-load the profile once per process so we have an
-             // authoritative plan label even when the credentials file
-             // ships nulls (current Claude CLI behavior).
+            // authoritative plan label even when the credentials file
+            // ships nulls (current Claude CLI behavior). Failures are
+            // logged but never stop the usage refresh — without the
+            // profile we just fall back to creds.planName, which is
+            // strictly worse but not broken.
             if cachedProfile == nil {
-                cachedProfile = try? await fetchProfile(accessToken: oauth.accessToken)
+                do {
+                    cachedProfile = try await fetchProfile(accessToken: oauth.accessToken)
+                } catch {
+                    Logger.claude.error(
+                        "Profile fetch failed; falling back to credentials.planName: \(error.localizedDescription, privacy: .public)"
+                    )
+                }
             }
 
             let usage = try await fetchUsage(accessToken: oauth.accessToken)
