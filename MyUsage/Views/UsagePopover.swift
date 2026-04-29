@@ -1,39 +1,37 @@
 import SwiftUI
 
 /// Main popover content shown when clicking the menu bar icon.
+///
+/// Visual structure follows `docs/ui-mockups/popover-glassy-v7.html`:
+///   · Header: wordmark · "X ago" (mono) · refresh
+///   · Card stack: one ProviderCard per enabled provider, 7pt gap,
+///     no global divider (each card carries its own border)
+///   · Footer: Quit (left) · settings (right), with a single
+///     hairline above
 struct UsagePopover: View {
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
         VStack(spacing: 0) {
             header
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
-
-            Divider()
-                .padding(.horizontal, 12)
 
             if enabledProviders.isEmpty {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 7) {
                         ForEach(enabledProviders, id: \.kind) { provider in
                             ProviderCard(provider: provider)
                         }
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.top, 2)
+                    .padding(.bottom, 12)
                 }
             }
 
-            Divider()
-                .padding(.horizontal, 12)
-
+            footerDivider
             footer
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
         }
         .frame(width: 340)
         .task(id: "init") {
@@ -47,26 +45,29 @@ struct UsagePopover: View {
     // MARK: - Subviews
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text("MyUsage")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 13.5, weight: .semibold))
+                .tracking(-0.2)
 
             Spacer()
 
             if let lastRefreshed = manager.lastRefreshed {
-                Text(lastRefreshed, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                (
+                    Text(lastRefreshed, style: .relative)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
                     + Text(" ago")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                )
+                .foregroundStyle(.secondary.opacity(0.7))
             }
 
             Button {
                 Task { await manager.refreshAll() }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0))
                     .animation(
                         manager.isRefreshing
@@ -76,8 +77,12 @@ struct UsagePopover: View {
                     )
             }
             .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
             .disabled(manager.isRefreshing)
         }
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 11)
     }
 
     private var emptyState: some View {
@@ -99,20 +104,19 @@ struct UsagePopover: View {
         .padding(.vertical, 32)
     }
 
+    private var footerDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.06))
+            .frame(height: 0.5)
+    }
+
     private var footer: some View {
         HStack {
-            Button("Quit") {
-                NSApp.terminate(nil)
-            }
-            .font(.caption2)
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-
             Spacer()
 
             SettingsLink {
                 Image(systemName: "gear")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -122,6 +126,8 @@ struct UsagePopover: View {
                 }
             })
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Helpers

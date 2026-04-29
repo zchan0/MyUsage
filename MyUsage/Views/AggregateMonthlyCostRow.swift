@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// "This month ~$12.34  ⊕ 2" row shown on Claude / Codex cards when the
-/// multi-device ledger has visible contributions. Clicking the ⊕ badge
-/// opens a popover with the per-device breakdown — see spec 12.
+/// "This month  $112.40  ⊕ 2 devices" row at the bottom of Claude / Codex
+/// cards. Mirrors v7 mockup's `.cost-row`. Click the ⊕ pill to open the
+/// per-device breakdown popover (unchanged from spec 12).
 struct AggregateMonthlyCostRow: View {
     let providerKind: ProviderKind
     let displayed: Double
@@ -12,52 +12,48 @@ struct AggregateMonthlyCostRow: View {
     @State private var isPopoverShown = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "dollarsign.circle")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("This month")
-                .font(.caption2)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Image(systemName: "info.circle")
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-                .help(ProviderCard.aggregateTooltip)
-
-            Spacer()
+            Spacer(minLength: 6)
 
             Text(ProviderCard.formatCost(displayed))
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.primary.opacity(0.95))
 
             if peerCount > 0 {
-                Button {
-                    isPopoverShown.toggle()
-                } label: {
-                    HStack(spacing: 2) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 10))
-                        Text("\(peerCount)")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                Button { isPopoverShown.toggle() } label: { devicesPill }
+                    .buttonStyle(.plain)
+                    .help("\(peerCount) other device\(peerCount == 1 ? "" : "s") contributed")
+                    .popover(isPresented: $isPopoverShown, arrowEdge: .top) {
+                        DeviceBreakdownPopover(
+                            providerKind: providerKind,
+                            total: displayed,
+                            contributions: contributions
+                        )
                     }
-                    .foregroundStyle(.tint)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.tint.opacity(0.10), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .help("\(peerCount) other device\(peerCount == 1 ? "" : "s") contributed")
-                .popover(isPresented: $isPopoverShown, arrowEdge: .top) {
-                    DeviceBreakdownPopover(
-                        providerKind: providerKind,
-                        total: displayed,
-                        contributions: contributions
-                    )
-                }
             }
         }
+    }
+
+    private var devicesPill: some View {
+        HStack(spacing: 3) {
+            Text("⊕")
+                .font(.system(size: 10))
+            Text(peerCount == 1 ? "1 device" : "\(peerCount + 1) devices")
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+        }
+        .foregroundStyle(.secondary.opacity(0.85))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1.5)
+        .background(
+            Color.primary.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+        )
     }
 }
 
@@ -70,7 +66,7 @@ struct DeviceBreakdownPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                ProviderIcon(kind: providerKind, size: 14)
+                ProviderIconTile(kind: providerKind, size: 16, glyph: 10)
                 Text("\(providerKind.displayName) — This month")
                     .font(.system(size: 12, weight: .semibold))
             }

@@ -1,120 +1,230 @@
 import SwiftUI
 
-/// A card displaying a single provider's usage information.
+/// One provider's card inside the popover. Data wiring is unchanged from
+/// the previous implementation — this view only reshapes the visual layer
+/// to match `docs/ui-mockups/popover-glassy-v7.html`:
+///
+///   ┌────────────────────────────────────────┐
+///   │ [tile] Claude Code  Max                │  ← head
+///   │                                        │
+///   │ 5-hour            47%  resets 2h 14m   │  ← LimitBar
+///   │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+///   │ Weekly            62%  resets Sun      │
+///   │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+///   │ ─────────────────────────────────────  │  ← hairline
+///   │ This month     $112.40   ⊕ 2 devices   │  ← cost row
+///   └────────────────────────────────────────┘
 struct ProviderCard: View {
     let provider: any UsageProvider
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header: icon + name + plan badge
-            HStack(spacing: 8) {
-                ProviderIcon(kind: provider.kind, size: 20)
+        VStack(alignment: .leading, spacing: 10) {
+            cardHead
+            bodySection
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(.background.opacity(0.62))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 1.5, x: 0, y: 1)
+        .opacity(isDimmed ? 0.7 : 1.0)
+    }
 
+    // MARK: - Head
+
+    private var cardHead: some View {
+        HStack(spacing: 9) {
+            ProviderIconTile(kind: provider.kind)
+                .saturation(isDimmed ? 0.55 : 1.0)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(provider.kind.displayName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .lineLimit(1)
 
-                Spacer()
+                if let plan = planLabel {
+                    PlanPill(text: plan)
+                }
 
-                if let planName = provider.snapshot?.planName {
-                    Text(planName)
-                        .font(.system(size: 10, weight: .medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(Capsule())
+                if isStale {
+                    StaleDot()
                 }
             }
 
-            // Content
-            if provider.isLoading && provider.snapshot == nil {
-                loadingView
-            } else if let error = provider.error, provider.snapshot == nil {
-                errorView(error)
-            } else if let snapshot = provider.snapshot {
-                snapshotContent(snapshot)
-            } else {
-                notConfiguredView
+            Spacer(minLength: 6)
+
+            if provider.kind == .antigravity, isAntigravityLive {
+                LiveBadge()
+            }
+
+            if provider.kind == .antigravity, !isAntigravityLive {
+                Button { Task { await provider.refresh() } } label: {
+                    Text("Open")
+                        .font(.system(size: 11.5, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
             }
         }
-        .padding(12)
-        .background(.quinary)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    // MARK: - Content variants
+    // MARK: - Body — limits / state / loading / error
 
     @ViewBuilder
-    private func snapshotContent(_ snapshot: UsageSnapshot) -> some View {
+    private var bodySection: some View {
+        if provider.isLoading && provider.snapshot == nil {
+            loadingView
+        } else if let error = provider.error, provider.snapshot == nil {
+            errorView(error)
+        } else if let snapshot = provider.snapshot {
+            snapshotBody(snapshot)
+        } else {
+            notConfiguredView
+        }
+    }
+
+    @ViewBuilder
+    private func snapshotBody(_ snapshot: UsageSnapshot) -> some View {
+        // Antigravity off: head already carries the "IDE off" plan label
+        // and the Open button. Don't render a state row beneath — the
+        // head says everything we need (no historical timestamp).
+        if provider.kind == .antigravity, !isAntigravityLive {
+            EmptyView()
+        } else if let staleMessage = provider.error {
+            VStack(alignment: .leading, spacing: 9) {
+                limits(snapshot)
+                costRowIfAny(snapshot)
+                staleWarningRow(staleMessage)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 9) {
+                limits(snapshot)
+                costRowIfAny(snapshot)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func limits(_ snapshot: UsageSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            switch provider.kind {
+            case .claude, .codex:
+                if let session = snapshot.sessionUsage {
+                    LimitBar(
+                        name: "5-hour",
+                        percent: session.percentUsed,
+                        reset: session.resetCountdown.map { "resets \($0)" }
+                    )
+                }
+                if let weekly = snapshot.weeklyUsage {
+                    LimitBar(
+                        name: "Weekly",
+                        percent: weekly.percentUsed,
+                        reset: weekly.resetCountdown.map { "resets \($0)" }
+                    )
+                }
+            case .cursor:
+                cursorLimits(snapshot)
+            case .antigravity:
+                ForEach(snapshot.modelQuotas) { quota in
+                    LimitBar(
+                        name: quota.label,
+                        percent: quota.percentUsed,
+                        monoName: true,
+                        reservesResetSlot: false
+                    )
+                }
+            }
+        }
+    }
+
+    /// Cursor splits into Included (capped quota, healthy bar) and
+    /// On-demand (capped budget, "+$X of $Y" overflow). Both use the
+    /// `LimitBar` shape — they ARE both bounded limits, just billed
+    /// differently.
+    @ViewBuilder
+    private func cursorLimits(_ snapshot: UsageSnapshot) -> some View {
+        if let spent = snapshot.spentAmount {
+            LimitBar(
+                name: "Included",
+                percent: snapshot.totalUsagePercent ?? 0,
+                reset: spent.formatted
+            )
+        }
+        if let onDemand = snapshot.onDemandSpend {
+            if let limit = onDemand.limit, limit > 0 {
+                let pct = onDemand.amount / limit * 100
+                LimitBar(
+                    name: "On-demand",
+                    percent: pct,
+                    reset: "+\(onDemand.formatted)"
+                )
+            } else {
+                // No on-demand cap reported — show the spend as a single
+                // metered row with no bar. Reuses the LimitBar header
+                // shape so it visually rhymes with capped rows.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("On-demand")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.95))
+                    Spacer(minLength: 8)
+                    Text("+" + onDemand.formatted)
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(.primary.opacity(0.92))
+                }
+            }
+        }
+    }
+
+    // MARK: - Cost row
+
+    /// Hairline divider + cost row at the bottom of each card. Mirrors v7:
+    /// claude/codex use the aggregate (multi-device) row with the ⊕ devices
+    /// pill; cursor uses a local cycle-spend row; antigravity has no cost.
+    @ViewBuilder
+    private func costRowIfAny(_ snapshot: UsageSnapshot) -> some View {
+        if shouldShowCost(snapshot) {
+            VStack(alignment: .leading, spacing: 9) {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.06))
+                    .frame(height: 0.5)
+
+                costRow(snapshot)
+            }
+        }
+    }
+
+    private func shouldShowCost(_ snapshot: UsageSnapshot) -> Bool {
+        guard manager.showEstimatedCost else { return false }
         switch provider.kind {
         case .claude, .codex:
-            rollingWindowContent(snapshot)
+            return true // aggregate row decides whether to render
         case .cursor:
-            billingCycleContent(snapshot)
+            return snapshot.monthlyEstimatedCost != nil || snapshot.spentAmount != nil
         case .antigravity:
-            perModelContent(snapshot)
+            return false
         }
-
-        monthlyCostRow(snapshot)
-        if let error = provider.error {
-            staleWarningRow(error)
-        }
-        cardFooter(snapshot)
     }
 
-    /// Inline warning shown below stale data (e.g. during a 429 cooldown) so
-    /// the user still sees the last-known usage but knows it isn't fresh.
-    private func staleWarningRow(_ message: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 9))
-                .foregroundStyle(.yellow)
-            Text(message)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-            Spacer()
-        }
-        .padding(.top, 2)
-    }
-
-    // MARK: - Monthly cost row
-
-    /// For Claude / Codex this row displays the *aggregate* monthly cost
-    /// (all synced devices, including this Mac) and exposes a ⊕ badge +
-    /// popover with the per-device breakdown. Cursor / Antigravity keep
-    /// the original local-only row — they're excluded from the ledger.
     @ViewBuilder
-    private func monthlyCostRow(_ snapshot: UsageSnapshot) -> some View {
-        if manager.showEstimatedCost {
-            if provider.kind == .claude || provider.kind == .codex {
-                aggregateMonthlyCostRow(fallbackLocal: snapshot.monthlyEstimatedCost)
-            } else if let cost = snapshot.monthlyEstimatedCost {
-                localMonthlyCostRow(cost, isEstimate: provider.kind != .cursor)
-            }
+    private func costRow(_ snapshot: UsageSnapshot) -> some View {
+        switch provider.kind {
+        case .claude, .codex:
+            aggregateMonthlyCostRow(fallbackLocal: snapshot.monthlyEstimatedCost)
+        case .cursor:
+            cursorCycleRow(snapshot)
+        case .antigravity:
+            EmptyView()
         }
-    }
-
-    private func localMonthlyCostRow(_ cost: Double, isEstimate: Bool) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "dollarsign.circle")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text("This month")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            if isEstimate {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .help(Self.estimateTooltip)
-            }
-            Spacer()
-            Text(Self.formatCost(cost, estimated: isEstimate))
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -126,231 +236,196 @@ struct ProviderCard: View {
         )
         let aggregate = manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0
         let hasPeers = contributions.contains { !$0.isSelf }
-        let displayed: Double = {
-            if aggregate > 0 { return aggregate }
-            return fallbackLocal ?? 0
-        }()
+        let displayed: Double = aggregate > 0 ? aggregate : (fallbackLocal ?? 0)
 
-        if displayed == 0 && !hasPeers { EmptyView() } else {
+        if displayed == 0 && !hasPeers {
+            EmptyView()
+        } else {
             AggregateMonthlyCostRow(
                 providerKind: provider.kind,
                 displayed: displayed,
                 peerCount: max(0, contributions.count - 1),
                 contributions: contributions
             )
-            .padding(.top, 2)
         }
     }
 
-    private static let estimateTooltip = """
-    Estimated from this Mac's local CLI session logs × API pricing.
-    Usage from other machines on the same account is not included.
-    """
+    private func cursorCycleRow(_ snapshot: UsageSnapshot) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("This cycle")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
 
-    static let aggregateTooltip = """
-    Sum of estimated costs across all Macs sharing the same Sync folder.
-    Click the ⊕ badge to see the per-device breakdown.
-    """
+            Spacer(minLength: 6)
+
+            Text(cursorCycleAmount(snapshot))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.primary.opacity(0.95))
+
+            if let cycleEnd = snapshot.billingCycleEnd {
+                let days = max(0, Calendar.current.dateComponents([.day], from: .now, to: cycleEnd).day ?? 0)
+                Text("· \(days)d left")
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
+        }
+    }
+
+    private func cursorCycleAmount(_ snapshot: UsageSnapshot) -> String {
+        let total = (snapshot.spentAmount?.amount ?? 0) + (snapshot.onDemandSpend?.amount ?? 0)
+        return Self.formatCost(total, estimated: false)
+    }
+
+    // MARK: - Stale warning
+
+    /// Shown beneath limits when the last refresh failed but cached data is
+    /// still being displayed. Single line, amber, with no destructive
+    /// styling — the data above is still useful.
+    private func staleWarningRow(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 9.5))
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            Button { Task { await provider.refresh() } } label: {
+                Text("Retry")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+        }
+    }
+
+    // MARK: - Empty / loading / error states
+
+    private var loadingView: some View {
+        HStack(spacing: 8) {
+            ProgressView().scaleEffect(0.7)
+            Text("Loading…")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
+
+    private func errorView(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 11))
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            Button { Task { await provider.refresh() } } label: {
+                Image(systemName: "arrow.clockwise").font(.system(size: 11))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var notConfiguredView: some View {
+        Text("Not configured")
+            .font(.system(size: 11.5))
+            .foregroundStyle(.tertiary)
+    }
+
+    // MARK: - State helpers
+
+    /// Plan label rendered to the right of the provider name. For
+    /// Antigravity the label communicates IDE state ("IDE off" /
+    /// "IDE running") instead of a paid-plan tier — Antigravity has none.
+    private var planLabel: String? {
+        if provider.kind == .antigravity {
+            return isAntigravityLive ? nil : "IDE off"
+        }
+        return provider.snapshot?.planName
+    }
+
+    private var isStale: Bool {
+        provider.snapshot != nil && provider.error != nil
+    }
+
+    private var isAntigravityLive: Bool {
+        guard provider.kind == .antigravity else { return false }
+        return provider.snapshot != nil && provider.error == nil
+    }
+
+    private var isDimmed: Bool {
+        // Antigravity-off: head + Open button only, no body — dim the
+        // whole card so the eye skips it on glance.
+        if provider.kind == .antigravity, !isAntigravityLive { return true }
+        return false
+    }
 
     static func formatCost(_ amount: Double, estimated: Bool = true) -> String {
         let prefix = estimated ? "~$" : "$"
         return prefix + String(format: "%.2f", amount)
     }
 
-    // MARK: - Claude / Codex: rolling windows
-
-    @ViewBuilder
-    private func rollingWindowContent(_ snapshot: UsageSnapshot) -> some View {
-        if let session = snapshot.sessionUsage {
-            usageBar(
-                label: "Session (5h)",
-                percent: session.percentUsed,
-                resetCountdown: session.resetCountdown
-            )
-        }
-        if let weekly = snapshot.weeklyUsage {
-            usageBar(
-                label: "Weekly (7d)",
-                percent: weekly.percentUsed,
-                resetCountdown: weekly.resetCountdown
-            )
-        }
-    }
-
-    // MARK: - Cursor: billing cycle
-
-    @ViewBuilder
-    private func billingCycleContent(_ snapshot: UsageSnapshot) -> some View {
-        if let spent = snapshot.spentAmount {
-            usageBar(
-                label: "Included (\(spent.formatted))",
-                percent: snapshot.totalUsagePercent ?? 0
-            )
-        }
-
-        if let onDemand = snapshot.onDemandSpend {
-            if let limit = onDemand.limit, limit > 0 {
-                usageBar(
-                    label: "On-Demand (\(onDemand.formatted))",
-                    percent: onDemand.amount / limit * 100
-                )
-            } else {
-                HStack {
-                    Text("On-Demand")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(onDemand.formatted)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.orange)
-                }
-            }
-        }
-    }
-
-    // MARK: - Antigravity: per-model bars
-
-    @ViewBuilder
-    private func perModelContent(_ snapshot: UsageSnapshot) -> some View {
-        ForEach(snapshot.modelQuotas) { quota in
-            usageBar(label: quota.label, percent: quota.percentUsed)
-        }
-    }
-
-    // MARK: - Unified footer
-
-    private func cardFooter(_ snapshot: UsageSnapshot) -> some View {
-        HStack {
-            if let reset = resetText(snapshot) {
-                Label(reset, systemImage: "clock")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if let email = snapshot.email {
-                Text(email)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    private func resetText(_ snapshot: UsageSnapshot) -> String? {
-        switch provider.kind {
-        case .claude, .codex:
-            // Claude/Codex show per-window countdowns inline under each
-            // usage bar, so the footer no longer duplicates the 5h reset.
-            return nil
-        case .cursor:
-            guard let cycleEnd = snapshot.billingCycleEnd else { return nil }
-            let daysLeft = Calendar.current.dateComponents([.day], from: .now, to: cycleEnd).day ?? 0
-            return "\(max(0, daysLeft))d left"
-        case .antigravity:
-            guard let resetTime = snapshot.modelQuotas.first?.resetsAt else { return nil }
-            return UsageWindow(percentUsed: 0, resetsAt: resetTime).resetCountdown
-        }
-    }
-
-    // MARK: - Shared components
-
-    private func usageBar(
-        label: String,
-        percent: Double,
-        resetCountdown: String? = nil
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(Int(percent))%")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-
-            ProgressBar(percent: percent)
-
-            if let resetCountdown {
-                Label(resetCountdown, systemImage: "clock")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-    }
-
-    private var loadingView: some View {
-        HStack {
-            ProgressView()
-                .scaleEffect(0.7)
-            Text("Loading…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, 8)
-    }
-
-    private func errorView(_ message: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.yellow)
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Spacer()
-
-            Button {
-                Task { await provider.refresh() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private var notConfiguredView: some View {
-        Text("Not configured")
-            .font(.caption)
-            .foregroundStyle(.tertiary)
-            .padding(.vertical, 4)
-    }
+    static let aggregateTooltip = """
+    Sum of estimated costs across all Macs sharing the same Sync folder.
+    Click the ⊕ badge to see the per-device breakdown.
+    """
 }
 
-// MARK: - Progress Bar
+// MARK: - Small badges
 
-struct ProgressBar: View {
-    let percent: Double
-    var height: CGFloat = 4
-
+/// Amber dot beside a provider name when the snapshot is stale.
+struct StaleDot: View {
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.quaternary)
-
-                Capsule()
-                    .fill(barColor)
-                    .frame(width: max(0, geo.size.width * min(percent, 100) / 100))
-                    .animation(.easeInOut(duration: 0.4), value: percent)
-            }
-        }
-        .frame(height: height)
-    }
-
-    private var barColor: Color {
-        if percent > 85 { return .red }
-        if percent > 60 { return .yellow }
-        return .green
+        Circle()
+            .fill(Color.orange)
+            .frame(width: 6, height: 6)
+            .overlay(
+                Circle().stroke(Color.orange.opacity(0.18), lineWidth: 2)
+            )
+            .help("Last refresh failed — showing cached data")
     }
 }
 
+/// Small monospaced pill for the plan label ("Pro" / "Max" / "Plus" / "IDE off").
+/// Same shape as the ⊕ devices pill so the card head stays visually rhyming.
+struct PlanPill: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(.secondary.opacity(0.78))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(
+                Color.primary.opacity(0.06),
+                in: Capsule()
+            )
+    }
+}
+
+/// Periwinkle "LIVE" badge for Antigravity when the IDE is running.
+struct LiveBadge: View {
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(ProviderKind.antigravity.brandTileColor)
+                .frame(width: 5, height: 5)
+            Text("LIVE")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.4)
+        }
+        .foregroundStyle(ProviderKind.antigravity.brandTileColor)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            ProviderKind.antigravity.brandTileColor.opacity(0.14),
+            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+    }
+}

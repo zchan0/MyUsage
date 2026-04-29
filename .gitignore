@@ -45,6 +45,9 @@ MyUsage.app/
 *.swp
 *~
 
+# Local design exploration (HTML mockups + screenshots)
+docs/ui-mockups/
+
 # SQLite artifacts from misconfigured in-memory paths
 :memory:
 :memory:-shm
