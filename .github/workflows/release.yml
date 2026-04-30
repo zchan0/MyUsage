@@ -47,11 +47,15 @@ jobs:
 
           # Extract the section for this tag from CHANGELOG.md. The section
           # is bounded by `## v$VERSION` (start) and the next `## v...`
-          # heading (end, exclusive).
+          # heading (end, exclusive). Also stop at `### 中文` — the
+          # Chinese half of each release entry stays in CHANGELOG.md but
+          # doesn't clutter the GitHub Release page (which is effectively
+          # the English-speaking audience's surface).
           awk -v ver="$VERSION" '
             $0 ~ "^## v" ver " " { found = 1; print; next }
             $0 ~ "^## v" ver "$" { found = 1; print; next }
             found && /^## v[0-9]/ { exit }
+            found && /^### 中文/ { exit }
             found { print }
           ' CHANGELOG.md > release-notes.md
 

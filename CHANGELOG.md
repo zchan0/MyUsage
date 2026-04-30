@@ -3,9 +3,8 @@
 All notable changes are listed here. Each release section is bilingual
 (English first, 中文 second). Format loosely follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
-
----
+The English half of each section is what GitHub's Release page shows;
+the 中文 half lives here only.
 
 ## v0.7.1 — 2026-04-30
 
