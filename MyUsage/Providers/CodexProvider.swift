@@ -319,13 +319,21 @@ final class CodexProvider: UsageProvider {
         // Session (5h)
         if let primary = response.rateLimit?.primaryWindow, let used = primary.usedPercent {
             let resetDate = primary.resetAt.map { Date(timeIntervalSince1970: Double($0)) }
-            snapshot.sessionUsage = UsageWindow(percentUsed: Double(used), resetsAt: resetDate)
+            snapshot.sessionUsage = UsageWindow(
+                percentUsed: Double(used),
+                resetsAt: resetDate,
+                windowDuration: 5 * 3600
+            )
         }
 
         // Weekly (7d)
         if let secondary = response.rateLimit?.secondaryWindow, let used = secondary.usedPercent {
             let resetDate = secondary.resetAt.map { Date(timeIntervalSince1970: Double($0)) }
-            snapshot.weeklyUsage = UsageWindow(percentUsed: Double(used), resetsAt: resetDate)
+            snapshot.weeklyUsage = UsageWindow(
+                percentUsed: Double(used),
+                resetsAt: resetDate,
+                windowDuration: 7 * 24 * 3600
+            )
         }
 
         // Credits

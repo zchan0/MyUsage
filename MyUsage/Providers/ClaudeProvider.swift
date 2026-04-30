@@ -567,14 +567,16 @@ final class ClaudeProvider: UsageProvider {
         if let fh = response.fiveHour {
             snapshot.sessionUsage = UsageWindow(
                 percentUsed: Double(fh.utilization),
-                resetsAt: fh.resetsAt.flatMap { parseISO8601($0) }
+                resetsAt: fh.resetsAt.flatMap { parseISO8601($0) },
+                windowDuration: 5 * 3600
             )
         }
 
         if let sd = response.sevenDay {
             snapshot.weeklyUsage = UsageWindow(
                 percentUsed: Double(sd.utilization),
-                resetsAt: sd.resetsAt.flatMap { parseISO8601($0) }
+                resetsAt: sd.resetsAt.flatMap { parseISO8601($0) },
+                windowDuration: 7 * 24 * 3600
             )
         }
 

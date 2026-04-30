@@ -6,6 +6,21 @@ struct UsageWindow: Sendable {
     let percentUsed: Double
     /// When this window resets.
     let resetsAt: Date?
+    /// Total length of this window. When set, enables the burn-rate
+    /// projection (`projectedFinalPercent`). Optional for backwards
+    /// compatibility — providers that don't fill it in just don't get
+    /// the "you'll run out before reset" indicator.
+    var windowDuration: TimeInterval?
+
+    init(
+        percentUsed: Double,
+        resetsAt: Date?,
+        windowDuration: TimeInterval? = nil
+    ) {
+        self.percentUsed = percentUsed
+        self.resetsAt = resetsAt
+        self.windowDuration = windowDuration
+    }
 
     /// Percentage remaining (100 - percentUsed).
     var percentRemaining: Double { max(0, 100 - percentUsed) }
@@ -27,6 +42,30 @@ struct UsageWindow: Sendable {
         } else {
             return "\(minutes)m"
         }
+    }
+
+    /// Linear extrapolation: if usage continues at the current burn rate
+    /// (% per second, derived from elapsed time in this window), what
+    /// percent would we land at when the window resets?
+    ///
+    /// Returns `nil` when projection isn't meaningful: window duration
+    /// unknown, no reset time, the window just started (elapsed < 1m
+    /// would balloon), or already past reset.
+    ///
+    /// The result is intentionally NOT capped — callers cap at render
+    /// time so a "you'll be at 230% by Sunday" can still be detected
+    /// upstream (e.g. for a stronger warning).
+    func projectedFinalPercent(now: Date = .now) -> Double? {
+        guard let resetsAt, let windowDuration, windowDuration > 0 else {
+            return nil
+        }
+        let timeRemaining = resetsAt.timeIntervalSince(now)
+        guard timeRemaining > 0 else { return nil }
+        let elapsed = windowDuration - timeRemaining
+        // Skip the first minute — burn rate is too noisy and projection
+        // would dominate the bar with garbage.
+        guard elapsed >= 60 else { return nil }
+        return percentUsed * windowDuration / elapsed
     }
 }
 

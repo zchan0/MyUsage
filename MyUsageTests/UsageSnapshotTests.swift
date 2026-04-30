@@ -108,3 +108,93 @@ struct RefreshIntervalTests {
         #expect(RefreshInterval.fifteenMinutes.seconds == 900)
     }
 }
+
+@Suite("UsageWindow burn-rate projection")
+struct UsageWindowProjectionTests {
+
+    /// Steady state: half the window elapsed, half the budget used → on
+    /// pace to land exactly at the same rate the user started at.
+    @Test("steady-state projection equals current percent")
+    func steadyState() {
+        // 5h window, 2.5h elapsed (so 2.5h until reset), used 50%.
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let resetsAt = now.addingTimeInterval(2.5 * 3600)
+        let window = UsageWindow(
+            percentUsed: 50,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let projected = window.projectedFinalPercent(now: now)
+        #expect(projected != nil)
+        // 50 * (5 / 2.5) = 100
+        #expect(abs(projected! - 100) < 0.01)
+    }
+
+    @Test("burning twice as fast → 2x current % at reset")
+    func burningHot() {
+        // 5h window, 1.25h elapsed, used 50% → burn rate is 2x normal.
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let resetsAt = now.addingTimeInterval(3.75 * 3600)
+        let window = UsageWindow(
+            percentUsed: 50,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let projected = window.projectedFinalPercent(now: now)
+        #expect(projected != nil)
+        // 50 * (5 / 1.25) = 200
+        #expect(abs(projected! - 200) < 0.01)
+    }
+
+    @Test("burning slow → projection well below 100")
+    func burningCool() {
+        // 7d window, 6d elapsed, used 30% → very chill rate.
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let resetsAt = now.addingTimeInterval(1 * 86400)
+        let window = UsageWindow(
+            percentUsed: 30,
+            resetsAt: resetsAt,
+            windowDuration: 7 * 86400
+        )
+        let projected = window.projectedFinalPercent(now: now)
+        #expect(projected != nil)
+        // 30 * (7 / 6) = 35
+        #expect(abs(projected! - 35) < 0.01)
+    }
+
+    @Test("projection is nil when window just opened (< 60s elapsed)")
+    func tooEarlyForProjection() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 5h window, only 30s in
+        let resetsAt = now.addingTimeInterval(5 * 3600 - 30)
+        let window = UsageWindow(
+            percentUsed: 1,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        #expect(window.projectedFinalPercent(now: now) == nil)
+    }
+
+    @Test("projection is nil when reset is in the past")
+    func resetInPast() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let resetsAt = now.addingTimeInterval(-60)
+        let window = UsageWindow(
+            percentUsed: 50,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        #expect(window.projectedFinalPercent(now: now) == nil)
+    }
+
+    @Test("projection is nil when window duration unknown")
+    func noWindowDuration() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let window = UsageWindow(
+            percentUsed: 50,
+            resetsAt: now.addingTimeInterval(3600),
+            windowDuration: nil
+        )
+        #expect(window.projectedFinalPercent(now: now) == nil)
+    }
+}

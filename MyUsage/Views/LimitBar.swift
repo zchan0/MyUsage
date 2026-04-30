@@ -13,6 +13,12 @@ struct LimitBar: View {
     let name: String
     let percent: Double
     var reset: String? = nil
+    /// When non-nil, draws a faint extension on the bar from `percent`
+    /// out to `min(projectedPercent, 100)`, signalling "if you keep
+    /// using at the current rate, this is where you'll land at reset".
+    /// Triggers an upward arrow next to the percent text when the
+    /// projection exceeds 100%.
+    var projectedPercent: Double? = nil
     /// When true, the name is rendered in monospaced 10.5pt — used by
     /// Antigravity per-model rows ("flash 47/200").
     var monoName: Bool = false
@@ -34,11 +40,19 @@ struct LimitBar: View {
 
                 Spacer(minLength: 8)
 
-                Text(pctString)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(pctColor)
-                    .frame(width: pctColumnWidth, alignment: .trailing)
+                HStack(spacing: 3) {
+                    if shouldShowOverflowArrow {
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(overflowColor)
+                            .help("On pace to exceed this limit before reset")
+                    }
+                    Text(pctString)
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(pctColor)
+                }
+                .frame(width: pctColumnWidth, alignment: .trailing)
 
                 if reservesResetSlot {
                     Text(reset ?? "")
@@ -49,8 +63,24 @@ struct LimitBar: View {
                 }
             }
 
-            ProgressTrack(percent: percent, level: level)
+            ProgressTrack(
+                percent: percent,
+                projectedPercent: projectedPercent,
+                level: level
+            )
         }
+    }
+
+    /// Show the up-right arrow only when projection clearly overshoots —
+    /// 5pt grace above 100% so a near-miss "you'll be at 101%" doesn't
+    /// scream. Anything less is normal usage.
+    private var shouldShowOverflowArrow: Bool {
+        guard let projected = projectedPercent else { return false }
+        return projected > 105 && percent < 100
+    }
+
+    private var overflowColor: Color {
+        Color(hue: 8.0/360.0, saturation: 0.78, brightness: 0.6)
     }
 
     @ViewBuilder
@@ -83,6 +113,10 @@ struct LimitBar: View {
 /// usage rows (e.g. an on-demand row that lives in a denser layout).
 struct ProgressTrack: View {
     let percent: Double
+    /// Optional burn-rate projection. When supplied, draws a faint
+    /// extension of the fill from `percent` to `min(projectedPercent, 100)`,
+    /// communicating "if you keep going at this rate, you'll land here".
+    var projectedPercent: Double? = nil
     var level: LimitSafety.Level = .healthy
     var height: CGFloat = 4
 
@@ -91,6 +125,16 @@ struct ProgressTrack: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(Color.primary.opacity(0.10))
+
+                // Projection ghost: drawn UNDER the solid fill so it
+                // visually extends past the current usage.
+                if let projected = projectedPercent, projected > percent {
+                    let endPct = min(projected, 100)
+                    Capsule()
+                        .fill(fillColor.opacity(0.28))
+                        .frame(width: max(0, geo.size.width * endPct / 100))
+                        .animation(.easeInOut(duration: 0.4), value: projected)
+                }
 
                 Capsule()
                     .fill(fillColor)
