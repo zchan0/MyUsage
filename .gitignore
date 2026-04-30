@@ -48,6 +48,9 @@ MyUsage.app/
 # Local design exploration (HTML mockups + screenshots)
 docs/ui-mockups/
 
+# Internal strategy notes — kept locally, not part of the public docs
+docs/competitive-analysis.md
+
 # SQLite artifacts from misconfigured in-memory paths
 :memory:
 :memory:-shm
