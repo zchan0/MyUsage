@@ -36,13 +36,22 @@ struct ClaudeCredentials: Codable, Sendable {
 struct ClaudeUsageResponse: Codable, Sendable {
     let fiveHour: ClaudeWindow?
     let sevenDay: ClaudeWindow?
-    let sevenDayOscar: ClaudeWindow?  // Opus-specific
+
+    /// Per-model breakdown of the weekly window. The API ships separate
+    /// utilization buckets for each public model family; we surface them
+    /// in the popover under the aggregate weekly bar.
+    let sevenDayOpus: ClaudeWindow?
+    let sevenDaySonnet: ClaudeWindow?
+    let sevenDayHaiku: ClaudeWindow?
+
     let extraUsage: ClaudeExtraUsage?
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
-        case sevenDayOscar = "seven_day_opus"
+        case sevenDayOpus = "seven_day_opus"
+        case sevenDaySonnet = "seven_day_sonnet"
+        case sevenDayHaiku = "seven_day_haiku"
         case extraUsage = "extra_usage"
     }
 
@@ -579,6 +588,18 @@ final class ClaudeProvider: UsageProvider {
                 windowDuration: 7 * 24 * 3600
             )
         }
+
+        // Per-model breakdown of the weekly window. Sorted by percent
+        // descending so the heaviest consumer reads first.
+        snapshot.weeklyByModel = [
+            ("Opus",   response.sevenDayOpus),
+            ("Sonnet", response.sevenDaySonnet),
+            ("Haiku",  response.sevenDayHaiku)
+        ].compactMap { (label, window) -> WeeklyModelUsage? in
+            guard let pct = window?.utilization, pct > 0 else { return nil }
+            return WeeklyModelUsage(label: label, percent: Double(pct))
+        }
+        .sorted { $0.percent > $1.percent }
 
         if let extra = response.extraUsage, extra.isEnabled == true {
             let spent = Double(extra.usedCredits ?? 0) / 100.0

@@ -118,7 +118,7 @@ struct ClaudeProviderTests {
         let response = ClaudeUsageResponse(
             fiveHour: .init(utilization: 35, resetsAt: "2026-04-14T20:00:00Z"),
             sevenDay: .init(utilization: 18, resetsAt: "2026-04-20T00:00:00Z"),
-            sevenDayOscar: nil,
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             extraUsage: nil
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: "Pro")
@@ -130,12 +130,43 @@ struct ClaudeProviderTests {
         #expect(snapshot.sessionUsage?.resetsAt != nil)
     }
 
+    @Test("Per-model breakdown sorted by percent desc, zeros dropped")
+    func mapSnapshotWeeklyByModel() {
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 62, resetsAt: nil),
+            sevenDayOpus: .init(utilization: 24, resetsAt: nil),
+            sevenDaySonnet: .init(utilization: 38, resetsAt: nil),
+            sevenDayHaiku: .init(utilization: 0, resetsAt: nil),
+            extraUsage: nil
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+
+        #expect(snapshot.weeklyByModel.count == 2)
+        #expect(snapshot.weeklyByModel[0].label == "Sonnet")
+        #expect(snapshot.weeklyByModel[0].percent == 38)
+        #expect(snapshot.weeklyByModel[1].label == "Opus")
+        #expect(snapshot.weeklyByModel[1].percent == 24)
+    }
+
+    @Test("Per-model breakdown is empty when API returns no model fields")
+    func mapSnapshotWeeklyByModelEmpty() {
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 50, resetsAt: nil),
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            extraUsage: nil
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+        #expect(snapshot.weeklyByModel.isEmpty)
+    }
+
     @Test("Map usage response with extra usage")
     func mapSnapshotWithExtra() {
         let response = ClaudeUsageResponse(
             fiveHour: .init(utilization: 50, resetsAt: nil),
             sevenDay: .init(utilization: 25, resetsAt: nil),
-            sevenDayOscar: nil,
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             extraUsage: .init(isEnabled: true, usedCredits: 500, monthlyLimit: 10000, currency: "USD")
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
@@ -150,7 +181,7 @@ struct ClaudeProviderTests {
         let response = ClaudeUsageResponse(
             fiveHour: .init(utilization: 10, resetsAt: nil),
             sevenDay: .init(utilization: 5, resetsAt: nil),
-            sevenDayOscar: nil,
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             extraUsage: nil
         )
         let past = Date(timeIntervalSince1970: 1_700_000_000)
@@ -163,7 +194,7 @@ struct ClaudeProviderTests {
         let response = ClaudeUsageResponse(
             fiveHour: .init(utilization: 10, resetsAt: nil),
             sevenDay: .init(utilization: 5, resetsAt: nil),
-            sevenDayOscar: nil,
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             extraUsage: nil
         )
         let before = Date.now
@@ -178,7 +209,7 @@ struct ClaudeProviderTests {
         let response = ClaudeUsageResponse(
             fiveHour: .init(utilization: 10, resetsAt: nil),
             sevenDay: .init(utilization: 5, resetsAt: nil),
-            sevenDayOscar: nil,
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             extraUsage: .init(isEnabled: false, usedCredits: 0, monthlyLimit: 0, currency: "USD")
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)

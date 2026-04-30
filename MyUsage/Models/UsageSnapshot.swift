@@ -69,6 +69,16 @@ struct UsageWindow: Sendable {
     }
 }
 
+/// One row of the per-model breakdown shown under Claude's weekly bar.
+/// Anthropic's `/api/oauth/usage` returns separate utilization values
+/// for `seven_day_sonnet`, `seven_day_opus`, etc. — this surfaces them
+/// as a list, sorted by percent so the heaviest consumer reads first.
+struct WeeklyModelUsage: Sendable, Equatable, Identifiable {
+    let label: String       // "Sonnet", "Opus", "Haiku"
+    let percent: Double
+    var id: String { label }
+}
+
 /// Per-model quota info (used by Antigravity).
 struct ModelQuota: Identifiable, Sendable {
     let id = UUID()
@@ -106,6 +116,10 @@ struct UsageSnapshot: Sendable {
     // MARK: - Rolling windows (Claude, Codex)
     var sessionUsage: UsageWindow?
     var weeklyUsage: UsageWindow?
+    /// Per-model breakdown of the weekly window. Populated only for
+    /// Claude (Anthropic's API exposes it; OpenAI's Codex does not).
+    /// Sorted by percent descending; only models with > 0% included.
+    var weeklyByModel: [WeeklyModelUsage] = []
 
     // MARK: - Billing cycle (Cursor)
     var totalUsagePercent: Double?

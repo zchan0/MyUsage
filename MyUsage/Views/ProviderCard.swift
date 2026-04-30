@@ -132,6 +132,7 @@ struct ProviderCard: View {
                         reset: weekly.resetCountdown.map { "resets \($0)" },
                         projectedPercent: weekly.projectedFinalPercent()
                     )
+                    weeklyByModelRows(snapshot.weeklyByModel)
                 }
             case .cursor:
                 cursorLimits(snapshot)
@@ -145,6 +146,33 @@ struct ProviderCard: View {
                     )
                 }
             }
+        }
+    }
+
+    /// Per-model breakdown rows shown directly under Claude's weekly bar.
+    /// Indented mono name + right-aligned mono percent, column-aligned
+    /// with the parent LimitBar's name + percent slots so the eye reads
+    /// straight down. No bar — the weekly bar above already shows the
+    /// total; here we only need the per-model contribution numbers.
+    @ViewBuilder
+    private func weeklyByModelRows(_ rows: [WeeklyModelUsage]) -> some View {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(rows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(row.label)
+                            .font(.system(size: 10.5, weight: .regular, design: .monospaced))
+                            .foregroundStyle(.secondary.opacity(0.75))
+                        Spacer(minLength: 8)
+                        Text("\(Int(row.percent.rounded()))%")
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary.opacity(0.85))
+                    }
+                }
+            }
+            .padding(.leading, 12)   // indent so child relationship reads
+            .padding(.top, 2)
         }
     }
 

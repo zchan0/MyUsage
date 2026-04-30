@@ -177,7 +177,7 @@ struct ClaudeUsageCacheTests {
         ClaudeUsageResponse(
             fiveHour: .init(utilization: utilization, resetsAt: "2026-04-14T20:00:00Z"),
             sevenDay: .init(utilization: 18, resetsAt: "2026-04-20T00:00:00Z"),
-            sevenDayOscar: nil,
+            sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             extraUsage: nil
         )
     }
