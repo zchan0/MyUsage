@@ -7,6 +7,36 @@ All notable changes are listed here. Each release section is bilingual
 
 ---
 
+## v0.7.1 — 2026-04-30
+
+### Fixed
+- CI / release pipelines failed on the macos-15 + Xcode 16 toolchain
+  because the `LimitNotifier`'s `NotificationDispatcher` protocol
+  required `Sendable`, but Apple's `UNUserNotificationCenter` is not
+  yet annotated `Sendable` in that SDK. `@preconcurrency import
+  UserNotifications` makes the framework's types implicitly `Sendable`
+  for cross-actor purposes, restoring builds on the release runner.
+  Local Xcode 26 builds were unaffected because that SDK already
+  carries the conformance.
+- v0.7.0 was tagged but the release workflow never produced an
+  artifact for the same reason. v0.7.1 is the same feature set, just
+  with a build that survives CI.
+
+### 中文
+
+- 修复 v0.7.0 在 macos-15 + Xcode 16 上的 CI / Release pipeline
+  全失败：`LimitNotifier` 的 `NotificationDispatcher` 协议要求
+  `Sendable`，但 Apple 在该 SDK 还没把 `UNUserNotificationCenter`
+  标成 `Sendable`，于是在跨 actor 调用 `await center.add(...)` 时
+  编译报错。改用 `@preconcurrency import UserNotifications`，让
+  Swift 把整个 UserNotifications 框架的类型按 `Sendable` 处理，
+  CI 重新通过。本地 Xcode 26 没出问题是因为新 SDK 已经带了那个
+  conformance。
+- v0.7.0 那个 tag 因为同一个原因没产出 release artifact，v0.7.1
+  和它功能完全一致，只是能正常构建发布。
+
+---
+
 ## v0.7.0 — 2026-04-30
 
 ### Added

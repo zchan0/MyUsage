@@ -1,6 +1,13 @@
 import Foundation
-import UserNotifications
 import os
+
+// `@preconcurrency` tells Swift to treat all `UserNotifications` types
+// as `Sendable` for cross-actor purposes. The framework predates the
+// Swift 6 concurrency model and Apple has not yet annotated all of its
+// classes as `Sendable`; without this, sending `UNUserNotificationCenter`
+// or `UNNotificationRequest` across an `await` boundary errors on the
+// macos-15 / Xcode 16 toolchain even though local Xcode 26 lets it pass.
+@preconcurrency import UserNotifications
 
 /// Thin abstraction over `UNUserNotificationCenter` so tests can inject
 /// a no-op dispatcher. `UNUserNotificationCenter.current()` asserts when
