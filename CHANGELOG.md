@@ -9,35 +9,11 @@ All notable changes are listed here. Each release section is bilingual
 
 ## v0.7.1 — 2026-04-30
 
-### Fixed
-- CI / release pipelines failed on the macos-15 + Xcode 16 toolchain
-  because the `LimitNotifier`'s `NotificationDispatcher` protocol
-  required `Sendable`, but Apple's `UNUserNotificationCenter` is not
-  yet annotated `Sendable` in that SDK. `@preconcurrency import
-  UserNotifications` makes the framework's types implicitly `Sendable`
-  for cross-actor purposes, restoring builds on the release runner.
-  Local Xcode 26 builds were unaffected because that SDK already
-  carries the conformance.
-- v0.7.0 was tagged but the release workflow never produced an
-  artifact for the same reason. v0.7.1 is the same feature set, just
-  with a build that survives CI.
-
-### 中文
-
-- 修复 v0.7.0 在 macos-15 + Xcode 16 上的 CI / Release pipeline
-  全失败：`LimitNotifier` 的 `NotificationDispatcher` 协议要求
-  `Sendable`，但 Apple 在该 SDK 还没把 `UNUserNotificationCenter`
-  标成 `Sendable`，于是在跨 actor 调用 `await center.add(...)` 时
-  编译报错。改用 `@preconcurrency import UserNotifications`，让
-  Swift 把整个 UserNotifications 框架的类型按 `Sendable` 处理，
-  CI 重新通过。本地 Xcode 26 没出问题是因为新 SDK 已经带了那个
-  conformance。
-- v0.7.0 那个 tag 因为同一个原因没产出 release artifact，v0.7.1
-  和它功能完全一致，只是能正常构建发布。
-
----
-
-## v0.7.0 — 2026-04-30
+> Originally tagged as v0.7.0, but the v0.7.0 release workflow never
+> produced an artifact (Sendable conformance bug on the Xcode 16
+> toolchain — local Xcode 26 builds were fine, CI failed). v0.7.1 is
+> the first 0.7-line release that actually shipped. The feature set
+> below is what's in the build.
 
 ### Added
 - **Limit-pressure notifications.** Get a macOS notification the moment
@@ -60,6 +36,11 @@ All notable changes are listed here. Each release section is bilingual
 - ClaudeProvider profile-fetch errors are now logged instead of
   silently swallowed — falling back to the credentials.planName
   field, but visible in `log stream --category Claude`.
+- CI / release pipelines now build on the macos-15 + Xcode 16
+  toolchain. Required `extension UNUserNotificationCenter:
+  @retroactive @unchecked Sendable {}` because that SDK doesn't yet
+  carry Apple's Sendable annotation; without it the protocol-driven
+  notification dispatcher couldn't be sent across `await`.
 
 ### Changed
 - Release notes on GitHub Releases now embed the matching CHANGELOG
@@ -74,6 +55,11 @@ All notable changes are listed here. Each release section is bilingual
   `swift test` and `xcodebuild build` against macOS 15 / Xcode 16.
 
 ### 中文
+
+> 这一版原本打成 v0.7.0，但 release workflow 在 Xcode 16 上构建失败
+> （Sendable conformance bug — 本地 Xcode 26 编译没问题，CI 跑炸），
+> 没有产出 .app artifact。v0.7.1 才是 0.7 系列里第一个真正发出去的
+> 版本。下面列的是这次构建里实际带的功能。
 
 - **新增 limit 压力通知**：任意一条受跟踪的 limit（Claude / Codex
   的 5 小时或每周窗口、Cursor 的 Included / On-demand、Antigravity
@@ -92,6 +78,11 @@ All notable changes are listed here. Each release section is bilingual
 
 - Claude 的 profile API 拉取失败现在会记到 log（之前是 `try?`
   静默吞掉），通过 `log stream --category Claude` 可见。
+- 修复 CI / Release 在 macos-15 + Xcode 16 toolchain 上的构建：
+  必须显式声明 `extension UNUserNotificationCenter: @retroactive
+  @unchecked Sendable {}`，因为该 SDK 还没带 Apple 的 Sendable
+  注解；没这一行的话基于 protocol 的通知 dispatcher 跨 `await`
+  传递时编译报错。
 
 ### 变更
 
