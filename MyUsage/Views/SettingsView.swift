@@ -9,6 +9,7 @@ import ServiceManagement
 struct SettingsView: View {
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
+    @State private var installer = UpdateInstaller.shared
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var crashLogStatus: String?
 
@@ -413,28 +414,36 @@ struct SettingsView: View {
     }
 
     /// Banner shown at the top of the About tab when `UpdateChecker` has
-     /// flagged a newer release on GitHub. Tinted card so it pops without
-     /// being noisy; click "Open Release" to jump to the GitHub page.
+    /// flagged a newer release on GitHub. State-driven action button:
+    /// idle → "Download", downloading → progress bar, ready → "Show in
+    /// Finder" (the .app is sitting in ~/Downloads waiting to be dragged
+    /// into /Applications). Falls back to "Open Release" when the release
+    /// has no .zip asset.
     private func updateBanner(_ release: UpdateChecker.ReleaseInfo) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "arrow.up.circle.fill")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.tint)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.tint)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Update available — \(release.tag)")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("Currently running v\(AppInfo.version)")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Update available — \(release.tag)")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(updateBannerSubtitle(release))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                updateActionControl(release)
             }
 
-            Spacer(minLength: 8)
-
-            Button("Open Release") {
-                NSWorkspace.shared.open(release.url)
+            if case .downloading(let progress) = installer.state {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
             }
-            .controlSize(.small)
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 10)
@@ -446,6 +455,51 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 0.5)
         )
+    }
+
+    private func updateBannerSubtitle(_ release: UpdateChecker.ReleaseInfo) -> String {
+        switch installer.state {
+        case .idle:
+            return "Currently running v\(AppInfo.version)"
+        case .downloading(let progress):
+            return "Downloading… \(Int(progress * 100))%"
+        case .extracting:
+            return "Extracting…"
+        case .ready:
+            return "Drag MyUsage.app into /Applications, then relaunch."
+        case .failed(let message):
+            return message
+        }
+    }
+
+    @ViewBuilder
+    private func updateActionControl(_ release: UpdateChecker.ReleaseInfo) -> some View {
+        switch installer.state {
+        case .idle:
+            if release.zipAssetURL != nil {
+                Button("Download") {
+                    Task { await installer.install(release: release) }
+                }
+                .controlSize(.small)
+            } else {
+                Button("Open Release") {
+                    NSWorkspace.shared.open(release.url)
+                }
+                .controlSize(.small)
+            }
+        case .downloading, .extracting:
+            ProgressView().controlSize(.small)
+        case .ready:
+            Button("Show in Finder") {
+                installer.revealReady()
+            }
+            .controlSize(.small)
+        case .failed:
+            Button("Retry") {
+                Task { await installer.install(release: release) }
+            }
+            .controlSize(.small)
+        }
     }
 
     private func copyLatestCrashLog() {

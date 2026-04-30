@@ -23,6 +23,10 @@ final class UpdateChecker {
         let version: String     // "0.6.2" (tag with leading "v" stripped)
         let url: URL            // html_url of the GitHub Release page
         let publishedAt: Date?
+        /// Direct download URL for `MyUsage-X.X.X.zip` if present in the
+        /// release's assets list. `nil` when the workflow didn't upload
+        /// one — UI falls back to opening `url`.
+        let zipAssetURL: URL?
     }
 
     /// `nil` while we haven't checked, the local build is current, or the
@@ -105,11 +109,15 @@ final class UpdateChecker {
             if Self.isNewer(remote: remoteVersion, local: local) {
                 let url = URL(string: release.htmlUrl)
                     ?? URL(string: "https://github.com/zchan0/MyUsage/releases")!
+                let zipURL = release.assets?
+                    .first(where: { $0.name.hasSuffix(".zip") })
+                    .flatMap { URL(string: $0.browserDownloadUrl) }
                 updateAvailable = ReleaseInfo(
                     tag: release.tagName,
                     version: remoteVersion,
                     url: url,
-                    publishedAt: release.publishedAt.flatMap(Self.parseDate)
+                    publishedAt: release.publishedAt.flatMap(Self.parseDate),
+                    zipAssetURL: zipURL
                 )
                 Logger.general.info(
                     "Update available: \(release.tagName, privacy: .public)"
@@ -160,10 +168,22 @@ private struct GitHubRelease: Codable {
     let tagName: String
     let htmlUrl: String
     let publishedAt: String?
+    let assets: [Asset]?
+
+    struct Asset: Codable {
+        let name: String
+        let browserDownloadUrl: String
+
+        enum CodingKeys: String, CodingKey {
+            case name
+            case browserDownloadUrl = "browser_download_url"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case htmlUrl = "html_url"
         case publishedAt = "published_at"
+        case assets
     }
 }
