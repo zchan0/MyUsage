@@ -18,6 +18,15 @@ protocol NotificationDispatcher: AnyObject, Sendable {
     func add(_ request: UNNotificationRequest) async throws
 }
 
+// Retroactive `@unchecked Sendable` is required on Xcode 16's UserNotifications
+// SDK because Apple hasn't annotated `UNUserNotificationCenter` as Sendable
+// there yet. Without this, conforming to the Sendable-requiring
+// `NotificationDispatcher` protocol below errors at compile time
+// ("conformance to 'Sendable' must occur in the same source file as class").
+// `@retroactive` silences the warning that pairs with retroactive
+// conformance and is a no-op on Xcode 26 where Apple already added it.
+extension UNUserNotificationCenter: @retroactive @unchecked Sendable {}
+
 extension UNUserNotificationCenter: NotificationDispatcher {}
 
 /// Drops every request on the floor. Used by tests so the state-machine
