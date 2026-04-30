@@ -6,6 +6,64 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.8.0 — 2026-04-30
+
+### Added
+- **Burn-rate projection on rolling-window bars.** Each 5h / weekly bar
+  now draws a faint ghost extension showing where you'll land at reset
+  if usage continues at the current rate. An ↗ arrow appears next to
+  the percent text when the projection clearly overshoots 100% (5pt
+  grace) — so you spot "I'm going to run out before Sunday" while
+  there's still time to slow down. Linear extrapolation, ignored in
+  the first 60s of a window where burn rate is too noisy. Applies to
+  Claude Code and Codex.
+- **Per-model breakdown under Claude weekly bar.** Anthropic's
+  `/api/oauth/usage` ships separate utilization buckets per model
+  family — Sonnet, Opus, Haiku. We now surface them as indented mono
+  rows directly under the weekly bar, sorted by share descending.
+  Models with 0% are dropped (no "Haiku 0%" noise). Tells you which
+  model is actually eating the budget.
+
+### Docs
+- README rewritten for the v0.8 launch: new tagline, "Why MyUsage"
+  opener, Highlights re-ordered to lead with the multi-device +
+  multi-provider moat (the only true differentiator vs CodexBar /
+  ccusage / the long tail), provider table updated to reflect v0.7.x
+  reality, Roadmap pruned of items already shipped.
+- `docs/competitive-analysis.md` added — survey of ~12 competitors,
+  per-tool notes, and ranked distribution channels with drafted
+  Show HN / Reddit / Product Hunt posts.
+- `docs/release.md` (new) carries the internal release-flow notes
+  (CHANGELOG extraction pipeline, tag-failure recovery procedure)
+  that used to clutter the user-facing README.
+- GitHub repository metadata set: description, homepage, 12 topics
+  for discoverability.
+
+### 中文
+
+- **滚动窗口 bar 增加 burn-rate 预测**：每条 5 小时 / 每周 bar 上叠一层
+  幽灵延伸，按当前消耗速度预测 reset 时会落在哪里。如果预测会突破
+  100%（>105% 以避免 "101%" 误报），百分数旁边出现红色 ↗ 箭头——
+  让你在还有时间放慢之前看到"周日要爆了"。线性外推；窗口刚开始
+  60 秒内不预测（数据太抖）。Claude Code 和 Codex 都生效。
+- **Claude weekly 卡内多出 per-model 拆分**：Anthropic 的
+  `/api/oauth/usage` 本来就返回 Sonnet / Opus / Haiku 的分别用量，
+  我们之前没用上。现在在 weekly 主条下面以缩进 mono 列出，按消耗
+  排序，0% 的不显示。一眼看到是哪个模型在吃额度。
+- README 为 v0.8 上线重写：新 tagline、"Why MyUsage" 开篇、
+  Highlights 按 moat-first 重排（multi-device + multi-provider 的
+  组合是唯一真护城河），Provider 表格更新到 v0.7.x 现实，Roadmap
+  砍掉已经 ship 的项。
+- 新增 `docs/competitive-analysis.md` — 调研了约 12 个竞品，每个
+  写了简评，给出了 Hacker News / Reddit / Product Hunt 三个渠道的
+  发帖草稿。
+- 新增 `docs/release.md` 把发版流程（CHANGELOG 抽取 pipeline、tag
+  失败回滚操作）从 user-facing README 挪进 internal docs。
+- GitHub 仓库元数据设了：description / homepage / 12 个 topics
+  方便被搜到。
+
+---
+
 ## v0.7.2 — 2026-04-30
 
 ### Changed
