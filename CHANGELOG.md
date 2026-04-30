@@ -6,6 +6,33 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.7.2 — 2026-04-30
+
+### Changed
+- **Update banner now downloads the .zip and reveals the new
+  `MyUsage.app` in Finder.** No more "open release page in browser →
+  hunt for the .zip in the assets list → download → double-click to
+  extract" — Settings → About's update banner does all of that and
+  drops you in Finder one drag away from `/Applications`. Subtitle
+  rotates with state ("Downloading… 47%", "Drag MyUsage.app into
+  /Applications, then relaunch."), action button rotates with state
+  (Download → spinner + progress → Show in Finder → Retry on error).
+  Falls back to the old "Open Release" link when a release ships
+  without a .zip asset.
+
+### 中文
+
+- **更新横幅现在自动下载 .zip 并在 Finder 里高亮新的 MyUsage.app。**
+  之前要"在浏览器打开 release 页 → 在 assets 列表里找 .zip → 下载
+  → 双击解压"，现在 设置 → 关于 那个 banner 一键搞定，最后在
+  Finder 里直接看到新的 .app，只剩"拖到 /Applications + 重启"两步
+  手动。下载中显示百分比，状态机走到底了 banner 上的副标题和按钮
+  都会跟着变（Download → 转圈 + 进度条 → Show in Finder → 出错则
+  Retry）。如果某个 release 没传 .zip，会自动回退到原来的"Open
+  Release"链接。
+
+---
+
 ## v0.7.1 — 2026-04-30
 
 > Originally tagged as v0.7.0, but the v0.7.0 release workflow never
