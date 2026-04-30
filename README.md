@@ -5,33 +5,49 @@
 <h1 align="center">MyUsage</h1>
 
 <p align="center">
-  Native macOS menu bar app for tracking AI coding tool usage across Claude Code, Codex, Cursor, and Antigravity.
+  One menu bar for every AI coding tool — across every Mac you use.
 </p>
 
 <p align="center">
-  <a href="README.zh-CN.md">中文说明</a>
+  <a href="https://github.com/zchan0/MyUsage/releases/latest"><img src="https://img.shields.io/github/v/release/zchan0/MyUsage?style=flat-square&color=4a7c59" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue?style=flat-square" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-6-orange?style=flat-square" alt="Swift 6">
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/lang-中文-red?style=flat-square" alt="中文说明"></a>
 </p>
 
 ![MyUsage Screenshot](docs/screenshot.png)
 
+## Why MyUsage
+
+If you use **Claude Code, Codex, Cursor, or Antigravity** — and especially if you use them across **more than one Mac** — the official UIs only show what's happening on the device you're sitting at. You hit a weekly limit on Friday afternoon because your laptop has been chewing through tokens all morning while your desktop's "remaining" number lied to you.
+
+MyUsage fixes this with a small native menu bar app that:
+
+- Talks to all four providers and shows them in one popover, so you don't have to flip between four UIs.
+- **Aggregates across every Mac you own** by writing tiny snapshots into a folder you already sync (iCloud Drive, Syncthing, Dropbox, an NFS mount — your call). No MyUsage backend exists; the sync transport is yours.
+- Tells you when you're going to run out — burn-rate projection draws a faint extension on each limit bar showing where you'll land at reset.
+
+It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dependencies.
+
 ## Highlights
 
-- Unified usage view for multiple AI coding tools in one menu bar popover.
-- Optional menu bar tracking for a selected provider.
-- Configurable refresh interval (1m / 2m / 5m / 15m / manual).
-- Provider ordering, enable/disable toggles, and quick status checks.
-- Estimated monthly cost display (Claude Code + Codex).
-- Shared sync folder + Devices tab to aggregate costs from multiple Macs.
-- Built with system frameworks only (SwiftUI, SQLite3, Security), no third-party dependencies.
+- **Multi-device aggregation, BYO sync transport.** Each Mac drops a per-device JSONL snapshot into `<sync-folder>/devices/<id>/`. Use iCloud, Syncthing, Dropbox, NAS, or anything else that keeps a folder in sync. The Devices tab in Settings lets you forget retired peers.
+- **Four providers in one popover** — Claude Code, Codex, Cursor, Antigravity. Reorder and enable/disable per provider in Settings.
+- **Burn-rate projection.** Each rolling-window bar shows a ghost extension projecting where you'll land at reset if usage continues at the current rate. An ↗ arrow appears next to the percent when the projection overshoots 100%.
+- **Per-model breakdown for Claude weekly.** Below the weekly bar, Sonnet / Opus / Haiku each get their own row sorted by share, so you can see which model is actually eating the budget.
+- **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
+- **In-app update channel.** On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The Settings → About banner can download the next release and reveal it in Finder one drag away from /Applications.
+- **Privacy-respecting device identity.** Multi-device sync uses a salted SHA-256 of `IOPlatformUUID` as the device ID; the raw hardware UUID never leaves the process. Cached in UserDefaults so reinstalling doesn't create a duplicate device.
+- **Zero third-party dependencies.** Built only with SwiftUI, SQLite3, Security.framework, Foundation. No Electron, no Sparkle, no analytics SDK.
 
 ## Supported Providers
 
 | Provider | Data Source | What You See |
 | --- | --- | --- |
-| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) | Current 5h session, 7d window, extra usage |
-| Codex | OAuth API (`~/.codex/auth.json` / Keychain) | Current 5h session, 7d window, credits |
-| Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included usage, on-demand spend, billing cycle |
-| Antigravity | Local language server process probe | Per-model quota and reset time |
+| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) + `/api/oauth/profile` for plan label | 5h session + weekly bars · per-model breakdown (Sonnet / Opus / Haiku) · burn-rate projection · monthly cost (multi-device) |
+| Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h session + weekly bars · burn-rate projection · monthly cost (multi-device) · credits |
+| Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota + on-demand budget bars · billing-cycle countdown |
+| Antigravity | Local language server process probe | Per-model quota bars · IDE running indicator |
 
 ## Requirements
 
@@ -83,20 +99,6 @@ Open in Xcode (SwiftPM workspace):
 open .swiftpm/xcode/package.xcworkspace
 ```
 
-## Release Flow
-
-- Update source version/build in `MyUsage/Resources/Info.plist`.
-- Prepare release artifacts with:
-
-```bash
-./Scripts/prepare_release.sh --version 0.4.0 --build 2
-```
-
-This script updates/validates bundle version fields, packages `MyUsage.app`, and outputs:
-
-- `MyUsage-<version>.zip`
-- `MyUsage-<version>.zip.sha256`
-
 ## Architecture Notes
 
 - `UsageManager` drives refresh orchestration and UI state.
@@ -116,13 +118,13 @@ More details: [docs/architecture.md](docs/architecture.md)
 Possible directions, not commitments. Open an issue if any of these would
 make MyUsage materially more useful for you:
 
-- **Token-level usage** — break monthly cost down by model and prompt
-  cache hit rate, in addition to the dollar totals already shown.
-- **UI redesign** — denser layout, native macOS look refresh.
-- **Notarized + signed releases** — so the .app opens without Gatekeeper
-  warnings on a fresh Mac.
-- **In-app update notifications** — Sparkle or a lightweight "new version
-  available" check against GitHub Releases.
+- **Notarized + signed releases** — so the .app opens without the Gatekeeper
+  warning on a fresh Mac. Blocked on an Apple Developer account.
+- **More providers as APIs become available.** GitHub Copilot is the most
+  requested but doesn't currently expose per-user usage to individual
+  subscribers; we'll add it the moment that changes.
+- **iOS / iPadOS companion** for at-a-glance checking when you're not at
+  a Mac. Lower priority than core macOS feature work.
 
 ## License
 
