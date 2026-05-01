@@ -175,6 +175,38 @@ struct UsageWindowProjectionTests {
         #expect(window.projectedFinalPercent(now: now) == nil)
     }
 
+    /// Regression for the user-reported false-arrow case: Codex 5h window,
+    /// 14 minutes elapsed, 6% used → math projects ~129% but the data is
+    /// way too noisy to trust. New 20%-of-window minimum suppresses it.
+    @Test("projection is nil when < 20% of window has elapsed")
+    func notEnoughElapsedForProjection() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 5h window, 14 min elapsed (< 1h = 20% of 5h)
+        let resetsAt = now.addingTimeInterval(5 * 3600 - 14 * 60)
+        let window = UsageWindow(
+            percentUsed: 6,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        #expect(window.projectedFinalPercent(now: now) == nil)
+    }
+
+    @Test("projection kicks in once at least 20% of the window has elapsed")
+    func projectionKicksInAtTwentyPercent() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 5h window, exactly 1h elapsed (20% of window)
+        let resetsAt = now.addingTimeInterval(5 * 3600 - 1 * 3600)
+        let window = UsageWindow(
+            percentUsed: 30,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let projected = window.projectedFinalPercent(now: now)
+        #expect(projected != nil)
+        // 30 * (5 / 1) = 150
+        #expect(abs(projected! - 150) < 0.01)
+    }
+
     @Test("projection is nil when reset is in the past")
     func resetInPast() {
         let now = Date(timeIntervalSince1970: 1_000_000)

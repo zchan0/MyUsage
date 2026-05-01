@@ -49,8 +49,13 @@ struct UsageWindow: Sendable {
     /// percent would we land at when the window resets?
     ///
     /// Returns `nil` when projection isn't meaningful: window duration
-    /// unknown, no reset time, the window just started (elapsed < 1m
-    /// would balloon), or already past reset.
+    /// unknown, no reset time, already past reset, or **not enough of
+    /// the window has elapsed** for the burn rate to be reliable. We
+    /// require the lesser of (60 seconds) or (20% of window duration) —
+    /// e.g. a 5-hour window needs at least 1h of data before projection,
+    /// and a 7-day window needs ~1.4d. Without this gate, a single early
+    /// prompt of 5% in the first 10 minutes of a 5h window would extrapolate
+    /// to ~150% and false-trigger the overshoot indicator for hours.
     ///
     /// The result is intentionally NOT capped — callers cap at render
     /// time so a "you'll be at 230% by Sunday" can still be detected
@@ -62,9 +67,8 @@ struct UsageWindow: Sendable {
         let timeRemaining = resetsAt.timeIntervalSince(now)
         guard timeRemaining > 0 else { return nil }
         let elapsed = windowDuration - timeRemaining
-        // Skip the first minute — burn rate is too noisy and projection
-        // would dominate the bar with garbage.
-        guard elapsed >= 60 else { return nil }
+        let minElapsed = max(60, windowDuration * 0.20)
+        guard elapsed >= minElapsed else { return nil }
         return percentUsed * windowDuration / elapsed
     }
 }

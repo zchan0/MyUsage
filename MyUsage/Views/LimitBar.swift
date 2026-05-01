@@ -78,11 +78,14 @@ struct LimitBar: View {
     }
 
     /// Show the up-right arrow only when projection clearly overshoots —
-    /// 5pt grace above 100% so a near-miss "you'll be at 101%" doesn't
-    /// scream. Anything less is normal usage.
+    /// 20pt grace above 100% so borderline projections ("you'll be at
+    /// 108%") don't scream. The projection function itself also
+    /// requires ≥ 20% of the window to have elapsed before returning
+    /// non-nil, so this guard is the second of two filters keeping the
+    /// arrow signal-not-noise.
     private var shouldShowOverflowArrow: Bool {
         guard let projected = projectedPercent else { return false }
-        return projected > 105 && percent < 100
+        return projected > 120 && percent < 100
     }
 
     private var overflowColor: Color {
