@@ -55,7 +55,13 @@ struct LimitBar: View {
                 .frame(width: pctColumnWidth, alignment: .trailing)
 
                 if reservesResetSlot {
-                    Text(reset ?? "")
+                    // "—" instead of empty string when the reset countdown
+                    // is nil (Anthropic's API occasionally returns
+                    // `resets_at: null`, e.g. right after a window resets
+                    // with utilization at 0). Keeps column alignment with
+                    // other rows in the same card and signals "no data"
+                    // rather than looking like a UI bug.
+                    Text(reset ?? "—")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.secondary.opacity(0.7))

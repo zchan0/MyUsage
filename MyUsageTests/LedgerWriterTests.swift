@@ -41,14 +41,27 @@ struct LedgerWriterTests {
         )
     }
 
+    /// Manifest aggregates only the **current** calendar month, so day
+    /// keys in fixtures must be in the same month as `Date.now` —
+    /// otherwise the rollup is empty and the assertions below fail at
+    /// month rollover. Returns `(monthKey, day1, day2)` where day1/day2
+    /// are two distinct days inside the current month.
+    private static func currentMonthDayKeys() -> (month: String, dayA: String, dayB: String) {
+        let monthKey = LedgerCalendar.monthKey(for: .now)
+        // Pick day-of-month "01" and "02" — always valid, always in the
+        // current month, and stays away from month boundaries.
+        return (monthKey, "\(monthKey)-01", "\(monthKey)-02")
+    }
+
     @Test("recordDailyCosts writes JSONL + manifest for new entries")
     func recordDailyCostsExports() async throws {
         let (h, tmp) = try makeHarness()
         defer { try? FileManager.default.removeItem(at: tmp) }
+        let (month, dayA, dayB) = Self.currentMonthDayKeys()
 
         let applied = await h.writer.recordDailyCosts(
             provider: .claude,
-            dailyCostsByDay: ["2026-04-17": 1.23, "2026-04-18": 4.56]
+            dailyCostsByDay: [dayA: 1.23, dayB: 4.56]
         )
         #expect(applied.applied.count == 2)
         #expect(applied.issue == nil)
@@ -62,24 +75,25 @@ struct LedgerWriterTests {
         #expect(manifest != nil)
         #expect(manifest?.deviceId == h.deviceID)
         #expect(manifest?.rowCount == 2)
-        #expect(manifest?.monthlyTotals["claude"]?["2026-04"] == 1.23 + 4.56)
+        #expect(manifest?.monthlyTotals["claude"]?[month] == 1.23 + 4.56)
     }
 
     @Test("JSONL append does not duplicate on re-entry with same costs")
     func reEntryIsIdempotent() async throws {
         let (h, tmp) = try makeHarness()
         defer { try? FileManager.default.removeItem(at: tmp) }
+        let (_, dayA, _) = Self.currentMonthDayKeys()
 
         let first = await h.writer.recordDailyCosts(
             provider: .claude,
-            dailyCostsByDay: ["2026-04-17": 1.23]
+            dailyCostsByDay: [dayA: 1.23]
         )
         #expect(first.applied.count == 1)
         #expect(first.issue == nil)
 
         let second = await h.writer.recordDailyCosts(
             provider: .claude,
-            dailyCostsByDay: ["2026-04-17": 1.23]
+            dailyCostsByDay: [dayA: 1.23]
         )
         #expect(second.applied.isEmpty)
         #expect(second.issue == nil)
@@ -94,14 +108,15 @@ struct LedgerWriterTests {
     func costUpdateAppends() async throws {
         let (h, tmp) = try makeHarness()
         defer { try? FileManager.default.removeItem(at: tmp) }
+        let (month, dayA, _) = Self.currentMonthDayKeys()
 
         _ = await h.writer.recordDailyCosts(
             provider: .claude,
-            dailyCostsByDay: ["2026-04-17": 1.00]
+            dailyCostsByDay: [dayA: 1.00]
         )
         _ = await h.writer.recordDailyCosts(
             provider: .claude,
-            dailyCostsByDay: ["2026-04-17": 2.50]
+            dailyCostsByDay: [dayA: 2.50]
         )
 
         let ledgerData = try Data(contentsOf: h.ledgerFile())
@@ -110,26 +125,27 @@ struct LedgerWriterTests {
         #expect(lines.count == 2)
 
         let manifest = LedgerManifestCodec.read(from: h.manifestFile())
-        #expect(manifest?.monthlyTotals["claude"]?["2026-04"] == 2.50)
+        #expect(manifest?.monthlyTotals["claude"]?[month] == 2.50)
     }
 
     @Test("publishSnapshot rewrites full local ledger into sync folder")
     func publishSnapshotRewritesFullLedger() async throws {
         let (h, tmp) = try makeHarness()
         defer { try? FileManager.default.removeItem(at: tmp) }
+        let (month, dayA, dayB) = Self.currentMonthDayKeys()
 
         _ = try h.store.upsert([
             LedgerEntry(
                 deviceId: h.deviceID,
                 provider: .claude,
-                day: "2026-04-17",
+                day: dayA,
                 costUSD: 1.23,
                 recordedAt: Date(timeIntervalSince1970: 1_000_000)
             ),
             LedgerEntry(
                 deviceId: h.deviceID,
                 provider: .codex,
-                day: "2026-04-18",
+                day: dayB,
                 costUSD: 4.56,
                 recordedAt: Date(timeIntervalSince1970: 1_000_001)
             )
@@ -150,8 +166,8 @@ struct LedgerWriterTests {
 
         let manifest = LedgerManifestCodec.read(from: h.manifestFile())
         #expect(manifest?.rowCount == 2)
-        #expect(manifest?.monthlyTotals["claude"]?["2026-04"] == 1.23)
-        #expect(manifest?.monthlyTotals["codex"]?["2026-04"] == 4.56)
+        #expect(manifest?.monthlyTotals["claude"]?[month] == 1.23)
+        #expect(manifest?.monthlyTotals["codex"]?[month] == 4.56)
     }
 
     @Test("publishSnapshot creates empty artifacts for a new device")
