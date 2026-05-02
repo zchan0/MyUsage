@@ -121,16 +121,14 @@ struct ProviderCard: View {
                     LimitBar(
                         name: "5-hour",
                         percent: session.percentUsed,
-                        reset: session.resetCountdown.map { "resets \($0)" },
-                        projectedPercent: session.projectedFinalPercent()
+                        reset: session.resetCountdown.map { "resets \($0)" }
                     )
                 }
                 if let weekly = snapshot.weeklyUsage {
                     LimitBar(
                         name: "Weekly",
                         percent: weekly.percentUsed,
-                        reset: weekly.resetCountdown.map { "resets \($0)" },
-                        projectedPercent: weekly.projectedFinalPercent()
+                        reset: weekly.resetCountdown.map { "resets \($0)" }
                     )
                     weeklyByModelRows(snapshot.weeklyByModel)
                 }

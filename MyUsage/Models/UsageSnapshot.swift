@@ -44,6 +44,29 @@ struct UsageWindow: Sendable {
         }
     }
 
+    /// Where the user would be right now if they were on a steady "burn
+    /// 100% across the full window" pace. Returns the on-pace position
+    /// as a percent (0–100). If the bar's actual fill is past this
+    /// number, the user is ahead of pace; if behind, they're slower.
+    ///
+    /// Renderable as a small marker on the bar — fill-past-marker reads
+    /// as "I'm burning hot", fill-behind-marker reads as "I have
+    /// runway". Communicates velocity without requiring the user to do
+    /// arithmetic on percentages and elapsed time.
+    ///
+    /// Note: unlike `projectedFinalPercent` this does NOT need a noise
+    /// gate. The position is deterministic from time alone — there's
+    /// no usage data being extrapolated, so even a brand-new window
+    /// has a meaningful (just very-near-zero) on-pace position.
+    func onPacePercent(now: Date = .now) -> Double? {
+        guard let resetsAt, let windowDuration, windowDuration > 0 else { return nil }
+        let timeRemaining = resetsAt.timeIntervalSince(now)
+        guard timeRemaining > 0 else { return nil }
+        let elapsed = windowDuration - timeRemaining
+        guard elapsed > 0 else { return nil }
+        return min(100, elapsed / windowDuration * 100)
+    }
+
     /// Linear extrapolation: if usage continues at the current burn rate
     /// (% per second, derived from elapsed time in this window), what
     /// percent would we land at when the window resets?

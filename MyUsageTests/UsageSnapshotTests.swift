@@ -229,4 +229,69 @@ struct UsageWindowProjectionTests {
         )
         #expect(window.projectedFinalPercent(now: now) == nil)
     }
+
+    // MARK: - On-pace tick position
+
+    @Test("on-pace position equals elapsed fraction")
+    func onPaceMatchesElapsed() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 5h window, 2.5h elapsed (50% of window)
+        let resetsAt = now.addingTimeInterval(2.5 * 3600)
+        let window = UsageWindow(
+            percentUsed: 30,   // doesn't affect on-pace position
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let onPace = window.onPacePercent(now: now)
+        #expect(onPace != nil)
+        #expect(abs(onPace! - 50) < 0.01)
+    }
+
+    /// Unlike projection (which gates on noise), the on-pace position
+    /// is deterministic from time alone — even a fresh window has a
+    /// meaningful (very-small) on-pace value. Make sure we don't
+    /// accidentally re-introduce a noise gate that hides the marker
+    /// for the first hour of a 5h window.
+    @Test("on-pace position is non-nil even early in the window")
+    func onPaceShowsEarly() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 5h window, 14 min elapsed — would have been gated under the
+        // projection function, but onPace is deterministic so it shows.
+        let resetsAt = now.addingTimeInterval(5 * 3600 - 14 * 60)
+        let window = UsageWindow(
+            percentUsed: 6,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let onPace = window.onPacePercent(now: now)
+        #expect(onPace != nil)
+        // 14m / 5h * 100 ≈ 4.67
+        #expect(abs(onPace! - 4.67) < 0.1)
+    }
+
+    @Test("on-pace position caps at 100 even at end of window")
+    func onPaceCapsAt100() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let resetsAt = now.addingTimeInterval(1)
+        let window = UsageWindow(
+            percentUsed: 80,
+            resetsAt: resetsAt,
+            windowDuration: 5 * 3600
+        )
+        let onPace = window.onPacePercent(now: now)
+        #expect(onPace != nil)
+        #expect(onPace! <= 100)
+        #expect(onPace! > 99)
+    }
+
+    @Test("on-pace nil when window duration unknown")
+    func onPaceNeedsDuration() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let window = UsageWindow(
+            percentUsed: 50,
+            resetsAt: now.addingTimeInterval(3600),
+            windowDuration: nil
+        )
+        #expect(window.onPacePercent(now: now) == nil)
+    }
 }
