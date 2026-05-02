@@ -25,7 +25,7 @@ MyUsage fixes this with a small native menu bar app that:
 
 - Talks to all four providers and shows them in one popover, so you don't have to flip between four UIs.
 - **Aggregates across every Mac you own** by writing tiny snapshots into a folder you already sync (iCloud Drive, Syncthing, Dropbox, an NFS mount — your call). No MyUsage backend exists; the sync transport is yours.
-- Tells you when you're going to run out — burn-rate projection draws a faint extension on each limit bar showing where you'll land at reset.
+- Tells you when you're going to run out — a dashed marker on each limit bar shows where you'll land at reset, with a footer note like `~82% by reset` (safe) or `projected 118%` (overshoot).
 
 It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dependencies.
 
@@ -33,7 +33,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 
 - **Multi-device aggregation, BYO sync transport.** Each Mac drops a per-device JSONL snapshot into `<sync-folder>/devices/<id>/`. Use iCloud, Syncthing, Dropbox, NAS, or anything else that keeps a folder in sync. The Devices tab in Settings lets you forget retired peers.
 - **Four providers in one popover** — Claude Code, Codex, Cursor, Antigravity. Reorder and enable/disable per provider in Settings.
-- **Burn-rate projection.** Each rolling-window bar shows a ghost extension projecting where you'll land at reset if usage continues at the current rate. An ↗ arrow appears next to the percent when the projection overshoots 100%.
+- **Burn-rate projection.** Each rolling-window bar carries a dashed marker at the projected-final position alongside a 100% quota reference line. A footer note reads `~82% by reset` when the projection is safe and switches to `projected 118%` (in warn-amber) when it overshoots. The math waits for at least 20% of the window to elapse before showing anything, so a single early prompt can't false-trigger the alarm.
 - **Per-model breakdown for Claude weekly.** Below the weekly bar, Sonnet / Opus / Haiku each get their own row sorted by share, so you can see which model is actually eating the budget.
 - **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
 - **In-app update channel.** On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The Settings → About banner can download the next release and reveal it in Finder one drag away from /Applications.

@@ -23,7 +23,7 @@ MyUsage 是一个原生的 macOS 菜单栏小应用，解决方式是：
 
 - 同时对接四个 provider，一个 popover 看完，不用在四个 UI 之间切。
 - **跨所有 Mac 聚合**——每台机器把一个 JSONL 快照写到你**已经在同步**的目录里（iCloud Drive、Syncthing、Dropbox、NFS 挂载点都行），完全不依赖 MyUsage 的服务器（也不存在这种东西）。
-- 提前告诉你"快烧完了"——每条 limit bar 上叠一层"幽灵延伸"，按当前速度预测你 reset 时会落在哪里。
+- 提前告诉你"快烧完了"——每条 limit bar 上有一根虚线 marker 标出按当前速度 reset 时会落在哪，下方一行小字写清楚 `~82% by reset`（安全）或 `projected 118%`（要超）。
 
 免费、MIT、不发任何 telemetry，纯 Swift / SwiftUI 实现，零第三方依赖。
 
@@ -31,7 +31,7 @@ MyUsage 是一个原生的 macOS 菜单栏小应用，解决方式是：
 
 - **跨设备聚合 + 自带同步通道**：每台 Mac 把 per-device 的 JSONL 快照写进 `<sync-folder>/devices/<id>/`。同步通道随你选——iCloud、Syncthing、Dropbox、NAS 都可以。Settings → Devices 可以"忘记"已退役的旧设备。
 - **四个 provider 一个弹层**：Claude Code、Codex、Cursor、Antigravity。Settings 里可以拖拽排序、启用/禁用。
-- **Burn-rate 预测**：每条 rolling-window bar 上画一层幽灵延伸，告诉你按当前速度 reset 时会到多少。如果会突破 100%，百分数旁边会出现红色 ↗ 箭头。
+- **Burn-rate 预测**：每条 rolling-window bar 上有一根虚线 marker 落在 projected 位置，旁边一根淡淡的 100% 参考线。bar 下方注释 `~82% by reset` 表示按当前速度 reset 时会落在哪里；预测超过 100% 时切换为 `projected 118%`（amber 加粗），marker 也染成 amber。窗口需要至少走过 20% 才会出预测，避免单次大请求把信号炸出来。
 - **Claude weekly per-model 拆分**：weekly 主条下面 Sonnet / Opus / Haiku 各占一行，按消耗量降序，一眼看到是哪个模型在吃额度。
 - **Limit 压力通知**：任意 limit 跨过 warn / crit 阈值（默认 80% / 95%，可调）会立即弹 macOS 系统通知。带幂等：同一档不会重复弹；用量回落后状态自动 reset，下次再升能再触发。
 - **应用内升级**：启动时检查 GitHub Releases，发现新版本时菜单栏图标和 Settings → About 都会有提示。banner 上的 Download 按钮可以一键下载新版的 .zip 并在 Finder 里高亮，离"拖到 /Applications"只差一拖。
