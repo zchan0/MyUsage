@@ -139,8 +139,7 @@ struct ProviderCard: View {
                     LimitBar(
                         name: quota.label,
                         percent: quota.percentUsed,
-                        monoName: true,
-                        reservesResetSlot: false
+                        monoName: true
                     )
                 }
             }

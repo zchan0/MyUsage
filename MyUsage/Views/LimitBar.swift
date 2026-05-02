@@ -2,14 +2,20 @@ import SwiftUI
 
 /// A single limit row used inside `ProviderCard`. Shape:
 ///
-///     name (left)            PCT  reset (right, mono baseline)
+///     name (left)                                  PCT (right)
 ///     ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  (4pt sage rail — coloured at warn/crit)
+///                                            resets 2h 14m (right, mono)
 ///
-/// Percent and reset live in fixed-width trailing columns so multiple
-/// rows in the same card column-align cleanly. The bar fill stays
-/// neutral (sage) by default and only adopts the warn/crit palette
-/// once the limit crosses 75% / 90%. Brand color is never used in the
-/// bar — that channel belongs to the brand-icon tile in the card head.
+/// Three-row stack: percent sits above the bar (with the name), reset
+/// countdown sits below (right-aligned). When `reset` is nil the third
+/// row is omitted entirely — no placeholder slot, no reserved width —
+/// so cards without a reset (Antigravity per-model rows, Cursor on-demand
+/// without a cap) stay compact instead of carrying a phantom column.
+///
+/// The bar fill stays neutral (sage) by default and only adopts the
+/// warn/crit palette once the limit crosses 75% / 90%. Brand color is
+/// never used in the bar — that channel belongs to the brand-icon tile
+/// in the card head.
 struct LimitBar: View {
     let name: String
     let percent: Double
@@ -17,14 +23,6 @@ struct LimitBar: View {
     /// When true, the name is rendered in monospaced 10.5pt — used by
     /// Antigravity per-model rows ("flash 47/200").
     var monoName: Bool = false
-    /// When true, the reset slot reserves a fixed width even when empty,
-    /// so percentages and reset texts column-align across multiple rows
-    /// in the same card. Antigravity per-model rows pass `false` because
-    /// they never carry a reset string and don't need that column.
-    var reservesResetSlot: Bool = true
-
-    private let pctColumnWidth: CGFloat = 38
-    private let resetColumnWidth: CGFloat = 86
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -35,16 +33,19 @@ struct LimitBar: View {
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(pctColor)
-                    .frame(width: pctColumnWidth, alignment: .trailing)
-                if reservesResetSlot {
-                    Text(reset ?? "")
+            }
+
+            ProgressTrack(percent: percent, level: level)
+
+            if let reset {
+                HStack(spacing: 0) {
+                    Spacer()
+                    Text(reset)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.secondary.opacity(0.7))
-                        .frame(width: resetColumnWidth, alignment: .trailing)
                 }
             }
-            ProgressTrack(percent: percent, level: level)
         }
     }
 
@@ -117,7 +118,7 @@ struct ProgressTrack: View {
         LimitBar(name: "Weekly", percent: 25, reset: "resets Sun")
         LimitBar(name: "Weekly", percent: 78, reset: "resets Sun")
         LimitBar(name: "Weekly", percent: 91, reset: "resets Sun")
-        LimitBar(name: "flash 47/200", percent: 23, monoName: true, reservesResetSlot: false)
+        LimitBar(name: "flash 47/200", percent: 23, monoName: true)
     }
     .padding(16)
     .frame(width: 320)
