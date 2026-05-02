@@ -156,9 +156,15 @@ struct ProgressTrack: View {
 
     private var fillColor: Color {
         switch level {
-        case .healthy: .primary.opacity(0.55)
-        case .warn:    Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.55)
-        case .crit:    Color(hue: 8.0/360.0,  saturation: 0.78, brightness: 0.58)
+        // Sage green, matched to the safety palette used by Settings →
+        // Sync status indicator. Low saturation keeps the popover calm
+        // while still communicating "this is healthy" — distinguishable
+        // from the neutral-gray track at a glance, where the previous
+        // gray-on-gray fill was indistinguishable from a missing-data
+        // state.
+        case .healthy: Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55)
+        case .warn:    Color(hue: 38.0/360.0,  saturation: 0.92, brightness: 0.55)
+        case .crit:    Color(hue: 8.0/360.0,   saturation: 0.78, brightness: 0.58)
         }
     }
 }
