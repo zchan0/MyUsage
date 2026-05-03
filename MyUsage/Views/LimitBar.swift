@@ -100,6 +100,12 @@ struct LimitBar: View {
 /// projection marker, optional 100% quota reference line, and the percent
 /// text right-anchored inside. Reusable for any usage-style row that wants
 /// the same visual treatment.
+///
+/// The bar (track + fill + percent) is hard-constrained to `height`. The
+/// projection marker and quota reference line live in an `.overlay` so
+/// their vertical overhang is *visual only* — they can extend a few pt
+/// above/below the bar without bloating the layout (an early version put
+/// them in the ZStack and the bar grew to match the marker's height).
 struct ProgressTrack: View {
     let percent: Double
     /// When non-nil, draws a dashed vertical marker at this position
@@ -109,68 +115,67 @@ struct ProgressTrack: View {
     var level: LimitSafety.Level = .healthy
     var height: CGFloat = 10
 
-    private static let markerWidth: CGFloat = 1.5
-    private static let markerOverhang: CGFloat = 4
+    private static let markerOverhang: CGFloat = 3
 
     var body: some View {
+        bar
+            .frame(height: height)
+            .overlay(alignment: .leading) { markerOverlay }
+    }
+
+    private var bar: some View {
         GeometryReader { geo in
-            let w = geo.size.width
-            let fillWidth = max(0, w * min(percent, 100) / 100)
+            let fillWidth = max(0, geo.size.width * min(percent, 100) / 100)
 
             ZStack(alignment: .leading) {
-                // Track
                 Capsule()
                     .fill(Color.primary.opacity(0.10))
 
-                // Fill (current usage)
                 Capsule()
                     .fill(fillColor)
                     .frame(width: fillWidth)
                     .animation(.easeInOut(duration: 0.4), value: percent)
 
-                // Quota reference line at 100% — only when there's a
-                // marker to relate to.
-                if projectedPercent != nil {
-                    quotaLine.offset(x: w - 0.5)
-                }
-
-                // Projected marker — clamped to 200% so a wildly hot
-                // burn rate doesn't render off-card.
-                if let p = projectedPercent {
-                    let isAlarm = p > 100
-                    let markerX = w * min(max(p, 0), 200) / 100
-                    DashedMarker(color: isAlarm ? LimitBar.warnAccent : Color.primary.opacity(0.30))
-                        .frame(width: Self.markerWidth, height: height + Self.markerOverhang * 2)
-                        .offset(x: markerX - Self.markerWidth / 2, y: -Self.markerOverhang)
-                }
-
-                // Percent text right-anchored inside the bar.
                 HStack {
                     Spacer(minLength: 0)
                     Text("\(Int(percent.rounded()))%")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.primary.opacity(0.85))
-                        .shadow(color: pctShadow, radius: 1, x: 0, y: 0)
                         .padding(.trailing, 7)
                 }
                 .allowsHitTesting(false)
             }
         }
-        .frame(height: height)
     }
 
-    /// Soft halo behind the percent text so it stays readable both on the
-    /// sage fill (light text on mid-saturation green) and on the gray
-    /// track (light text on light gray). Uses background colour so it
-    /// adapts to light/dark mode automatically.
-    private var pctShadow: Color { Color(.windowBackgroundColor).opacity(0.85) }
+    @ViewBuilder
+    private var markerOverlay: some View {
+        if let p = projectedPercent {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let isAlarm = p > 100
+                let markerX = w * min(max(p, 0), 200) / 100
+                let totalHeight = height + Self.markerOverhang * 2
+                let yOffset = -Self.markerOverhang
 
-    private var quotaLine: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.18))
-            .frame(width: 1, height: height + Self.markerOverhang * 2)
-            .offset(y: -Self.markerOverhang)
+                ZStack(alignment: .topLeading) {
+                    // 100% quota reference line (solid, thinner than marker)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.18))
+                        .frame(width: 1, height: totalHeight)
+                        .offset(x: w - 0.5, y: yOffset)
+
+                    // Projection marker (dashed)
+                    DashedMarker(
+                        color: isAlarm ? LimitBar.warnAccent : Color.primary.opacity(0.32),
+                        totalHeight: totalHeight
+                    )
+                    .offset(x: markerX - 0.75, y: yOffset)
+                }
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     private var fillColor: Color {
@@ -188,21 +193,33 @@ struct ProgressTrack: View {
     }
 }
 
-/// A vertical dashed line. We render it as a Path stroke with a dash
-/// pattern rather than a series of stacked rectangles so it stays crisp
-/// at any height and the dash rhythm renders identically in light/dark
-/// without per-segment work.
+/// A vertical dashed line rendered as a column of axis-aligned
+/// rectangles. We tried a single Path stroke with `StrokeStyle.dash`
+/// first; the antialiasing on a 1.5pt-wide butt-capped stroke was
+/// uneven per dash and the line read as faintly slanted. Stacking
+/// integer-height rectangles in a VStack guarantees pixel-aligned
+/// segments at any total height.
 private struct DashedMarker: View {
     let color: Color
+    let totalHeight: CGFloat
+    private let dashHeight: CGFloat = 3
+    private let gapHeight: CGFloat = 2
+    private let strokeWidth: CGFloat = 1.5
 
     var body: some View {
-        GeometryReader { geo in
-            Path { p in
-                p.move(to: CGPoint(x: geo.size.width / 2, y: 0))
-                p.addLine(to: CGPoint(x: geo.size.width / 2, y: geo.size.height))
+        VStack(spacing: gapHeight) {
+            ForEach(0..<dashCount, id: \.self) { _ in
+                Rectangle()
+                    .fill(color)
+                    .frame(width: strokeWidth, height: dashHeight)
             }
-            .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .butt, dash: [3, 2]))
         }
+        .frame(width: strokeWidth, height: totalHeight, alignment: .top)
+    }
+
+    private var dashCount: Int {
+        let unit = dashHeight + gapHeight
+        return max(1, Int((totalHeight + gapHeight) / unit))
     }
 }
 
