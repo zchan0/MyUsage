@@ -96,24 +96,28 @@ struct LimitBar: View {
     static let warnAccent = Color(hue: 28.0/360.0, saturation: 0.70, brightness: 0.55)
 }
 
-/// The bar host: 10pt tall capsule rail with the fill, optional dashed
-/// projection marker, optional 100% quota reference line, and the percent
-/// text right-anchored inside. Reusable for any usage-style row that wants
-/// the same visual treatment.
+/// The bar host: 12pt tall capsule rail with the fill, optional dashed
+/// projection marker, and the percent text right-anchored inside.
+/// Reusable for any usage-style row that wants the same visual treatment.
 ///
 /// The bar (track + fill + percent) is hard-constrained to `height`. The
-/// projection marker and quota reference line live in an `.overlay` so
-/// their vertical overhang is *visual only* — they can extend a few pt
-/// above/below the bar without bloating the layout (an early version put
-/// them in the ZStack and the bar grew to match the marker's height).
+/// projection marker lives in an `.overlay` so its vertical overhang is
+/// *visual only* — it can extend a few pt above/below the bar without
+/// bloating the layout (an early version put it in the ZStack and the
+/// bar grew to match the marker's height).
+///
+/// Note we deliberately don't draw a "100% reference line" at the bar's
+/// right edge anymore. The bar's right edge IS the 100% boundary — an
+/// extra rule there read as visual debris, especially since the dashed
+/// marker either sits inside the bar (safe projection) or overflows past
+/// the right edge (overshoot), which already encodes "vs. the limit."
 struct ProgressTrack: View {
     let percent: Double
     /// When non-nil, draws a dashed vertical marker at this position
     /// (clamped 0–200% so the bar overflow doesn't run off the card).
-    /// The 100% quota reference line is drawn alongside.
     var projectedPercent: Double? = nil
     var level: LimitSafety.Level = .healthy
-    var height: CGFloat = 10
+    var height: CGFloat = 12
 
     private static let markerOverhang: CGFloat = 3
 
@@ -159,20 +163,11 @@ struct ProgressTrack: View {
                 let totalHeight = height + Self.markerOverhang * 2
                 let yOffset = -Self.markerOverhang
 
-                ZStack(alignment: .topLeading) {
-                    // 100% quota reference line (solid, thinner than marker)
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.18))
-                        .frame(width: 1, height: totalHeight)
-                        .offset(x: w - 0.5, y: yOffset)
-
-                    // Projection marker (dashed)
-                    DashedMarker(
-                        color: isAlarm ? LimitBar.warnAccent : Color.primary.opacity(0.32),
-                        totalHeight: totalHeight
-                    )
-                    .offset(x: markerX - 0.75, y: yOffset)
-                }
+                DashedMarker(
+                    color: isAlarm ? LimitBar.warnAccent : Color.primary.opacity(0.32),
+                    totalHeight: totalHeight
+                )
+                .offset(x: markerX - 0.75, y: yOffset)
             }
             .allowsHitTesting(false)
         }
@@ -214,7 +209,12 @@ private struct DashedMarker: View {
                     .frame(width: strokeWidth, height: dashHeight)
             }
         }
-        .frame(width: strokeWidth, height: totalHeight, alignment: .top)
+        // Center the dash column inside the overhang frame. With the
+        // current bar (12pt) + 3pt overhang each side = 18pt, the four
+        // dashes (3+2+3+2+3+2+3 = 18pt) fit exactly. For other bar
+        // heights the centered column degrades gracefully — the empty
+        // gap is split top and bottom rather than dumped at the bottom.
+        .frame(width: strokeWidth, height: totalHeight, alignment: .center)
     }
 
     private var dashCount: Int {
