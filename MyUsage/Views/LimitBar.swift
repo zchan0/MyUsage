@@ -1,21 +1,27 @@
 import SwiftUI
 
-/// A single limit row. v4 shape:
+/// A single limit row. v0.9 shape:
 ///
-///     5-hour                                          ← meta (name)
-///     ████████░░|░░░░░░│░░░░  47%                     ← 10pt bar w/ fill,
-///                                                       projection marker (dashed),
-///                                                       100% quota line, % inside
-///     resets 2h 14m              projected 118%       ← footer (reset L, note R)
+///     5-hour 47%                              resets 2h 14m   ← meta (name + pct L,
+///                                                                     reset R)
+///     ░░░░░░░░░░░░░░░░░░│░░░░░░░░░░░░░░░░                    ← 4pt bar (sage by
+///                                                                     default; warn/crit
+///                                                                     fill at 75/90)
+///                                          projected 118%     ← alarm-only footer
+///                                                              (right-aligned, warn
+///                                                              amber, only when
+///                                                              projection > 100%)
 ///
-/// The bar is the visual anchor: at 10pt it's tall enough to host the
-/// percent text, the dashed projection marker, and the 100% quota line
-/// without losing legibility. The marker and quota line only render
-/// when `projectedPercent` is non-nil (the math gates this — see
-/// `UsageWindow.projectedFinalPercent`). When the projection clears
-/// 100% the marker overflows past the bar's right edge, the marker +
-/// footer note both pick up the warn accent, and the footer wording
-/// shifts from `~XX% by reset` to `projected XXX%`.
+/// The bar reverts to the thin 4pt rail it was before v0.8. Putting the
+/// percent inside a fatter bar made the bar feel chunky relative to the
+/// rest of the card; pulling pct out into the meta row lets the bar do
+/// what bars do best — a discrete, slim spatial signal — while the
+/// numeric reading sits with its semantic neighbours (name, reset).
+///
+/// The dashed projection marker still rides as an .overlay on the bar,
+/// but only when the projection actually crosses 100% (see
+/// `alarmingProjection`). Healthy projections stay silent — bar fill
+/// alone communicates "you have headroom".
 struct LimitBar: View {
     let name: String
     let percent: Double
@@ -30,8 +36,8 @@ struct LimitBar: View {
     var monoName: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            nameView
+        VStack(alignment: .leading, spacing: 4) {
+            metaRow
 
             ProgressTrack(
                 percent: percent,
@@ -39,7 +45,32 @@ struct LimitBar: View {
                 level: level
             )
 
-            footerView
+            if let note = projectionNote {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Text(note)
+                        .font(.system(size: 10, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Self.warnAccent)
+                }
+            }
+        }
+    }
+
+    /// Top row: name + percent on the left as a unit, reset right-aligned.
+    /// When reset is nil (Antigravity per-model rows) the row collapses
+    /// to just `name pct` on the left with no phantom right slot.
+    private var metaRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            nameView
+            pctView
+            Spacer(minLength: 8)
+            if let reset {
+                Text(reset)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
         }
     }
 
@@ -56,25 +87,22 @@ struct LimitBar: View {
         }
     }
 
-    @ViewBuilder
-    private var footerView: some View {
-        let note = projectionNote
-        if reset != nil || note != nil {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if let reset {
-                    Text(reset)
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary.opacity(0.7))
-                }
-                Spacer(minLength: 0)
-                if let note {
-                    Text(note)
-                        .font(.system(size: 10, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Self.warnAccent)
-                }
-            }
+    private var pctView: some View {
+        Text("\(Int(percent.rounded()))%")
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(pctColor)
+    }
+
+    /// Percent text colour mirrors the bar fill's safety level. The bar
+    /// fill already shows warn/crit, but having the number adopt the
+    /// same hue makes the state pop in the meta row without forcing the
+    /// user to read the bar to confirm.
+    private var pctColor: Color {
+        switch level {
+        case .healthy: .primary.opacity(0.92)
+        case .warn:    Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.62)
+        case .crit:    Color(hue: 8.0/360.0,  saturation: 0.78, brightness: 0.66)
         }
     }
 
@@ -104,21 +132,19 @@ struct LimitBar: View {
     static let warnAccent = Color(hue: 28.0/360.0, saturation: 0.70, brightness: 0.55)
 }
 
-/// The bar host: 10pt tall capsule rail with the fill, optional dashed
-/// projection marker, and the percent text (8pt mono) right-anchored
-/// inside. Reusable for any usage-style row that wants the same
-/// visual treatment.
+/// The bar host: 4pt thin capsule rail with the fill and an optional
+/// dashed projection marker overlay. Reusable for any usage-style row.
 ///
-/// The bar (track + fill + percent) is hard-constrained to `height`. The
-/// projection marker lives in an `.overlay` so its vertical overhang is
-/// *visual only* — it can extend a few pt above/below the bar without
-/// bloating the layout (an early version put it in the ZStack and the
-/// bar grew to match the marker's height).
+/// The bar (track + fill) is hard-constrained to `height`. The projection
+/// marker lives in an `.overlay` so its vertical overhang is *visual
+/// only* — it can extend a few pt above/below the bar without bloating
+/// the layout (an early version put it in the ZStack and the bar grew
+/// to match the marker's height).
 ///
-/// Note we deliberately don't draw a "100% reference line" at the bar's
-/// right edge. The bar's right edge IS the 100% boundary — an extra rule
-/// there read as visual debris. The dashed marker only ever appears in
-/// the overshoot case (caller passes `projectedPercent` only when > 100%,
+/// We deliberately don't draw a "100% reference line" at the bar's right
+/// edge. The bar's right edge IS the 100% boundary — an extra rule there
+/// read as visual debris. The dashed marker only ever appears in the
+/// overshoot case (caller passes `projectedPercent` only when > 100%,
 /// see `LimitBar.alarmingProjection`), so the marker always overflows
 /// past the right edge and the "vs. the limit" relationship is implicit.
 struct ProgressTrack: View {
@@ -127,9 +153,11 @@ struct ProgressTrack: View {
     /// (clamped 0–200% so the bar overflow doesn't run off the card).
     var projectedPercent: Double? = nil
     var level: LimitSafety.Level = .healthy
-    var height: CGFloat = 10
+    var height: CGFloat = 4
 
-    private static let markerOverhang: CGFloat = 2
+    /// 3pt overhang each side gives the marker enough vertical presence
+    /// to read against a thin 4pt bar — total marker = 10pt.
+    private static let markerOverhang: CGFloat = 3
 
     var body: some View {
         bar
@@ -149,16 +177,6 @@ struct ProgressTrack: View {
                     .fill(fillColor)
                     .frame(width: fillWidth)
                     .animation(.easeInOut(duration: 0.4), value: percent)
-
-                HStack {
-                    Spacer(minLength: 0)
-                    Text("\(Int(percent.rounded()))%")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.primary.opacity(0.85))
-                        .padding(.trailing, 6)
-                }
-                .allowsHitTesting(false)
             }
         }
     }
@@ -219,10 +237,10 @@ private struct DashedMarker: View {
                     .frame(width: strokeWidth, height: dashHeight)
             }
         }
-        // Center the dash column inside the overhang frame. The current
-        // bar (10pt + 2pt overhang each side = 14pt) holds three dashes
-        // (3+2+3+2+3 = 13pt) with 0.5pt of empty space split top and
-        // bottom — visually balanced. Other bar heights degrade
+        // Center the dash column inside the overhang frame. With the
+        // current bar (4pt + 3pt overhang each side = 10pt) two dashes
+        // (3+2+3 = 8pt) sit in the centre with 1pt empty top + 1pt
+        // empty bottom — visually balanced. Other bar heights degrade
         // gracefully with the same .center alignment.
         .frame(width: strokeWidth, height: totalHeight, alignment: .center)
     }
