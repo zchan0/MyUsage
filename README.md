@@ -25,7 +25,7 @@ MyUsage fixes this with a small native menu bar app that:
 
 - Talks to all four providers and shows them in one popover, so you don't have to flip between four UIs.
 - **Aggregates across every Mac you own** by writing tiny snapshots into a folder you already sync (iCloud Drive, Syncthing, Dropbox, an NFS mount — your call). No MyUsage backend exists; the sync transport is yours.
-- Tells you when you're going to run out — a dashed marker on each limit bar shows where you'll land at reset, with a footer note like `~82% by reset` (safe) or `projected 118%` (overshoot).
+- Tells you when you're about to run out — when current burn rate would push a limit past 100% before reset, the bar gets a dashed projection marker overflowing past the right edge and a `projected 118%` note in the footer. Healthy projections stay silent.
 
 It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dependencies.
 
@@ -33,7 +33,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 
 - **Multi-device aggregation, BYO sync transport.** Each Mac drops a per-device JSONL snapshot into `<sync-folder>/devices/<id>/`. Use iCloud, Syncthing, Dropbox, NAS, or anything else that keeps a folder in sync. The Devices tab in Settings lets you forget retired peers.
 - **Four providers in one popover** — Claude Code, Codex, Cursor, Antigravity. Reorder and enable/disable per provider in Settings.
-- **Burn-rate projection.** Each rolling-window bar carries a dashed marker at the projected-final position alongside a 100% quota reference line. A footer note reads `~82% by reset` when the projection is safe and switches to `projected 118%` (in warn-amber) when it overshoots. The math waits for at least 20% of the window to elapse before showing anything, so a single early prompt can't false-trigger the alarm.
+- **Burn-rate projection — alarm-only.** When the projected end-of-window usage would exceed 100%, the rolling-window bar surfaces a dashed marker overflowing past the right edge and a `projected 118%` footer note in warn-amber. Healthy projections are intentionally silent — the bar fill alone tells you you have headroom; an extra "you'll land at 31%" marker would just be noise. The math waits for at least 20% of the window to elapse before computing anything, so a single early prompt can't false-trigger the alarm.
 - **Per-model breakdown for Claude weekly.** Below the weekly bar, Sonnet / Opus / Haiku each get their own row sorted by share, so you can see which model is actually eating the budget.
 - **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
 - **In-app update channel.** On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The Settings → About banner can download the next release and reveal it in Finder one drag away from /Applications.

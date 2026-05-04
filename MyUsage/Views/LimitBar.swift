@@ -35,7 +35,7 @@ struct LimitBar: View {
 
             ProgressTrack(
                 percent: percent,
-                projectedPercent: projectedPercent,
+                projectedPercent: alarmingProjection,
                 level: level
             )
 
@@ -69,26 +69,34 @@ struct LimitBar: View {
                 }
                 Spacer(minLength: 0)
                 if let note {
-                    Text(note.text)
-                        .font(.system(size: 10, weight: note.isAlarm ? .semibold : .regular))
+                    Text(note)
+                        .font(.system(size: 10, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(note.isAlarm ? Self.warnAccent : .secondary.opacity(0.7))
+                        .foregroundStyle(Self.warnAccent)
                 }
             }
         }
     }
 
-    /// Footer-right text + severity flag derived from `projectedPercent`.
-    /// Wording shifts at the 100% boundary so the user reads "approaching"
-    /// vs. "overshooting" without parsing colour.
-    private var projectionNote: (text: String, isAlarm: Bool)? {
-        guard let p = projectedPercent else { return nil }
-        let rounded = Int(p.rounded())
-        if p > 100 {
-            return ("projected \(rounded)%", true)
-        } else {
-            return ("~\(rounded)% by reset", false)
-        }
+    /// Effective projection — surfaced only when it warrants attention.
+    /// The math (`UsageWindow.projectedFinalPercent`) returns nil when the
+    /// window is too fresh; we additionally suppress everything ≤ 100%
+    /// because a marker that sits on or just past the fill (e.g. current
+    /// 29% / projected 31%) is pure noise — the user can already read
+    /// "I have headroom" from the bar fill alone. Showing a projection
+    /// signal becomes valuable only when it changes their understanding
+    /// of risk, which means: only when overshoot is actually predicted.
+    private var alarmingProjection: Double? {
+        guard let p = projectedPercent, p > 100 else { return nil }
+        return p
+    }
+
+    /// Footer-right text — only set when there's an alarming projection.
+    /// Always uses the warn accent + semibold weight; there's no "safe"
+    /// variant anymore (see `alarmingProjection`).
+    private var projectionNote: String? {
+        guard let p = alarmingProjection else { return nil }
+        return "projected \(Int(p.rounded()))%"
     }
 
     private var level: LimitSafety.Level { LimitSafety.level(for: percent) }
@@ -107,10 +115,11 @@ struct LimitBar: View {
 /// bar grew to match the marker's height).
 ///
 /// Note we deliberately don't draw a "100% reference line" at the bar's
-/// right edge anymore. The bar's right edge IS the 100% boundary — an
-/// extra rule there read as visual debris, especially since the dashed
-/// marker either sits inside the bar (safe projection) or overflows past
-/// the right edge (overshoot), which already encodes "vs. the limit."
+/// right edge. The bar's right edge IS the 100% boundary — an extra rule
+/// there read as visual debris. The dashed marker only ever appears in
+/// the overshoot case (caller passes `projectedPercent` only when > 100%,
+/// see `LimitBar.alarmingProjection`), so the marker always overflows
+/// past the right edge and the "vs. the limit" relationship is implicit.
 struct ProgressTrack: View {
     let percent: Double
     /// When non-nil, draws a dashed vertical marker at this position
@@ -225,11 +234,12 @@ private struct DashedMarker: View {
 
 #Preview("Limits") {
     VStack(alignment: .leading, spacing: 14) {
-        // No projection — fresh window
+        // No projection — fresh window (math gated)
         LimitBar(name: "5-hour · fresh", percent: 6, reset: "resets 4h 46m")
-        // Safe projection
-        LimitBar(name: "Weekly · safe", percent: 31, reset: "resets Sun", projectedPercent: 58)
-        // Will overshoot (alarm)
+        // Projection ≤ 100% — silent (noise-gated; pure visual would be
+        // a marker right next to the fill which adds nothing)
+        LimitBar(name: "Weekly · calm", percent: 31, reset: "resets Sun", projectedPercent: 58)
+        // Will overshoot — marker overflows past right edge, footer alarm
         LimitBar(name: "5-hour · burning hot", percent: 47, reset: "resets 2h 14m", projectedPercent: 115)
         // Already in warn band + deep overshoot
         LimitBar(name: "Daily cap · alarm", percent: 88, reset: "resets in 4h", projectedPercent: 145)

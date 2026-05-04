@@ -6,40 +6,41 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## v0.9.0 — 2026-05-03
+## v0.9.0 — 2026-05-04
 
 ### Changed
 - **LimitBar redesigned around the projection signal.** The 4 pt sage
-  rail grows to a 10 pt bar that hosts the percent text inside it
-  (right-anchored, mono, with a soft halo so it stays readable across
-  the fill / track boundary). The burn-rate signal is now a **dashed
-  vertical marker** placed at the projected-final position alongside a
-  subtle 100% reference line; when projection clears 100% the marker
-  overflows past the quota line and recolors to warn-amber. A small
-  footer note backs the marker with literal text — `~82% by reset`
-  when safe, `projected 118%` when the projection overshoots — so the
-  state is readable without learning a colour code. Replaces the v0.8
-  ghost-extension + ↗ arrow combo, which proved hard to read at 4 pt
-  and over-relied on chromatic severity.
-- The 20% elapsed-window gate from v0.8 stays (avoids a single early
-  prompt extrapolating to 130% and false-triggering the alarm).
+  rail grows to a 12 pt bar that hosts the percent text inside it
+  (right-anchored, mono). The burn-rate signal is now a **dashed
+  vertical marker** that *only* appears when current pace would push
+  the limit past 100% before reset — the marker overflows past the
+  bar's right edge in warn-amber and the footer picks up a
+  `projected 118%` note. Healthy projections (≤ 100%) stay silent:
+  the bar fill alone communicates "you have headroom," and a marker
+  that sits right next to the fill (e.g. current 29% / projected 31%)
+  is pure noise. Replaces the v0.8 ghost-extension + ↗ arrow combo,
+  which proved hard to read at 4 pt and over-relied on chromatic
+  severity.
+- The 20% elapsed-window gate from v0.8 stays — projection math
+  doesn't even run until at least 20% of the window has elapsed,
+  so a single early prompt can't false-trigger the alarm.
 
 ### Docs
-- README + README.zh-CN updated to describe the dashed-marker visual.
+- README + README.zh-CN updated to describe the alarm-only signal.
 
 ### 中文
 
-- **LimitBar 围绕"预测信号"整体重做**：4 pt 的 sage 细条变成 10 pt 的
-  bar，百分数直接放进 bar 里（右对齐 mono，带软 halo 保证 fill 和
-  track 都能看清）。burn-rate 信号换成**虚线竖向 marker**，落在
-  projected 位置上，旁边一根淡淡的 100% 参考线；预测一旦超过 100%，
-  marker 会越过参考线右侧并染成 warn-amber。bar 下方一行小字写出
-  字面文案——安全时 `~82% by reset`，超过时 `projected 118%`——不
-  需要看色块就能读懂状态。替换 v0.8 的"幽灵延伸 + ↗ 箭头"，那套在
-  4 pt 高度上太难辨认，且过度依赖颜色分级。
-- v0.8 引入的「窗口走完 20% 才开始预测」门继续保留（避免单次大请求
-  把信号外推到 130% 误报）。
-- README + README.zh-CN 更新了 burn-rate 那段的描述，对齐新的视觉。
+- **LimitBar 围绕「预测信号」整体重做**：4 pt 的 sage 细条变成 12 pt
+  的 bar，百分数直接放进 bar 里（右对齐 mono）。burn-rate 信号换成
+  **虚线竖向 marker**，*只*在「按当前速度到 reset 时会冲破 100%」
+  时才出现——marker 在 bar 右边缘溢出，染 warn-amber，footer 补一行
+  `projected 118%`。projected ≤ 100% 全部静默：bar 留白本身就告诉
+  你「还有空间」，多画一根挨着 fill 的小竖线（比如 29% / 31% 那种）
+  纯属噪音。替换 v0.8 的「幽灵延伸 + ↗ 箭头」，那套在 4 pt 高度上
+  太难辨认，且过度依赖颜色分级。
+- v0.8 引入的「窗口走完 20% 才开始算预测」门继续保留——单次大请求
+  没法把信号炸出来。
+- README + README.zh-CN 更新了 burn-rate 那段，对齐新的"只报警"行为。
 
 ---
 
