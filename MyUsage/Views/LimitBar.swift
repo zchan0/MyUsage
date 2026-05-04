@@ -87,9 +87,15 @@ struct LimitBar: View {
         }
     }
 
+    /// Percent is the headline number on this row — bigger (13pt) and
+    /// heavier (bold) than the 11pt semibold name, so the eye lands on
+    /// the digit first and the name reads as its label. With
+    /// `.firstTextBaseline` alignment the larger cap height naturally
+    /// rises above the name's cap, reinforcing the label → value
+    /// relationship without any explicit baseline gymnastics.
     private var pctView: some View {
         Text("\(Int(percent.rounded()))%")
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .font(.system(size: 13, weight: .bold, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(pctColor)
     }
@@ -100,7 +106,7 @@ struct LimitBar: View {
     /// user to read the bar to confirm.
     private var pctColor: Color {
         switch level {
-        case .healthy: .primary.opacity(0.92)
+        case .healthy: .primary
         case .warn:    Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.62)
         case .crit:    Color(hue: 8.0/360.0,  saturation: 0.78, brightness: 0.66)
         }
