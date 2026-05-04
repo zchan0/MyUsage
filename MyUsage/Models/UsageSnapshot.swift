@@ -25,7 +25,18 @@ struct UsageWindow: Sendable {
     /// Percentage remaining (100 - percentUsed).
     var percentRemaining: Double { max(0, 100 - percentUsed) }
 
-    /// Formatted time until reset.
+    /// Formatted time until reset, with the absolute clock time appended
+    /// after a middle-dot separator. Caller renders this as a single
+    /// chunk; the absolute portion answers "what time will that actually
+    /// be" so the user doesn't have to mental-arithmetic the countdown.
+    ///
+    /// Format adapts to distance:
+    ///   < 24h  →  `2h 14m · 16:30`
+    ///   1d–7d  →  `5d 12h · Tue 09:00`
+    ///   > 7d   →  `28d · May 28`     (Cursor billing cycle, etc.)
+    ///
+    /// Time + day templates use `setLocalizedDateFormatFromTemplate` so
+    /// 12h vs 24h respects the system locale automatically.
     var resetCountdown: String? {
         guard let resetsAt else { return nil }
         let interval = resetsAt.timeIntervalSinceNow
@@ -34,14 +45,30 @@ struct UsageWindow: Sendable {
         let hours = Int(interval) / 3600
         let minutes = (Int(interval) % 3600) / 60
 
+        let relative: String
         if hours > 24 {
             let days = hours / 24
-            return "\(days)d \(hours % 24)h"
+            relative = "\(days)d \(hours % 24)h"
         } else if hours > 0 {
-            return "\(hours)h \(minutes)m"
+            relative = "\(hours)h \(minutes)m"
         } else {
-            return "\(minutes)m"
+            relative = "\(minutes)m"
         }
+
+        return "\(relative) · \(Self.absoluteResetText(for: resetsAt, interval: interval))"
+    }
+
+    private static func absoluteResetText(for date: Date, interval: TimeInterval) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        if interval < 24 * 3600 {
+            formatter.setLocalizedDateFormatFromTemplate("Hm")
+        } else if interval < 7 * 86400 {
+            formatter.setLocalizedDateFormatFromTemplate("EEEHm")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        }
+        return formatter.string(from: date)
     }
 
     /// Where the user would be right now if they were on a steady "burn

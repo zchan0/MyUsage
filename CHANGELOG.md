@@ -6,6 +6,41 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.9.1 — 2026-05-04
+
+### Changed
+- **LimitBar layout: 3-row separation.** Pct moves to the top-right
+  (above the bar); reset moves to the bottom-left (below the bar) on
+  its own row alongside the alarm-only projection note. Each axis
+  gets its own visual lane instead of crowding pct + reset onto a
+  shared meta strip.
+- **Reset countdown now includes the absolute clock time.** Format
+  adapts to distance: `2h 14m · 16:30` for sub-day, `5d 12h · Tue
+  09:00` for sub-week, `28d · May 28` for monthly cycles. Time
+  formatting is locale-aware (12 / 24h follows system preference).
+- **Pct chip is alarm-only.** Healthy rows show bold mono text
+  (no chip). Warn / crit rows wrap the same text in a tinted Capsule
+  — amber for warn (≥ 75%), red for crit (≥ 90%). Drops the always-on
+  neutral chip from v0.9.0; most rows are healthy at any moment, and
+  a coloured chip on every row was visual noise. Padding is
+  consistent across states so row height stays stable when usage
+  crosses a threshold.
+
+### 中文
+
+- **LimitBar 排版分三行**：百分比挪到 bar 上方右侧，reset 挪到 bar
+  下方左侧（与 alarm-only projection note 同行）。每个维度有独立
+  的视觉行，不再把 pct + reset 挤在同一条 meta 行里。
+- **reset 倒计时附带绝对时刻**：`2h 14m · 16:30` / `5d 12h · Tue
+  09:00` / `28d · May 28`。12/24 小时格式跟随系统 locale。
+- **百分比胶囊改为只在 alarm 时出现**。Healthy 行只显示 bold mono
+  文本（无胶囊框）；warn ≥ 75% 配 amber 浅底胶囊；crit ≥ 90% 配
+  红色稍浓胶囊。砍掉 v0.9.0 那个常驻的中性灰胶囊——大部分时候 row
+  都是 healthy 的，每行都顶个色块就是噪音。padding 跨状态保持一致，
+  跨过阈值时 row 高度不抖。
+
+---
+
 ## v0.9.0 — 2026-05-04
 
 ### Changed

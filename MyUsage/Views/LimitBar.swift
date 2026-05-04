@@ -1,27 +1,27 @@
 import SwiftUI
 
-/// A single limit row. v0.9 shape:
+/// A single limit row. v0.9.1 shape:
 ///
-///     5-hour 47%                              resets 2h 14m   ← meta (name + pct L,
-///                                                                     reset R)
-///     ░░░░░░░░░░░░░░░░░░│░░░░░░░░░░░░░░░░                    ← 4pt bar (sage by
-///                                                                     default; warn/crit
-///                                                                     fill at 75/90)
-///                                          projected 118%     ← alarm-only footer
-///                                                              (right-aligned, warn
-///                                                              amber, only when
-///                                                              projection > 100%)
+///     5-hour                                                47%   ← name (L) + pct (R)
+///     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ← 4pt bar
+///     resets 2h 14m · 16:30                  projected 118%       ← reset (L, with
+///                                                                   absolute clock
+///                                                                   time appended)
+///                                                                   + alarm-only
+///                                                                   projection note (R)
 ///
-/// The bar reverts to the thin 4pt rail it was before v0.8. Putting the
-/// percent inside a fatter bar made the bar feel chunky relative to the
-/// rest of the card; pulling pct out into the meta row lets the bar do
-/// what bars do best — a discrete, slim spatial signal — while the
-/// numeric reading sits with its semantic neighbours (name, reset).
+/// Three rows. Splitting pct (top-right) from reset (bottom-left)
+/// gives each its own visual lane, instead of crowding both onto a
+/// shared meta line — the user can scan "where am I" (top) and "when
+/// does it reset" (bottom) without re-parsing a packed strip.
 ///
-/// The dashed projection marker still rides as an .overlay on the bar,
-/// but only when the projection actually crosses 100% (see
-/// `alarmingProjection`). Healthy projections stay silent — bar fill
-/// alone communicates "you have headroom".
+/// The bar is the slim 4pt rail. The dashed projection marker rides as
+/// an .overlay on it, but only when projection actually crosses 100%
+/// (see `alarmingProjection`). Healthy projections stay silent.
+///
+/// Pct gets a tinted Capsule **only** in warn / crit — healthy rows
+/// just show bold mono text. Most of the popover is healthy at any
+/// given moment; a coloured chip on every row would be visual noise.
 struct LimitBar: View {
     let name: String
     let percent: Double
@@ -37,39 +37,46 @@ struct LimitBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            metaRow
+            // Row 1 — name (left) + pct (right).
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                nameView
+                Spacer(minLength: 8)
+                pctView
+            }
 
+            // Row 2 — the bar (4pt sage rail with optional projection
+            // marker overlay; marker only renders for projected > 100%).
             ProgressTrack(
                 percent: percent,
                 projectedPercent: alarmingProjection,
                 level: level
             )
 
-            if let note = projectionNote {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
+            // Row 3 — reset (left, with absolute time appended) +
+            // alarm-only projection note (right). Skipped entirely when
+            // both are absent (Antigravity per-model rows).
+            footerRow
+        }
+    }
+
+    @ViewBuilder
+    private var footerRow: some View {
+        let note = projectionNote
+        if reset != nil || note != nil {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if let reset {
+                    Text(reset)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary.opacity(0.7))
+                }
+                Spacer(minLength: 0)
+                if let note {
                     Text(note)
                         .font(.system(size: 10, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Self.warnAccent)
                 }
-            }
-        }
-    }
-
-    /// Top row: name + percent on the left as a unit, reset right-aligned.
-    /// When reset is nil (Antigravity per-model rows) the row collapses
-    /// to just `name pct` on the left with no phantom right slot.
-    private var metaRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            nameView
-            pctView
-            Spacer(minLength: 8)
-            if let reset {
-                Text(reset)
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary.opacity(0.7))
             }
         }
     }
@@ -87,17 +94,16 @@ struct LimitBar: View {
         }
     }
 
-    /// Percent rendered as a small pill (capsule with tinted background),
-    /// matching the visual family of `PlanPill` ("MAX"/"PLUS"/"PRO") in
-    /// the card head — but slightly larger and weight-heavier since pct
-    /// is the actual data, not just metadata. The pill background does
-    /// the safety signalling: subtle gray when healthy, amber tint when
-    /// warn (≥75%), red tint when crit (≥90%). The text stays `.primary`
-    /// so it's always readable; the pill's hue is what flags state at a
-    /// glance.
+    /// Percent renders as bold mono text; only **warn / crit** rows wrap
+    /// it in a tinted Capsule "pill". Healthy rows stay clean — most of
+    /// the popover is healthy at any given moment, and a colored chip on
+    /// every row would just be visual noise. The pill is the alarm
+    /// chrome. Padding stays consistent across states (transparent
+    /// Capsule for healthy) so row height doesn't jitter when usage
+    /// crosses the warn threshold.
     private var pctView: some View {
         Text("\(Int(percent.rounded()))%")
-            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(.primary)
             .padding(.horizontal, 6)
@@ -107,7 +113,7 @@ struct LimitBar: View {
 
     private var pctBackground: Color {
         switch level {
-        case .healthy: Color.primary.opacity(0.07)
+        case .healthy: .clear
         case .warn:    Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.55).opacity(0.20)
         case .crit:    Color(hue: 8.0/360.0,  saturation: 0.78, brightness: 0.55).opacity(0.22)
         }
@@ -260,16 +266,15 @@ private struct DashedMarker: View {
 
 #Preview("Limits") {
     VStack(alignment: .leading, spacing: 14) {
-        // No projection — fresh window (math gated)
-        LimitBar(name: "5-hour · fresh", percent: 6, reset: "resets 4h 46m")
-        // Projection ≤ 100% — silent (noise-gated; pure visual would be
-        // a marker right next to the fill which adds nothing)
-        LimitBar(name: "Weekly · calm", percent: 31, reset: "resets Sun", projectedPercent: 58)
-        // Will overshoot — marker overflows past right edge, footer alarm
-        LimitBar(name: "5-hour · burning hot", percent: 47, reset: "resets 2h 14m", projectedPercent: 115)
-        // Already in warn band + deep overshoot
-        LimitBar(name: "Daily cap · alarm", percent: 88, reset: "resets in 4h", projectedPercent: 145)
-        // Antigravity-style: no reset, no projection
+        // Healthy, no projection
+        LimitBar(name: "5-hour", percent: 6, reset: "resets 4h 46m · 19:00")
+        // Healthy with safe projection (suppressed by alarmingProjection)
+        LimitBar(name: "Weekly", percent: 31, reset: "resets 5d 12h · Tue 09:00", projectedPercent: 58)
+        // Warn band → pct gets amber pill
+        LimitBar(name: "Weekly", percent: 78, reset: "resets 3d 4h · Sat 12:00")
+        // Crit band + alarm projection → red pill + overflow marker + footer note
+        LimitBar(name: "Daily cap", percent: 91, reset: "resets in 4h · 18:30", projectedPercent: 145)
+        // Antigravity-style: no reset, no projection, no pill
         LimitBar(name: "flash 47/200", percent: 23, monoName: true)
     }
     .padding(16)
