@@ -10,8 +10,8 @@ the 中文 half lives here only.
 
 ### Changed
 - **LimitBar redesigned around the projection signal.** The 4 pt sage
-  rail grows to a 12 pt bar that hosts the percent text inside it
-  (right-anchored, mono). The burn-rate signal is now a **dashed
+  rail grows to a 10 pt bar that hosts the percent text inside it
+  (right-anchored, 8 pt mono). The burn-rate signal is now a **dashed
   vertical marker** that *only* appears when current pace would push
   the limit past 100% before reset — the marker overflows past the
   bar's right edge in warn-amber and the footer picks up a
@@ -30,8 +30,8 @@ the 中文 half lives here only.
 
 ### 中文
 
-- **LimitBar 围绕「预测信号」整体重做**：4 pt 的 sage 细条变成 12 pt
-  的 bar，百分数直接放进 bar 里（右对齐 mono）。burn-rate 信号换成
+- **LimitBar 围绕「预测信号」整体重做**：4 pt 的 sage 细条变成 10 pt
+  的 bar，百分数直接放进 bar 里（右对齐 8 pt mono）。burn-rate 信号换成
   **虚线竖向 marker**，*只*在「按当前速度到 reset 时会冲破 100%」
   时才出现——marker 在 bar 右边缘溢出，染 warn-amber，footer 补一行
   `projected 118%`。projected ≤ 100% 全部静默：bar 留白本身就告诉

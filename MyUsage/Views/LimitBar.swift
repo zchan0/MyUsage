@@ -104,9 +104,10 @@ struct LimitBar: View {
     static let warnAccent = Color(hue: 28.0/360.0, saturation: 0.70, brightness: 0.55)
 }
 
-/// The bar host: 12pt tall capsule rail with the fill, optional dashed
-/// projection marker, and the percent text right-anchored inside.
-/// Reusable for any usage-style row that wants the same visual treatment.
+/// The bar host: 10pt tall capsule rail with the fill, optional dashed
+/// projection marker, and the percent text (8pt mono) right-anchored
+/// inside. Reusable for any usage-style row that wants the same
+/// visual treatment.
 ///
 /// The bar (track + fill + percent) is hard-constrained to `height`. The
 /// projection marker lives in an `.overlay` so its vertical overhang is
@@ -126,9 +127,9 @@ struct ProgressTrack: View {
     /// (clamped 0–200% so the bar overflow doesn't run off the card).
     var projectedPercent: Double? = nil
     var level: LimitSafety.Level = .healthy
-    var height: CGFloat = 12
+    var height: CGFloat = 10
 
-    private static let markerOverhang: CGFloat = 3
+    private static let markerOverhang: CGFloat = 2
 
     var body: some View {
         bar
@@ -152,10 +153,10 @@ struct ProgressTrack: View {
                 HStack {
                     Spacer(minLength: 0)
                     Text("\(Int(percent.rounded()))%")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.primary.opacity(0.85))
-                        .padding(.trailing, 7)
+                        .padding(.trailing, 6)
                 }
                 .allowsHitTesting(false)
             }
@@ -218,11 +219,11 @@ private struct DashedMarker: View {
                     .frame(width: strokeWidth, height: dashHeight)
             }
         }
-        // Center the dash column inside the overhang frame. With the
-        // current bar (12pt) + 3pt overhang each side = 18pt, the four
-        // dashes (3+2+3+2+3+2+3 = 18pt) fit exactly. For other bar
-        // heights the centered column degrades gracefully — the empty
-        // gap is split top and bottom rather than dumped at the bottom.
+        // Center the dash column inside the overhang frame. The current
+        // bar (10pt + 2pt overhang each side = 14pt) holds three dashes
+        // (3+2+3+2+3 = 13pt) with 0.5pt of empty space split top and
+        // bottom — visually balanced. Other bar heights degrade
+        // gracefully with the same .center alignment.
         .frame(width: strokeWidth, height: totalHeight, alignment: .center)
     }
 
