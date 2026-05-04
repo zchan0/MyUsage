@@ -87,28 +87,29 @@ struct LimitBar: View {
         }
     }
 
-    /// Percent is the headline number on this row — bigger (13pt) and
-    /// heavier (bold) than the 11pt semibold name, so the eye lands on
-    /// the digit first and the name reads as its label. With
-    /// `.firstTextBaseline` alignment the larger cap height naturally
-    /// rises above the name's cap, reinforcing the label → value
-    /// relationship without any explicit baseline gymnastics.
+    /// Percent rendered as a small pill (capsule with tinted background),
+    /// matching the visual family of `PlanPill` ("MAX"/"PLUS"/"PRO") in
+    /// the card head — but slightly larger and weight-heavier since pct
+    /// is the actual data, not just metadata. The pill background does
+    /// the safety signalling: subtle gray when healthy, amber tint when
+    /// warn (≥75%), red tint when crit (≥90%). The text stays `.primary`
+    /// so it's always readable; the pill's hue is what flags state at a
+    /// glance.
     private var pctView: some View {
         Text("\(Int(percent.rounded()))%")
-            .font(.system(size: 13, weight: .bold, design: .monospaced))
+            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
             .monospacedDigit()
-            .foregroundStyle(pctColor)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1.5)
+            .background(pctBackground, in: Capsule())
     }
 
-    /// Percent text colour mirrors the bar fill's safety level. The bar
-    /// fill already shows warn/crit, but having the number adopt the
-    /// same hue makes the state pop in the meta row without forcing the
-    /// user to read the bar to confirm.
-    private var pctColor: Color {
+    private var pctBackground: Color {
         switch level {
-        case .healthy: .primary
-        case .warn:    Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.62)
-        case .crit:    Color(hue: 8.0/360.0,  saturation: 0.78, brightness: 0.66)
+        case .healthy: Color.primary.opacity(0.07)
+        case .warn:    Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.55).opacity(0.20)
+        case .crit:    Color(hue: 8.0/360.0,  saturation: 0.78, brightness: 0.55).opacity(0.22)
         }
     }
 
