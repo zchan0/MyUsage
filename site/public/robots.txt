@@ -1,0 +1,65 @@
+# MyUsage — robots policy
+# Strategy (per https://x.com/HiTw93/status/2050189572999618982):
+#   - Allow AI search/retrieval bots so the project surfaces in
+#     ChatGPT search, Claude Citations, Perplexity answers.
+#   - Allow user-triggered bots so "summarize this page" works.
+#   - Block training-only bots — opting out of model training without
+#     opting out of search visibility.
+#   - Block known undeclared / non-conformant bots.
+
+# === Search & retrieval — allow ===
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+# Note: Google-Extended is a training opt-out token, not a crawler.
+# Disallowing here = "don't use my content to train Bard/Gemini"
+# while still letting Googlebot index for Search.
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+# === User-triggered — allow ===
+# These fire only when a user pastes the URL into a chat. Blocking
+# them breaks "Claude / ChatGPT, summarize this page" UX.
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Agent
+Allow: /
+
+# === Training-only bots — block ===
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+# === Undeclared / non-conformant — block ===
+User-agent: Bytespider
+Disallow: /
+
+# === Default — allow conventional indexers ===
+User-agent: *
+Allow: /
+
+Sitemap: https://zchan0.github.io/MyUsage/sitemap-index.xml

@@ -1,0 +1,101 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+  title="Install MyUsage — macOS menu bar app"
+  description="Step-by-step install guide for MyUsage. Download from GitHub Releases, drag to /Applications, work around the Gatekeeper warning on first launch."
+>
+  <h1>Install</h1>
+  <p>
+    MyUsage ships as a standard macOS <code>.app</code> bundle delivered through
+    GitHub Releases. There's no installer; the install is one drag.
+  </p>
+
+  <h2>1 · Download</h2>
+  <p>
+    Grab the latest <code>MyUsage-&lt;version&gt;.zip</code> from the
+    <a href="https://github.com/zchan0/MyUsage/releases/latest">latest release page</a>.
+    Each release also has a <code>.sha256</code> file you can verify against:
+  </p>
+  <pre><code>shasum -a 256 -c MyUsage-0.9.1.zip.sha256</code></pre>
+
+  <h2>2 · Move to /Applications</h2>
+  <ol>
+    <li>Unzip <code>MyUsage-0.9.1.zip</code> (Finder will do this automatically when you double-click).</li>
+    <li>Drag <code>MyUsage.app</code> into <code>/Applications/</code>.</li>
+  </ol>
+
+  <h2>3 · First launch (Gatekeeper)</h2>
+  <p>
+    MyUsage is ad-hoc signed — there's no paid Apple Developer certificate
+    yet. macOS will warn the first time you open it that the developer
+    can't be verified. There are two ways through:
+  </p>
+
+  <h3>Option A — Right-click → Open</h3>
+  <ol>
+    <li>In Finder, right-click (or control-click) <code>MyUsage.app</code>.</li>
+    <li>Choose <strong>Open</strong>.</li>
+    <li>The dialog will offer an <strong>Open</strong> button (greyed out the first time you saw it; available now).</li>
+  </ol>
+  <p>macOS remembers this decision; subsequent launches are normal.</p>
+
+  <h3>Option B — Strip the quarantine attribute</h3>
+  <p>
+    If you prefer the terminal, this clears the quarantine flag and opens the app:
+  </p>
+  <pre><code>xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app</code></pre>
+
+  <div class="callout">
+    <b>Why the warning?</b> Apple's notarization service requires a paid
+    Apple Developer Program membership ($99/year). MyUsage is currently
+    ad-hoc signed only. The warning is cosmetic — the binary itself is the
+    one published in GitHub Releases, and you can verify with the SHA-256.
+    Notarization is on the roadmap.
+  </div>
+
+  <h2>4 · Per-provider auth</h2>
+  <p>
+    Once MyUsage is running, click the menu bar icon and you'll see
+    cards for each provider. The status of each card depends on whether
+    that provider's auth artifact is present on this Mac:
+  </p>
+  <ul>
+    <li><strong>Claude Code</strong> reads <code>~/.claude/.credentials.json</code> (or the matching Keychain entry). Sign in to Claude Code at least once and the credentials appear automatically.</li>
+    <li><strong>Codex</strong> reads <code>~/.codex/auth.json</code>. Same pattern — sign in to the Codex CLI once and you're set.</li>
+    <li><strong>Cursor</strong> reads its local <code>state.vscdb</code> SQLite store under <code>~/Library/Application Support/Cursor/</code>. Just being signed in to the Cursor app is enough.</li>
+    <li><strong>Antigravity</strong> probes the running language server process. The card shows <code>IDE off</code> when Antigravity isn't running, <code>LIVE</code> when it is.</li>
+  </ul>
+
+  <h2>5 · (Optional) Multi-device sync</h2>
+  <p>
+    Open <strong>Settings → General</strong>, click <strong>Choose…</strong>
+    next to "Sync folder", and pick a folder that's already syncing across
+    your Macs (iCloud Drive's <code>Mobile Documents</code> folder works
+    out of the box). Repeat the same selection on every Mac. Within one
+    refresh cycle, each Mac's monthly cost row will show the aggregate
+    across all of them.
+  </p>
+  <p>
+    The full design — including the device-ID derivation and how to forget
+    retired peers — is in the <a href={`${import.meta.env.BASE_URL}/docs/multi-device-sync`}>multi-device sync doc</a>.
+  </p>
+
+  <h2>Updating</h2>
+  <p>
+    MyUsage checks GitHub Releases on launch. When a newer version is
+    published, the popover header gets a small dot, and Settings → About
+    surfaces a download banner. The banner can fetch the new
+    <code>.zip</code> for you and open Finder pre-positioned for the drag
+    into <code>/Applications</code>. No auto-install yet — staying explicit
+    until notarization lands.
+  </p>
+
+  <h2>Uninstall</h2>
+  <ol>
+    <li>Quit MyUsage from its popover (gear icon → Quit).</li>
+    <li>Drag <code>/Applications/MyUsage.app</code> to the Trash.</li>
+    <li>Optional: remove preferences with <code>defaults delete com.zchan0.MyUsage</code> and the sync data with <code>rm -rf &lt;your-sync-folder&gt;/devices/&lt;deviceID&gt;</code>.</li>
+  </ol>
+</Layout>

@@ -1,0 +1,47 @@
+# MyUsage
+
+> Native macOS menu bar app that tracks AI coding tool usage (Claude Code, Codex, Cursor, Antigravity) across multiple Macs via a user-chosen sync folder. No backend, MIT licensed, zero third-party dependencies, written in Swift / SwiftUI.
+
+## About
+
+MyUsage solves a problem the official tools don't: when you use Claude Code, Codex, Cursor, or Antigravity across more than one Mac, each device's official UI only shows what *it* knows. You hit a weekly limit on Friday because your laptop has been burning through tokens all morning while your desktop's "remaining" number lied to you.
+
+MyUsage runs as a small macOS menu bar app, talks to all four providers from each Mac, and writes per-device snapshots into a folder you already sync (iCloud Drive, Syncthing, Dropbox, NFS — your choice). The popover then shows the *aggregate* across every Mac sharing that folder.
+
+Core design tenets:
+
+- **No MyUsage backend exists.** The sync transport is whatever you already use; the app never phones home.
+- **One menu bar, four providers.** Glance-able status without opening four apps.
+- **Burn-rate projection.** Each rolling-window bar shows a dashed marker at the projected end-of-window position (alarm-only — silent when on track).
+- **Privacy-respecting device identity.** Multi-device sync uses a salted SHA-256 of `IOPlatformUUID`; raw hardware UUID never leaves the process.
+
+## Links
+
+- [GitHub repository](https://github.com/zchan0/MyUsage)
+- [Latest release](https://github.com/zchan0/MyUsage/releases/latest)
+- [Install guide](https://zchan0.github.io/MyUsage/install)
+- [CHANGELOG](https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md)
+- [README (English)](https://github.com/zchan0/MyUsage/blob/main/README.md)
+- [README (中文)](https://github.com/zchan0/MyUsage/blob/main/README.zh-CN.md)
+
+## Documentation
+
+- [Multi-device sync](https://zchan0.github.io/MyUsage/docs/multi-device-sync) — How the BYO-folder aggregation works, device identity model
+- [Claude Code setup](https://zchan0.github.io/MyUsage/docs/claude) — OAuth credential discovery, plan label fetching
+- [Codex setup](https://zchan0.github.io/MyUsage/docs/codex) — Local credential reading, weekly + 5h windows
+- [Cursor setup](https://zchan0.github.io/MyUsage/docs/cursor) — SQLite probing, billing-cycle vs included quota
+- [Antigravity setup](https://zchan0.github.io/MyUsage/docs/antigravity) — Per-model quota tracking, IDE running indicator
+
+## Blog
+
+- [Designing a 4 pt progress bar — eight iterations with Claude Code as designer-of-record](https://zchan0.github.io/MyUsage/blog/limit-bar-iteration)
+- [No backend, BYO sync folder — multi-device aggregation without a server](https://zchan0.github.io/MyUsage/blog/no-backend-sync-architecture)
+
+## Quick facts
+
+- **Platform:** macOS 14+ (Sonoma)
+- **License:** MIT
+- **Language:** Swift 6 / SwiftUI
+- **Dependencies:** zero third-party (built-in SQLite3, Security.framework, Foundation only)
+- **Distribution:** ad-hoc signed (no paid Apple Developer cert yet)
+- **Latest version:** see [GitHub Releases](https://github.com/zchan0/MyUsage/releases/latest)

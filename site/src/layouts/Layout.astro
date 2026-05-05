@@ -1,0 +1,79 @@
+---
+// Shared HTML shell for every page. Carries the SEO meta, OG tags,
+// and (when the page has a Markdown source) the
+// `<link rel="alternate" type="text/markdown">` that lets retrieval
+// crawlers (Claude Code, Cursor, et al.) grab a clean MD copy via
+// content negotiation.
+import '../styles/global.css';
+
+export interface Props {
+  title: string;
+  description: string;
+  /** Path to the page's `.md` source under `/`, e.g. `/docs/claude.md`. */
+  markdownAlternate?: string;
+  /** Override OG image (defaults to /og.png). */
+  ogImage?: string;
+}
+
+const { title, description, markdownAlternate, ogImage = '/og.png' } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+const ogImageUrl = new URL(ogImage, Astro.site).toString();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <!-- OpenGraph / Twitter -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+
+    {markdownAlternate && (
+      <link rel="alternate" type="text/markdown" href={markdownAlternate} />
+    )}
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href={import.meta.env.BASE_URL} class="brand">
+        <span class="brand-mark">⌘</span>
+        <span class="brand-name">MyUsage</span>
+      </a>
+      <nav>
+        <a href={`${import.meta.env.BASE_URL}/install`}>Install</a>
+        <a href={`${import.meta.env.BASE_URL}/docs/multi-device-sync`}>Docs</a>
+        <a href={`${import.meta.env.BASE_URL}/blog`}>Blog</a>
+        <a href="https://github.com/zchan0/MyUsage" rel="external">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <span>MyUsage — MIT licensed.</span>
+      <span>
+        <a href="https://github.com/zchan0/MyUsage">Source on GitHub</a>
+        ·
+        <a href="https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md">Changelog</a>
+      </span>
+    </footer>
+  </body>
+</html>
