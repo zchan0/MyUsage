@@ -63,3 +63,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Notify IndexNow (Bing / Yandex)
+        # IndexNow lets us push "new content" notifications to Bing &
+        # friends without account-bound API auth — the only auth is the
+        # key file at site root, which we ship in public/. Submitting
+        # the sitemap URL is the simplest "everything's been updated"
+        # ping; the indexer dereferences and crawls from there.
+        run: |
+          curl -fsS -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "host": "zchan0.github.io",
+              "key": "64cc2cd2e20c7733b2624eec5da21318",
+              "keyLocation": "https://zchan0.github.io/MyUsage/64cc2cd2e20c7733b2624eec5da21318.txt",
+              "urlList": [
+                "https://zchan0.github.io/MyUsage/",
+                "https://zchan0.github.io/MyUsage/install",
+                "https://zchan0.github.io/MyUsage/docs/multi-device-sync",
+                "https://zchan0.github.io/MyUsage/sitemap-index.xml"
+              ]
+            }' || echo "IndexNow ping failed (non-fatal)"
