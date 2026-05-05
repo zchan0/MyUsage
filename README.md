@@ -12,7 +12,12 @@
   <a href="https://github.com/zchan0/MyUsage/releases/latest"><img src="https://img.shields.io/github/v/release/zchan0/MyUsage?style=flat-square&color=4a7c59" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue?style=flat-square" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-6-orange?style=flat-square" alt="Swift 6">
+  <a href="https://zchan0.github.io/MyUsage/"><img src="https://img.shields.io/badge/site-zchan0.github.io%2FMyUsage-4a7c59?style=flat-square" alt="Project site"></a>
   <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/lang-中文-red?style=flat-square" alt="中文说明"></a>
+</p>
+
+<p align="center">
+  <strong>Project site:</strong> <a href="https://zchan0.github.io/MyUsage/">zchan0.github.io/MyUsage</a> — landing, install guide, multi-device sync deep dive, blog.
 </p>
 
 ![MyUsage Screenshot](docs/screenshot.png)

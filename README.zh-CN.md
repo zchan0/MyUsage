@@ -12,7 +12,12 @@
   <a href="https://github.com/zchan0/MyUsage/releases/latest"><img src="https://img.shields.io/github/v/release/zchan0/MyUsage?style=flat-square&color=4a7c59" alt="最新版本"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue?style=flat-square" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-6-orange?style=flat-square" alt="Swift 6">
+  <a href="https://zchan0.github.io/MyUsage/"><img src="https://img.shields.io/badge/site-zchan0.github.io%2FMyUsage-4a7c59?style=flat-square" alt="项目站点"></a>
   <a href="README.md"><img src="https://img.shields.io/badge/lang-English-red?style=flat-square" alt="English README"></a>
+</p>
+
+<p align="center">
+  <strong>项目站点：</strong><a href="https://zchan0.github.io/MyUsage/">zchan0.github.io/MyUsage</a>——介绍页、安装指南、多设备同步深度文档、blog。
 </p>
 
 ## 为什么需要 MyUsage

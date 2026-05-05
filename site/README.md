@@ -40,6 +40,33 @@ site/
 └── astro.config.mjs
 ```
 
+## Search engine verification
+
+Both Google Search Console and Bing Webmaster Tools want you to prove
+ownership of `zchan0.github.io/MyUsage` before they'll show indexing
+data. The fastest verification method for both is the meta tag:
+
+1. **Google Search Console** — https://search.google.com/search-console
+   1. Add property → "URL prefix" → `https://zchan0.github.io/MyUsage/`
+   2. Pick "HTML tag" verification.
+   3. Copy the token from the meta tag they show (the `content="..."` value).
+   4. Paste into `src/layouts/Layout.astro`'s `google-site-verification` meta tag.
+   5. Push, wait for deploy, click "Verify" back in Search Console.
+   6. Once verified, submit the sitemap: enter `sitemap-index.xml` (URL becomes `https://zchan0.github.io/MyUsage/sitemap-index.xml`).
+
+2. **Bing Webmaster Tools** — https://www.bing.com/webmasters
+   1. Add site → `https://zchan0.github.io/MyUsage/`
+   2. Pick "Meta tag" verification.
+   3. Copy the token (the `content="..."` value).
+   4. Paste into `src/layouts/Layout.astro`'s `msvalidate.01` meta tag.
+   5. Push, wait for deploy, click "Verify".
+   6. Submit sitemap, then **enable IndexNow** under Settings — Bing's "Pages
+      published" panel will start showing AI-Search citations after a few weeks.
+
+Both tokens live as `content=""` placeholders in `Layout.astro` until you
+paste real values. Empty placeholders are harmless — verification only
+fails if a token is *wrong*, not if it's missing.
+
 ## SEO / GEO conventions
 
 - **`robots.txt`** segments AI crawlers: allow search/retrieval +
