@@ -39,7 +39,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 - **Multi-device aggregation, BYO sync transport.** Each Mac drops a per-device JSONL snapshot into `<sync-folder>/devices/<id>/`. Use iCloud, Syncthing, Dropbox, NAS, or anything else that keeps a folder in sync. The Devices tab in Settings lets you forget retired peers.
 - **Four providers in one popover** — Claude Code, Codex, Cursor, Antigravity. Reorder and enable/disable per provider in Settings.
 - **Burn-rate projection — alarm-only.** When the projected end-of-window usage would exceed 100%, the rolling-window bar surfaces a dashed marker overflowing past the right edge and a `projected 118%` footer note in warn-amber. Healthy projections are intentionally silent — the bar fill alone tells you you have headroom; an extra "you'll land at 31%" marker would just be noise. The math waits for at least 20% of the window to elapse before computing anything, so a single early prompt can't false-trigger the alarm.
-- **Per-model breakdown for Claude weekly.** Below the weekly bar, Sonnet / Opus / Haiku each get their own row sorted by share, so you can see which model is actually eating the budget.
+- **Per-bucket weekly breakdown for Claude.** Anthropic's `/api/oauth/usage` exposes plan-dependent sub-caps — model families (Opus, Sonnet, Haiku) and product lines (Design, Cowork, OAuth-apps). MyUsage surfaces every non-zero bucket as an indented row under the weekly bar. Plans without separate sub-caps (e.g. Max 5x, where everything pools into the unified weekly total) show none.
 - **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
 - **In-app update channel.** On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The Settings → About banner can download the next release and reveal it in Finder one drag away from /Applications.
 - **Privacy-respecting device identity.** Multi-device sync uses a salted SHA-256 of `IOPlatformUUID` as the device ID; the raw hardware UUID never leaves the process. Cached in UserDefaults so reinstalling doesn't create a duplicate device.
@@ -49,7 +49,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 
 | Provider | Data Source | What You See |
 | --- | --- | --- |
-| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) + `/api/oauth/profile` for plan label | 5h session + weekly bars · per-model breakdown (Sonnet / Opus / Haiku) · burn-rate projection · monthly cost (multi-device) |
+| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) + `/api/oauth/profile` for plan label | 5h session + weekly bars · per-bucket breakdown (model + product caps when plan exposes them) · burn-rate projection · monthly cost (multi-device) |
 | Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h session + weekly bars · burn-rate projection · monthly cost (multi-device) · credits |
 | Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota + on-demand budget bars · billing-cycle countdown |
 | Antigravity | Local language server process probe | Per-model quota bars · IDE running indicator |

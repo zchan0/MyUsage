@@ -33,16 +33,34 @@ struct ClaudeCredentials: Codable, Sendable {
 }
 
 /// Claude usage API response.
+///
+/// The API exposes a primary weekly cap (`sevenDay`) plus a *variable* set
+/// of per-bucket sub-caps. Each sub-cap is **plan-dependent and optional**:
+/// only plans that actually meter usage against that bucket return a non-
+/// null value. Max 5x users typically see all sub-caps as null because
+/// their usage rolls up into the unified `sevenDay` figure; some Enterprise
+/// / Team tiers have separate Opus / Design / Cowork caps.
+///
+/// The bucket vocabulary has been evolving:
+/// - `sevenDayOpus` / `sevenDaySonnet` — model-family caps (Haiku appears
+///   to have been removed from the response entirely as of mid-2026).
+/// - `sevenDayOmelette` — Anthropic's internal codename for **Claude Design**.
+/// - `sevenDayCowork` — **Claude Cowork** (the collaborative coding product).
+/// - `sevenDayOauthApps` — usage attributed to third-party OAuth apps.
+///
+/// Other codename fields appear in the response (`tangelo`, `iguana_necktie`,
+/// `omelette_promotional`, ...) but their semantics aren't documented and
+/// they're consistently null for end-user accounts; we don't decode them.
 struct ClaudeUsageResponse: Codable, Sendable {
     let fiveHour: ClaudeWindow?
     let sevenDay: ClaudeWindow?
 
-    /// Per-model breakdown of the weekly window. The API ships separate
-    /// utilization buckets for each public model family; we surface them
-    /// in the popover under the aggregate weekly bar.
     let sevenDayOpus: ClaudeWindow?
     let sevenDaySonnet: ClaudeWindow?
     let sevenDayHaiku: ClaudeWindow?
+    let sevenDayOmelette: ClaudeWindow?
+    let sevenDayCowork: ClaudeWindow?
+    let sevenDayOauthApps: ClaudeWindow?
 
     let extraUsage: ClaudeExtraUsage?
 
@@ -52,6 +70,9 @@ struct ClaudeUsageResponse: Codable, Sendable {
         case sevenDayOpus = "seven_day_opus"
         case sevenDaySonnet = "seven_day_sonnet"
         case sevenDayHaiku = "seven_day_haiku"
+        case sevenDayOmelette = "seven_day_omelette"
+        case sevenDayCowork = "seven_day_cowork"
+        case sevenDayOauthApps = "seven_day_oauth_apps"
         case extraUsage = "extra_usage"
     }
 
@@ -589,12 +610,20 @@ final class ClaudeProvider: UsageProvider {
             )
         }
 
-        // Per-model breakdown of the weekly window. Sorted by percent
-        // descending so the heaviest consumer reads first.
+        // Weekly per-bucket breakdown. The API exposes a *variable* set of
+        // sub-caps — model families (Opus/Sonnet/Haiku) AND product lines
+        // (Design/Cowork/OAuth-apps) — each plan-dependent and optional.
+        // Surface every bucket the API returns with utilization > 0, sorted
+        // by share descending. Plans without any sub-caps (e.g. Max 5x,
+        // where everything pools into the unified `sevenDay`) yield an
+        // empty array — caller hides the breakdown rows entirely.
         snapshot.weeklyByModel = [
-            ("Opus",   response.sevenDayOpus),
-            ("Sonnet", response.sevenDaySonnet),
-            ("Haiku",  response.sevenDayHaiku)
+            ("Opus",       response.sevenDayOpus),
+            ("Sonnet",     response.sevenDaySonnet),
+            ("Haiku",      response.sevenDayHaiku),
+            ("Design",     response.sevenDayOmelette),
+            ("Cowork",     response.sevenDayCowork),
+            ("OAuth apps", response.sevenDayOauthApps)
         ].compactMap { (label, window) -> WeeklyModelUsage? in
             guard let pct = window?.utilization, pct > 0 else { return nil }
             return WeeklyModelUsage(label: label, percent: Double(pct))

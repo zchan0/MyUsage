@@ -119,6 +119,7 @@ struct ClaudeProviderTests {
             fiveHour: .init(utilization: 35, resetsAt: "2026-04-14T20:00:00Z"),
             sevenDay: .init(utilization: 18, resetsAt: "2026-04-20T00:00:00Z"),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: nil
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: "Pro")
@@ -138,6 +139,7 @@ struct ClaudeProviderTests {
             sevenDayOpus: .init(utilization: 24, resetsAt: nil),
             sevenDaySonnet: .init(utilization: 38, resetsAt: nil),
             sevenDayHaiku: .init(utilization: 0, resetsAt: nil),
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: nil
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
@@ -149,12 +151,40 @@ struct ClaudeProviderTests {
         #expect(snapshot.weeklyByModel[1].percent == 24)
     }
 
+    @Test("Per-bucket breakdown also surfaces product caps (Design/Cowork/OAuth apps)")
+    func mapSnapshotWeeklyBucketsProducts() {
+        // Some Enterprise/Team plans expose product-line sub-caps in
+        // addition to (or instead of) model-family caps. Make sure the
+        // adaptive parser surfaces all of them, sorted by share.
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 50, resetsAt: nil),
+            sevenDayOpus: nil,
+            sevenDaySonnet: .init(utilization: 12, resetsAt: nil),
+            sevenDayHaiku: nil,
+            sevenDayOmelette: .init(utilization: 22, resetsAt: nil),  // Claude Design
+            sevenDayCowork: .init(utilization: 8, resetsAt: nil),     // Claude Cowork
+            sevenDayOauthApps: .init(utilization: 0, resetsAt: nil),  // 0 → dropped
+            extraUsage: nil
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+
+        #expect(snapshot.weeklyByModel.count == 3)
+        #expect(snapshot.weeklyByModel[0].label == "Design")
+        #expect(snapshot.weeklyByModel[0].percent == 22)
+        #expect(snapshot.weeklyByModel[1].label == "Sonnet")
+        #expect(snapshot.weeklyByModel[1].percent == 12)
+        #expect(snapshot.weeklyByModel[2].label == "Cowork")
+        #expect(snapshot.weeklyByModel[2].percent == 8)
+    }
+
     @Test("Per-model breakdown is empty when API returns no model fields")
     func mapSnapshotWeeklyByModelEmpty() {
         let response = ClaudeUsageResponse(
             fiveHour: nil,
             sevenDay: .init(utilization: 50, resetsAt: nil),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: nil
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
@@ -167,6 +197,7 @@ struct ClaudeProviderTests {
             fiveHour: .init(utilization: 50, resetsAt: nil),
             sevenDay: .init(utilization: 25, resetsAt: nil),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: .init(isEnabled: true, usedCredits: 500, monthlyLimit: 10000, currency: "USD")
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
@@ -182,6 +213,7 @@ struct ClaudeProviderTests {
             fiveHour: .init(utilization: 10, resetsAt: nil),
             sevenDay: .init(utilization: 5, resetsAt: nil),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: nil
         )
         let past = Date(timeIntervalSince1970: 1_700_000_000)
@@ -195,6 +227,7 @@ struct ClaudeProviderTests {
             fiveHour: .init(utilization: 10, resetsAt: nil),
             sevenDay: .init(utilization: 5, resetsAt: nil),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: nil
         )
         let before = Date.now
@@ -210,6 +243,7 @@ struct ClaudeProviderTests {
             fiveHour: .init(utilization: 10, resetsAt: nil),
             sevenDay: .init(utilization: 5, resetsAt: nil),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
+            sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,
             extraUsage: .init(isEnabled: false, usedCredits: 0, monthlyLimit: 0, currency: "USD")
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)

@@ -37,7 +37,7 @@ MyUsage 是一个原生的 macOS 菜单栏小应用，解决方式是：
 - **跨设备聚合 + 自带同步通道**：每台 Mac 把 per-device 的 JSONL 快照写进 `<sync-folder>/devices/<id>/`。同步通道随你选——iCloud、Syncthing、Dropbox、NAS 都可以。Settings → Devices 可以"忘记"已退役的旧设备。
 - **四个 provider 一个弹层**：Claude Code、Codex、Cursor、Antigravity。Settings 里可以拖拽排序、启用/禁用。
 - **Burn-rate 预测——只在要超时报警**：当按当前速度到 reset 会突破 100%，bar 右边会出一根 amber 虚线 marker（溢出右边缘）+ 下方 `projected 118%` 的 amber 加粗文字。projected ≤ 100% 时全部静默——bar 本身的留白已经告诉你还有余地，再画一根「会落在 31%」的小竖线只会变噪音。窗口需要至少走过 20% 才会开始预测，避免单次大请求把信号炸出来。
-- **Claude weekly per-model 拆分**：weekly 主条下面 Sonnet / Opus / Haiku 各占一行，按消耗量降序，一眼看到是哪个模型在吃额度。
+- **Claude weekly 子配额拆分**：Anthropic `/api/oauth/usage` 暴露多种 plan-dependent 子配额——model 系列（Opus / Sonnet / Haiku）+ 产品线（Claude Design / Cowork / OAuth apps）。MyUsage 把每个非零子桶在 weekly 主条下方独占一行，按消耗量降序，看到是哪个模型/产品在吃额度。Plan 没有独立子配额（如 Max 5x，所有用量共享一个 weekly 总额）时不显示子行。
 - **Limit 压力通知**：任意 limit 跨过 warn / crit 阈值（默认 80% / 95%，可调）会立即弹 macOS 系统通知。带幂等：同一档不会重复弹；用量回落后状态自动 reset，下次再升能再触发。
 - **应用内升级**：启动时检查 GitHub Releases，发现新版本时菜单栏图标和 Settings → About 都会有提示。banner 上的 Download 按钮可以一键下载新版的 .zip 并在 Finder 里高亮，离"拖到 /Applications"只差一拖。
 - **隐私：硬件衍生的设备 ID**：跨设备同步用的设备 ID 是 `IOPlatformUUID` 加盐后 SHA-256 的结果，原始硬件 ID 永远不出本进程。`UserDefaults` 仅作缓存，重装也不会产生重复设备。
