@@ -140,7 +140,19 @@ struct LimitBar: View {
         return "projected \(Int(p.rounded()))%"
     }
 
-    private var level: LimitSafety.Level { LimitSafety.level(for: percent) }
+    /// Severity for the bar fill + pct pill. Takes the **higher** of the
+    /// current-usage band and the projection-alarm band — so a row at 58%
+    /// (healthy by current usage) but with a projected 274% (clear
+    /// overshoot) renders the bar amber, not sage. Without this, the
+    /// footer "projected XXX%" note screams while the bar visually says
+    /// "you're fine" — confusing and inconsistent.
+    private var level: LimitSafety.Level {
+        let currentLevel = LimitSafety.level(for: percent)
+        guard let projected = alarmingProjection else { return currentLevel }
+        // projected > 100 always at least warn; > 150 escalates to crit.
+        let projectedLevel: LimitSafety.Level = projected > 150 ? .crit : .warn
+        return max(currentLevel, projectedLevel)
+    }
 
     static let warnAccent = Color(hue: 28.0/360.0, saturation: 0.70, brightness: 0.55)
 }

@@ -50,7 +50,24 @@ enum LimitSafety {
     static let warnThreshold: Double = 75
     static let critThreshold: Double = 90
 
-    enum Level { case healthy, warn, crit }
+    enum Level: Comparable {
+        case healthy, warn, crit
+
+        /// Numeric weight so callers can `max(a, b)` two levels — used by
+        /// `LimitBar.level` to take the higher of (current-usage band,
+        /// projection-alarm band).
+        var severity: Int {
+            switch self {
+            case .healthy: 0
+            case .warn:    1
+            case .crit:    2
+            }
+        }
+
+        static func < (lhs: Level, rhs: Level) -> Bool {
+            lhs.severity < rhs.severity
+        }
+    }
 
     static func level(for percent: Double) -> Level {
         if percent >= critThreshold { return .crit }
