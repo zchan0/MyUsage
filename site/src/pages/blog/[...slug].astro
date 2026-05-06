@@ -17,6 +17,7 @@ const dateFmt = new Intl.DateTimeFormat('en', {
   month: 'long',
   day: 'numeric',
 });
+const wordCount = Math.round(post.body.split(/\s+/).length / 100) * 100;
 ---
 
 <Layout
@@ -24,11 +25,14 @@ const dateFmt = new Intl.DateTimeFormat('en', {
   description={post.data.description}
   markdownAlternate={`/blog/${post.slug}.md`}
 >
-  <article class="prose">
-    <header>
-      <h1>{post.data.title}</h1>
-      <time datetime={post.data.pubDate.toISOString()}>{dateFmt.format(post.data.pubDate)}</time>
-    </header>
+  <article class="reading">
+    <span class="meta-row">
+      Blog · {dateFmt.format(post.data.pubDate)} · ~{wordCount} words
+    </span>
+    <h1>{post.data.title}</h1>
+    {post.data.description && (
+      <p class="post-lede">{post.data.description}</p>
+    )}
     <Content />
   </article>
 </Layout>

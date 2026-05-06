@@ -1,0 +1,24 @@
+---
+/**
+ * Brand-coloured provider tile, 22×22, white SVG glyph centred.
+ * Mirrors the macOS app's `ProviderIconTile` look and uses the same
+ * brand colours (HSB → HSL converted from `ProviderKind.brandTileColor`).
+ */
+export interface Props {
+  kind: 'claude' | 'codex' | 'cursor' | 'antigravity';
+}
+
+const { kind } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const labels: Record<Props['kind'], string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  antigravity: 'Antigravity',
+};
+const tileClass = kind === 'antigravity' ? 'antigrav' : kind;
+---
+
+<div class={`tile ${tileClass}`}>
+  <img src={`${base}/icons/ProviderIcon-${kind}.svg`} alt={labels[kind]} width="16" height="16" />
+</div>

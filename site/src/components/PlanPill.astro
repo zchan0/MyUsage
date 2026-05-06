@@ -1,0 +1,11 @@
+---
+/**
+ * Small mono pill matching the popover's plan label
+ * (MAX / PLUS / PRO / IDE off etc.).
+ */
+export interface Props {
+  text: string;
+}
+const { text } = Astro.props;
+---
+<span class="plan-pill">{text}</span>

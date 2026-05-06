@@ -1,23 +1,21 @@
 ---
-// Shared HTML shell for every page. Carries the SEO meta, OG tags,
-// and (when the page has a Markdown source) the
-// `<link rel="alternate" type="text/markdown">` that lets retrieval
-// crawlers (Claude Code, Cursor, et al.) grab a clean MD copy via
-// content negotiation.
 import '../styles/global.css';
 
 export interface Props {
   title: string;
   description: string;
-  /** Path to the page's `.md` source under `/`, e.g. `/docs/claude.md`. */
+  /** Path to the page's `.md` source under `/`, e.g. `/docs/claude.md`.
+      When set, emits `<link rel="alternate" type="text/markdown">` so
+      retrieval crawlers (Claude Code, Cursor) can grab clean Markdown. */
   markdownAlternate?: string;
-  /** Override OG image (defaults to /og.png). */
+  /** OG image override (defaults to /og.png). */
   ogImage?: string;
 }
 
 const { title, description, markdownAlternate, ogImage = '/og.png' } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const ogImageUrl = new URL(ogImage, Astro.site).toString();
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <!doctype html>
@@ -46,26 +44,25 @@ const ogImageUrl = new URL(ogImage, Astro.site).toString();
       <link rel="alternate" type="text/markdown" href={markdownAlternate} />
     )}
 
-    <!-- Search engine verification — tokens from Google Search Console
-         and Bing Webmaster Tools. Once verified the property is bound to
-         the token; rotating means re-verifying. -->
+    <!-- Search engine verification -->
     <meta name="google-site-verification" content="ws58BEuoSlHHHNKzx9IgmsrepdABsoaRaWVw_MsfEs4" />
     <meta name="msvalidate.01" content="4142C0E7DBB83A345622E7344D41C8D4" />
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href={`${base}/icons/app-icon.png`} />
+    <link rel="apple-touch-icon" href={`${base}/icons/app-icon-256.png`} />
     <link rel="sitemap" href="/sitemap-index.xml" />
   </head>
   <body>
     <header class="site-header">
-      <a href={import.meta.env.BASE_URL} class="brand">
-        <span class="brand-mark">⌘</span>
+      <a href={base || '/'} class="brand">
+        <img class="brand-mark-img" src={`${base}/icons/app-icon.png`} alt="MyUsage app icon" width="28" height="28" />
         <span class="brand-name">MyUsage</span>
       </a>
-      <nav>
-        <a href={`${import.meta.env.BASE_URL}/install`}>Install</a>
-        <a href={`${import.meta.env.BASE_URL}/docs/multi-device-sync`}>Docs</a>
-        <a href={`${import.meta.env.BASE_URL}/blog`}>Blog</a>
-        <a href="https://github.com/zchan0/MyUsage" rel="external">GitHub</a>
+      <nav class="site-nav">
+        <a href={`${base}/install`}>Install</a>
+        <a href={`${base}/docs/multi-device-sync`}>Docs</a>
+        <a href={`${base}/blog`}>Blog</a>
+        <a class="ext" href="https://github.com/zchan0/MyUsage" rel="external">GitHub ↗</a>
       </nav>
     </header>
 
@@ -74,11 +71,11 @@ const ogImageUrl = new URL(ogImage, Astro.site).toString();
     </main>
 
     <footer class="site-footer">
-      <span>MyUsage — MIT licensed.</span>
+      <span>MyUsage · MIT</span>
       <span>
-        <a href="https://github.com/zchan0/MyUsage">Source on GitHub</a>
-        ·
-        <a href="https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/zchan0/MyUsage">Source</a> &middot;
+        <a href="https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md">Changelog</a> &middot;
+        <a href={`${base}/blog`}>Blog</a>
       </span>
     </footer>
   </body>

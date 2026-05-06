@@ -1,0 +1,25 @@
+---
+import ProviderTile from './ProviderTile.astro';
+import PlanPill from './PlanPill.astro';
+
+/**
+ * Provider card inside a popover — head (tile + name + plan pill)
+ * + slotted limits + optional cost row.
+ */
+export interface Props {
+  kind: 'claude' | 'codex' | 'cursor' | 'antigravity';
+  name: string;
+  plan?: string;
+}
+
+const { kind, name, plan } = Astro.props;
+---
+
+<div class="pcard">
+  <div class="pcard-head">
+    <ProviderTile kind={kind} />
+    <span class="pcard-name">{name}</span>
+    {plan && <PlanPill text={plan} />}
+  </div>
+  <slot />
+</div>

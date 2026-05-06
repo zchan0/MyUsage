@@ -4,8 +4,6 @@ description: How MyUsage aggregates AI usage across multiple Macs through a user
 order: 1
 ---
 
-# Multi-device sync
-
 The reason MyUsage exists in the first place is that the official UIs for Claude Code, Codex, Cursor, and Antigravity each only know about the device they're running on. If you use AI coding tools across two or three Macs (work laptop, personal desktop, and a backup machine, say), each one's "X% of your weekly limit remaining" is **wrong by some amount you can't see**. You hit a weekly cap on Friday afternoon because your laptop has been burning through tokens all morning while your desktop was telling you everything's fine.
 
 MyUsage solves this by giving every Mac a small "diary" that it writes into a folder you already sync. The popover then reads every diary in that folder and shows the totals.

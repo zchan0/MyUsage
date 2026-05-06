@@ -1,0 +1,28 @@
+---
+/**
+ * The popover frame — glass card with optional head bar (title +
+ * "X sec ago" + refresh glyph). Children render inside as one or
+ * more <ProviderCard /> instances.
+ *
+ * `mini` shrinks the popover to ~300px for inline use in feature
+ * sections (the hero uses the default 340pt).
+ */
+export interface Props {
+  title?: string;
+  ago?: string;
+  mini?: boolean;
+}
+
+const { title = 'MyUsage', ago = '3 sec ago', mini = false } = Astro.props;
+const widthStyle = mini ? 'width: 300px;' : '';
+---
+
+<div class="popover" style={widthStyle}>
+  {title && (
+    <div class="pop-head-bar">
+      <span class="pop-title">{title}</span>
+      <span class="pop-meta">{ago} <span class="refresh-glyph"></span></span>
+    </div>
+  )}
+  <slot />
+</div>

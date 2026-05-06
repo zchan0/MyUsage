@@ -1,0 +1,27 @@
+---
+/**
+ * "Specimen" frame: wraps a popover with measurement annotations
+ * (cross-hairs at corners, dimension callouts top + bottom). Used
+ * exclusively in the hero — gives the popover the "artifact under
+ * examination" treatment matching the editorial-technical aesthetic.
+ */
+export interface Props {
+  topLabel?: string;
+  bottomLabel?: string;
+}
+
+const {
+  topLabel = '340 pt',
+  bottomLabel = 'sage · 4 pt rail · alarm-only marker',
+} = Astro.props;
+---
+
+<div class="specimen">
+  <span class="annot t"><span class="tick"></span> {topLabel} <span class="tick"></span></span>
+  <span class="crosshair tl"></span>
+  <span class="crosshair tr"></span>
+  <span class="crosshair bl"></span>
+  <span class="crosshair br"></span>
+  <slot />
+  <span class="annot b"><span class="tick"></span> {bottomLabel} <span class="tick"></span></span>
+</div>

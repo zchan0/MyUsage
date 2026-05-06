@@ -1,218 +1,323 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Specimen from '../components/Specimen.astro';
+import Popover from '../components/Popover.astro';
+import ProviderCard from '../components/ProviderCard.astro';
+import LimitBar from '../components/LimitBar.astro';
+import ProviderTile from '../components/ProviderTile.astro';
+import SyncDiagram from '../components/SyncDiagram.astro';
 ---
 
 <Layout
   title="MyUsage — One menu bar for every AI coding tool, across every Mac"
   description="Native macOS menu bar app that tracks Claude Code, Codex, Cursor, and Antigravity usage across multiple Macs. No backend, MIT, zero third-party dependencies."
 >
+
+  <!-- ============================================================
+       HERO — text + specimen-framed live popover
+       ============================================================ -->
   <section class="hero">
-    <h1>One menu bar for every AI coding tool — across every Mac you use.</h1>
-    <p class="lede">
-      MyUsage is a small native macOS menu bar app that talks to Claude Code,
-      Codex, Cursor, and Antigravity, and aggregates usage across every Mac you
-      own — through a folder you already sync (iCloud Drive, Syncthing, Dropbox,
-      anything). No MyUsage backend exists. Free, MIT, zero third-party dependencies.
-    </p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/zchan0/MyUsage/releases/latest">
-        Download v0.9.1
-      </a>
-      <a class="btn btn-secondary" href="https://github.com/zchan0/MyUsage">
-        View on GitHub
-      </a>
+    <div class="hero-text">
+      <span class="eyebrow">Menu bar · Native macOS · MIT</span>
+      <h1>One menu bar for every <em>AI coding tool</em> — across every Mac you use.</h1>
+      <p class="lede">
+        MyUsage is a native macOS menu bar app that talks to Claude Code, Codex,
+        Cursor, and Antigravity, and aggregates usage across every Mac you own
+        — through a folder you already sync. No backend. Free, MIT, zero
+        third-party dependencies.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/zchan0/MyUsage/releases/latest">
+          Download <span class="ver">latest</span>
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/zchan0/MyUsage">
+          View source ↗
+        </a>
+      </div>
+      <div class="hero-meta">
+        <span>macOS 14+</span>
+        <span>~8 MB</span>
+        <span>0 dependencies</span>
+        <span>226 tests</span>
+      </div>
+    </div>
+
+    <div class="hero-pop">
+      <Specimen>
+        <Popover>
+          <ProviderCard kind="claude" name="Claude Code" plan="MAX">
+            <LimitBar name="5-hour" percent={47} reset="resets 2h 14m · 16:30" />
+            <LimitBar name="Weekly" percent={62} reset="resets 5d 12h · Tue 09:00" />
+            <div class="submodels">
+              <div class="submodel"><span class="nm">sonnet</span><span class="pc">42%</span></div>
+              <div class="submodel"><span class="nm">opus</span><span class="pc">14%</span></div>
+              <div class="submodel"><span class="nm">haiku</span><span class="pc">6%</span></div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$543.57<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </ProviderCard>
+          <ProviderCard kind="codex" name="Codex" plan="PLUS">
+            <LimitBar name="5-hour" percent={6} reset="resets 4h 46m · 19:00" />
+          </ProviderCard>
+        </Popover>
+      </Specimen>
     </div>
   </section>
 
-  <section class="section">
-    <h2>Why MyUsage exists</h2>
-    <p>
-      If you use Claude Code, Codex, Cursor, or Antigravity — and especially
-      if you use them across <strong>more than one Mac</strong> — the official
-      UIs only show what's happening on the device you're sitting at right now.
-      You hit a weekly limit on Friday afternoon because your laptop has been
-      chewing through tokens all morning while your desktop's "remaining"
-      number lied to you.
-    </p>
-    <p>
-      That's the gap MyUsage fills. Each Mac runs the app, talks to the
-      providers it has credentials for, and writes a tiny JSONL snapshot into
-      a folder you already sync. The popover then shows the <em>aggregate</em>
-      across every Mac sharing that folder. No MyUsage backend exists; the
-      sync transport is whatever you already use.
-    </p>
+  <!-- ============================================================
+       §01 — Why MyUsage
+       ============================================================ -->
+  <section class="section why">
+    <div class="section-head">
+      <div class="section-num-large">§ 01</div>
+      <h2 class="section-title">Why MyUsage exists.</h2>
+    </div>
+    <div class="section-body">
+      <div class="marginalia">
+        The provider UIs each show only<br />
+        what their device knows.<br />
+        The aggregate doesn't exist<br />
+        anywhere — until you build it.
+      </div>
+      <div class="body-col">
+        <p class="dropcap">If you use Claude Code, Codex, Cursor, or Antigravity — and especially if you use them across <strong>more than one Mac</strong> — the official UIs only show what's happening on the device you're sitting at. You hit a weekly limit on Friday afternoon because your laptop has been chewing through tokens all morning while your desktop's "remaining" number lied to you.</p>
+        <p>That's the gap MyUsage fills. Each Mac runs the app, talks to the providers it has credentials for, and writes a tiny JSONL snapshot into a folder you already sync. The popover then shows the <em>aggregate</em> across every Mac sharing that folder. No MyUsage backend exists; the sync transport is whatever you already use.</p>
+      </div>
+    </div>
   </section>
 
+  <!-- ============================================================
+       §02 — Features
+       ============================================================ -->
   <section class="section">
-    <h2>What you get</h2>
-    <div class="feature-grid">
-      <div class="feature">
-        <h3>Multi-device aggregation</h3>
-        <p>
+    <div class="section-head">
+      <div class="section-num-large">§ 02</div>
+      <h2 class="section-title">What you get.</h2>
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <div class="feature-num">02 · 01</div>
+        <h3>Multi-device aggregation, BYO sync transport.</h3>
+        <p class="lede">
           Each Mac drops a per-device JSONL snapshot into <code>&lt;sync-folder&gt;/devices/&lt;id&gt;/</code>.
-          Use iCloud Drive, Syncthing, Dropbox, NAS, or any folder that stays
-          in sync. The Devices tab in Settings lets you forget retired peers,
-          and the popover's monthly cost row totals across every Mac.
+          Use iCloud, Syncthing, Dropbox, NAS — same to MyUsage. The popover totals
+          across every Mac sharing that folder.
         </p>
       </div>
-      <div class="feature">
-        <h3>Four providers, one popover</h3>
-        <p>
-          Claude Code, Codex, Cursor, and Antigravity surface in a single
-          340 pt menu bar popover. Reorder them or toggle each on/off in
-          Settings. No flipping between four separate UIs.
+      <div class="feature-pop">
+        <Popover mini title={undefined} ago="">
+          <ProviderCard kind="claude" name="Claude Code" plan="MAX">
+            <LimitBar name="Weekly" percent={62} reset="resets Sun" />
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$543.57<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </ProviderCard>
+        </Popover>
+      </div>
+    </div>
+
+    <div class="feature flip">
+      <div class="feature-pop">
+        <Popover mini title={undefined} ago="">
+          <ProviderCard kind="claude" name="Claude Code" plan="MAX">
+            <LimitBar name="Daily cap" percent={88} reset="resets in 4h · 18:30" projected={145} />
+          </ProviderCard>
+        </Popover>
+      </div>
+      <div class="feature-text">
+        <div class="feature-num">02 · 02</div>
+        <h3>Burn-rate projection — alarm only.</h3>
+        <p class="lede">
+          When current burn rate would push a limit past 100% before reset, the bar gets
+          a dashed marker overflowing past the right edge plus a <code>projected 145%</code>
+          note in warn-amber. Healthy projections stay silent — the bar fill alone tells
+          you you have headroom.
         </p>
       </div>
-      <div class="feature">
-        <h3>Burn-rate projection — alarm only</h3>
-        <p>
-          When current burn rate would push a limit past 100% before reset,
-          the bar gets a dashed projection marker overflowing past the right
-          edge plus a <code>projected 118%</code> footer note. Healthy
-          projections stay silent — the bar fill alone tells you you have
-          headroom.
+    </div>
+
+    <div class="feature">
+      <div class="feature-text">
+        <div class="feature-num">02 · 03</div>
+        <h3>Per-model breakdown for Claude weekly.</h3>
+        <p class="lede">
+          Anthropic's <code>/api/oauth/usage</code> exposes separate utilization buckets
+          per model family. MyUsage surfaces Sonnet / Opus / Haiku as indented rows under
+          the weekly bar, sorted by share — so you can see which model is actually eating
+          the budget.
         </p>
       </div>
-      <div class="feature">
-        <h3>Per-model breakdown for Claude</h3>
-        <p>
-          Anthropic's <code>/api/oauth/usage</code> exposes separate utilization
-          buckets per model family — Sonnet, Opus, Haiku. MyUsage surfaces them
-          as indented rows under the weekly bar, sorted by share, so you can see
-          which model is actually eating the budget.
-        </p>
+      <div class="feature-pop">
+        <Popover mini title={undefined} ago="">
+          <ProviderCard kind="claude" name="Claude Code" plan="MAX">
+            <LimitBar name="Weekly" percent={62} reset="resets 5d 12h · Tue 09:00" />
+            <div class="submodels">
+              <div class="submodel"><span class="nm">sonnet</span><span class="pc">42%</span></div>
+              <div class="submodel"><span class="nm">opus</span><span class="pc">14%</span></div>
+              <div class="submodel"><span class="nm">haiku</span><span class="pc">6%</span></div>
+            </div>
+          </ProviderCard>
+        </Popover>
       </div>
-      <div class="feature">
-        <h3>Limit-pressure notifications</h3>
-        <p>
-          Native macOS notifications fire the moment any tracked limit crosses
-          your warn / crit threshold (default 80% / 95%, both tunable). Idempotent
-          — the same percent across two refreshes never double-fires.
-        </p>
+    </div>
+
+    <div class="feature flip">
+      <div class="feature-pop">
+        <div class="popover" style="width:300px; padding: 18px 16px;">
+          <div style="display:grid;gap:10px;font-family:var(--font-mono); font-size: 11px;">
+            <div style="display:flex; justify-content:space-between; color: var(--ink-mute);"><span>IOPlatformUUID</span><span style="color:var(--ink-fade);">stays local</span></div>
+            <div style="font-size:13px; color: var(--ink); padding: 4px 0; border-bottom: 0.5px solid var(--rule);">↓ SHA-256 (salt | UUID)</div>
+            <div style="display:flex; justify-content:space-between;"><span style="color: var(--ink-mute);">deviceID</span><span style="color: var(--sage-deep); font-weight: 500;">7F3CA5E1-…-5E3D2B4F6A7C</span></div>
+            <div style="font-size:10px; color: var(--ink-fade); margin-top: 4px; line-height: 1.5;">
+              Cached in <code>UserDefaults</code>. Reinstalling re-derives the same ID — no ghost devices in the popover.
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="feature">
-        <h3>In-app update channel</h3>
-        <p>
-          On launch, MyUsage checks GitHub Releases and shows a banner when a
-          newer tag is available. Settings → About's banner can download the
-          next release and reveal it in Finder one drag away from <code>/Applications</code>.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Privacy-respecting device identity</h3>
-        <p>
-          Multi-device sync uses a salted SHA-256 of <code>IOPlatformUUID</code>
-          as the device ID. The raw hardware UUID never leaves the process.
-          Cached in UserDefaults so reinstalling doesn't create a duplicate device.
-        </p>
-      </div>
-      <div class="feature">
-        <h3>Zero third-party dependencies</h3>
-        <p>
-          Built only with SwiftUI, SQLite3, Security.framework, and Foundation.
-          No Electron, no Sparkle, no analytics SDK. The whole binary is under
-          8 MB.
+      <div class="feature-text">
+        <div class="feature-num">02 · 04</div>
+        <h3>Privacy-respecting device identity.</h3>
+        <p class="lede">
+          Multi-device sync uses a salted SHA-256 of <code>IOPlatformUUID</code>, reshaped
+          to RFC 4122 UUIDv4 form. The raw hardware UUID never leaves the process.
+          Reinstalling MyUsage on a Mac re-derives the same ID, so you don't get duplicate
+          ghost devices in the popover.
         </p>
       </div>
     </div>
   </section>
 
+  <!-- ============================================================
+       §03 — Providers
+       ============================================================ -->
   <section class="section">
-    <h2>Supported providers</h2>
-    <table class="providers-table">
-      <thead>
-        <tr>
-          <th>Provider</th>
-          <th>Data source</th>
-          <th>What you see</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Claude Code</strong></td>
-          <td>OAuth API (<code>~/.claude/.credentials.json</code> / Keychain) + <code>/api/oauth/profile</code></td>
-          <td>5 h session + weekly bars · per-model breakdown · burn-rate projection · monthly cost (multi-device)</td>
-        </tr>
-        <tr>
-          <td><strong>Codex</strong></td>
-          <td>OAuth API (<code>~/.codex/auth.json</code> / Keychain)</td>
-          <td>5 h session + weekly bars · burn-rate projection · monthly cost (multi-device) · credits</td>
-        </tr>
-        <tr>
-          <td><strong>Cursor</strong></td>
-          <td>Local SQLite + Connect RPC (<code>state.vscdb</code>)</td>
-          <td>Included quota + on-demand budget bars · billing-cycle countdown</td>
-        </tr>
-        <tr>
-          <td><strong>Antigravity</strong></td>
-          <td>Local language server process probe</td>
-          <td>Per-model quota bars · IDE running indicator</td>
-        </tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section class="section">
-    <h2>How the multi-device sync works</h2>
-    <p>
-      The "no backend" claim is load-bearing — there is genuinely no
-      MyUsage-operated server anywhere. The sync transport is whatever folder
-      you point the app at:
-    </p>
-    <ul>
-      <li>Each Mac picks a sync folder (iCloud Drive's <code>~/Library/Mobile Documents</code>, a Syncthing folder, a Dropbox folder, an NFS mount — same to MyUsage).</li>
-      <li>Each Mac writes its own snapshot into <code>&lt;sync-folder&gt;/devices/&lt;deviceID&gt;/manifest.json</code> + <code>ledger.jsonl</code>.</li>
-      <li>The popover reads every other device's folder and totals them.</li>
-      <li>Forgetting a peer in Settings → Devices removes its folder from the sync root, so the next sync round drops it everywhere.</li>
-    </ul>
-    <p>
-      The device ID is the salted SHA-256 of <code>IOPlatformUUID</code>, cached
-      in <code>UserDefaults</code>. Reinstalling MyUsage on a Mac re-derives the
-      same ID, so you don't get duplicate "ghost" devices in the popover.
-      Read the <a href={`${import.meta.env.BASE_URL}/docs/multi-device-sync`}>multi-device sync deep dive</a>
-      for the full design and edge cases.
-    </p>
-  </section>
-
-  <section class="section">
-    <h2>Install</h2>
-    <ol>
-      <li>Download the latest <code>MyUsage-&lt;version&gt;.zip</code> from <a href="https://github.com/zchan0/MyUsage/releases/latest">GitHub Releases</a>, unzip.</li>
-      <li>Drag <code>MyUsage.app</code> to <code>/Applications/</code>.</li>
-      <li>First launch: right-click → Open (Gatekeeper will prompt once, then remember).</li>
-    </ol>
-    <div class="callout">
-      <b>Note:</b> MyUsage is ad-hoc signed (no paid Apple Developer
-      certificate). macOS flags it as "unidentified developer" on first launch.
-      Each release includes a <code>.sha256</code> file for checksum
-      verification. See the <a href={`${import.meta.env.BASE_URL}/install`}>full install guide</a>
-      if Gatekeeper blocks you.
+    <div class="section-head">
+      <div class="section-num-large">§ 03</div>
+      <h2 class="section-title">Providers, in order of arrival.</h2>
+    </div>
+    <div class="section-body">
+      <div class="marginalia">
+        Two camps:<br />
+        Claude / Codex tell you tokens —<br />
+        you compute dollars.<br />
+        Cursor tells you dollars.<br />
+        Antigravity tracks quotas.
+      </div>
+      <div class="body-col" style="max-width:none;">
+        <table class="providers">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Data source</th>
+              <th>What you see</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="name"><ProviderTile kind="claude" />Claude Code</td>
+              <td class="source">OAuth API<br /><code>~/.claude/.credentials.json</code><br />+ <code>/api/oauth/profile</code></td>
+              <td class="feats">5 h session + weekly bars · per-model breakdown · burn-rate projection · monthly cost (multi-device)</td>
+            </tr>
+            <tr>
+              <td class="name"><ProviderTile kind="codex" />Codex</td>
+              <td class="source">OAuth API<br /><code>~/.codex/auth.json</code></td>
+              <td class="feats">5 h session + weekly bars · burn-rate projection · monthly cost (multi-device) · credits</td>
+            </tr>
+            <tr>
+              <td class="name"><ProviderTile kind="cursor" />Cursor</td>
+              <td class="source">Local SQLite + Connect RPC<br /><code>state.vscdb</code></td>
+              <td class="feats">Included quota + on-demand budget bars · billing-cycle countdown</td>
+            </tr>
+            <tr>
+              <td class="name"><ProviderTile kind="antigravity" />Antigravity</td>
+              <td class="source">Local language server probe</td>
+              <td class="feats">Per-model quota bars · IDE running indicator</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
+  <!-- ============================================================
+       §04 — Sync architecture
+       ============================================================ -->
   <section class="section">
-    <h2>Requirements</h2>
-    <ul>
-      <li><strong>macOS 14+</strong> (Sonoma)</li>
-      <li>At least one supported tool installed and signed in</li>
-      <li>For multi-device sync: a folder that stays in sync across Macs (iCloud Drive recommended)</li>
-    </ul>
+    <div class="section-head">
+      <div class="section-num-large">§ 04</div>
+      <h2 class="section-title">A folder you already sync.</h2>
+    </div>
+    <div class="section-body">
+      <div class="marginalia">
+        No MyUsage backend exists.<br />
+        The sync transport is yours.<br />
+        Each device writes only its<br />
+        own subfolder. No merge<br />
+        conflicts by construction.
+      </div>
+      <div class="body-col">
+        <p>The "no backend" claim is load-bearing — there is genuinely no MyUsage-operated server anywhere. Each Mac writes a per-device snapshot into a folder you already sync (iCloud Drive, Syncthing, Dropbox, NFS, anything). The popover reads every other device's folder and totals them.</p>
+
+        <SyncDiagram />
+
+        <p>The device ID is a salted SHA-256 of <code>IOPlatformUUID</code>, reshaped to RFC 4122 UUIDv4 form, cached in <code>UserDefaults</code>. Reinstalling MyUsage on a Mac re-derives the same ID. Read the <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/docs/multi-device-sync`}>multi-device sync deep dive</a> for the full design and edge cases.</p>
+      </div>
+    </div>
   </section>
 
+  <!-- ============================================================
+       §05 — Install summary
+       ============================================================ -->
   <section class="section">
-    <h2>Project background</h2>
-    <p>
-      MyUsage is open source under MIT, written entirely in Swift 6 / SwiftUI.
-      The codebase ships ~226 unit tests covering the parsing, sync, and
-      notification layers. The whole binary is under 8 MB because there are
-      zero third-party dependencies — everything runs on first-party Apple
-      frameworks.
-    </p>
-    <p>
-      The development story (including the 8 iterations it took to get the
-      4 pt limit-bar visual right, and the multi-device sync architecture
-      decisions) lives in the <a href={`${import.meta.env.BASE_URL}/blog`}>blog</a>.
-      Release history in the <a href="https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md">CHANGELOG</a>.
-    </p>
+    <div class="section-head">
+      <div class="section-num-large">§ 05</div>
+      <h2 class="section-title">Install in three drags.</h2>
+    </div>
+    <div class="section-body">
+      <div class="marginalia">
+        Ad-hoc signed.<br />
+        Gatekeeper warns once.<br />
+        SHA-256 attached to every release.
+      </div>
+      <div class="body-col">
+        <ol>
+          <li>Download the latest <code>MyUsage-&lt;version&gt;.zip</code> from <a href="https://github.com/zchan0/MyUsage/releases/latest">GitHub Releases</a>, unzip.</li>
+          <li>Drag <code>MyUsage.app</code> to <code>/Applications/</code>.</li>
+          <li>First launch: right-click → <strong>Open</strong> (Gatekeeper will prompt once, then remember).</li>
+        </ol>
+        <div class="callout">
+          <div>
+            <strong>Why the Gatekeeper warning?</strong> MyUsage is ad-hoc signed (no paid Apple Developer certificate). The binary is the same one published in GitHub Releases — verify with the attached <code>.sha256</code>. See the <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/install`}>full install guide</a> if Gatekeeper blocks you.
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
+
+  <!-- ============================================================
+       §06 — Project background
+       ============================================================ -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-num-large">§ 06</div>
+      <h2 class="section-title">Project background.</h2>
+    </div>
+    <div class="section-body">
+      <div class="marginalia">
+        Swift 6 / SwiftUI.<br />
+        ~226 unit tests.<br />
+        Zero third-party deps.<br />
+        Whole binary &lt; 8 MB.
+      </div>
+      <div class="body-col">
+        <p>MyUsage is open source under MIT, written entirely in Swift 6 / SwiftUI. The codebase ships ~226 unit tests covering the parsing, sync, and notification layers. The whole binary is under 8 MB because there are zero third-party dependencies — everything runs on first-party Apple frameworks.</p>
+        <p>The development story (the multi-device sync architecture, the locally-computed cost pipeline) lives in the <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/blog`}>blog</a>. Release history in the <a href="https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md">CHANGELOG</a>.</p>
+      </div>
+    </div>
+  </section>
+
 </Layout>

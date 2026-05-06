@@ -1,0 +1,56 @@
+---
+/**
+ * One limit row for the popover mockup. Three-row shape matching the
+ * macOS app's v0.9.1 LimitBar:
+ *
+ *   name (L)              pct (R, optionally tinted pill if warn/crit)
+ *   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  4pt sage rail
+ *   reset · 16:30 (L)     [optional alarm note (R, warn-amber)]
+ *
+ * Pass `projected > 100` to draw the dashed amber projection marker
+ * overflowing past the bar's right edge.
+ */
+export interface Props {
+  name: string;
+  percent: number;
+  /** "resets 2h 14m · 16:30" or similar. Omitted for Antigravity rows. */
+  reset?: string;
+  /** When > 100, draws the alarm marker + footer note. */
+  projected?: number;
+  /** Force fill colour to warn (independently of projection). */
+  fillVariant?: 'sage' | 'warn';
+}
+
+const { name, percent, reset, projected, fillVariant } = Astro.props;
+const isAlarm = projected !== undefined && projected > 100;
+const fillClass = fillVariant === 'warn' || percent >= 75 ? 'warn' : 'sage';
+const pctClass = fillClass === 'warn' ? 'warn' : '';
+---
+
+<div class="limit">
+  <div class="limit-meta">
+    <span class="limit-name">{name}</span>
+    <span class={`limit-pct spacer ${pctClass}`}>{Math.round(percent)}%</span>
+  </div>
+  <div class="bar-wrap">
+    <div class="bar-track">
+      <div
+        class={`bar-fill ${fillClass === 'warn' ? 'warn' : ''}`}
+        style={`width:${Math.min(percent, 100)}%`}
+      ></div>
+      {isAlarm && (
+        <div class="proj-marker" style="left: calc(100% + 14px);">
+          <i></i><i></i><i></i>
+        </div>
+      )}
+    </div>
+  </div>
+  {(reset || isAlarm) && (
+    <div class="bar-foot">
+      {reset && <span class="reset">{reset}</span>}
+      {isAlarm && (
+        <span class="note warn">projected {Math.round(projected!)}%</span>
+      )}
+    </div>
+  )}
+</div>
