@@ -6,6 +6,7 @@ extension Logger {
 
     static let antigravity = Logger(subsystem: subsystem, category: "Antigravity")
     static let claude = Logger(subsystem: subsystem, category: "Claude")
+    static let codex = Logger(subsystem: subsystem, category: "Codex")
     static let general = Logger(subsystem: subsystem, category: "General")
 }
 

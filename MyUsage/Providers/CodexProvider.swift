@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Codex Credential Models
 
@@ -183,10 +184,12 @@ final class CodexProvider: UsageProvider {
         defer { isLoading = false }
 
         do {
-            guard let auth = loadAuth(), let tokens = auth.tokens else {
+            guard let loaded = loadAuthWithSource(), let tokens = loaded.auth.tokens else {
                 error = "No credentials found"
                 return
             }
+            let auth = loaded.auth
+            let sourcePath = loaded.sourcePath
 
             var accessToken = tokens.accessToken
             var usage: CodexUsageResponse?
@@ -200,10 +203,40 @@ final class CodexProvider: UsageProvider {
                 guard auth.needsRefresh else { throw error }
             }
 
-            // Strategy 2: Refresh token and retry
+            // Strategy 2: Refresh token and retry. OpenAI rotates the
+            // refresh_token on every refresh, so we MUST persist the new
+            // pair back to auth.json — otherwise next cycle reuses the
+            // now-revoked old refresh_token and the user starts seeing
+            // "No credentials" until they re-run `codex` manually.
             if usage == nil {
                 let refreshed = try await refreshToken(tokens.refreshToken)
                 accessToken = refreshed.accessToken
+
+                if let path = sourcePath {
+                    let updatedTokens = CodexTokens(
+                        accessToken: refreshed.accessToken,
+                        refreshToken: refreshed.refreshToken ?? tokens.refreshToken,
+                        idToken: refreshed.idToken ?? tokens.idToken,
+                        accountId: tokens.accountId
+                    )
+                    let isoFormatter = ISO8601DateFormatter()
+                    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    let updatedAuth = CodexAuthFile(
+                        openaiApiKey: auth.openaiApiKey,
+                        tokens: updatedTokens,
+                        lastRefresh: isoFormatter.string(from: Date.now)
+                    )
+                    do {
+                        try saveAuth(updatedAuth, to: path)
+                    } catch {
+                        // Non-fatal: refresh still worked for THIS request;
+                        // we just won't have persisted the rotation.
+                        Logger.codex.error(
+                            "Failed to persist refreshed Codex tokens: \(error.localizedDescription, privacy: .public)"
+                        )
+                    }
+                }
+
                 usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
             }
 
@@ -255,18 +288,43 @@ final class CodexProvider: UsageProvider {
     // MARK: - Auth Loading
 
     func loadAuth() -> CodexAuthFile? {
+        loadAuthWithSource()?.auth
+    }
+
+    /// Loads the auth payload AND remembers which on-disk file produced it,
+    /// so a subsequent `persistRefreshedTokens` can write back to the same
+    /// path (rather than guessing — Keychain-sourced auth has no path and
+    /// is left untouched on refresh).
+    func loadAuthWithSource() -> (auth: CodexAuthFile, sourcePath: String?)? {
         for path in Self.authFilePaths {
             if let data = FileManager.default.contents(atPath: path),
                let auth = try? JSONDecoder().decode(CodexAuthFile.self, from: data),
                auth.tokens != nil {
-                return auth
+                return (auth, path)
             }
         }
-        // Fallback to Keychain
-        return KeychainHelper.readGenericPasswordJSON(
+        // Fallback to Keychain. nil path = "no on-disk file to write back to".
+        if let auth = KeychainHelper.readGenericPasswordJSON(
             service: Self.keychainService,
             as: CodexAuthFile.self
-        )
+        ) {
+            return (auth, nil)
+        }
+        return nil
+    }
+
+    /// Atomically write the supplied auth back to `path`. We hand-encode
+    /// instead of using JSONEncoder because OpenAI's auth.json uses an
+    /// uppercase `OPENAI_API_KEY` key while the rest of the file is
+    /// snake_case — round-tripping that exactly with Codable + a custom
+    /// encoder strategy is fiddlier than just emitting the JSON literally.
+    /// The atomic-write `(.atomic)` option goes through a temp file +
+    /// rename so the Codex CLI can never observe a half-written file.
+    func saveAuth(_ auth: CodexAuthFile, to path: String) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(auth)
+        try data.write(to: URL(fileURLWithPath: path), options: .atomic)
     }
 
     // MARK: - Token Refresh

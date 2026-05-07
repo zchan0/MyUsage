@@ -179,38 +179,55 @@ struct ProviderCard: View {
     /// On-demand (capped budget, "+$X of $Y" overflow). Both use the
     /// `LimitBar` shape — they ARE both bounded limits, just billed
     /// differently.
+    ///
+    /// When neither bar has data (Free plans return no included budget
+    /// and no on-demand spend), the card body would otherwise be visually
+    /// empty — the head shows "Free" and then nothing. Surface a small
+    /// dim caption so the absence is intentional, not a render bug.
     @ViewBuilder
     private func cursorLimits(_ snapshot: UsageSnapshot) -> some View {
-        if let spent = snapshot.spentAmount {
-            LimitBar(
-                name: "Included",
-                percent: snapshot.totalUsagePercent ?? 0,
-                reset: spent.formatted
-            )
-        }
-        if let onDemand = snapshot.onDemandSpend {
-            if let limit = onDemand.limit, limit > 0 {
-                let pct = onDemand.amount / limit * 100
+        let hasIncluded = snapshot.spentAmount != nil
+        let hasOnDemand = snapshot.onDemandSpend != nil
+
+        if hasIncluded || hasOnDemand {
+            if let spent = snapshot.spentAmount {
                 LimitBar(
-                    name: "On-demand",
-                    percent: pct,
-                    reset: "+\(onDemand.formatted)"
+                    name: "Included",
+                    percent: snapshot.totalUsagePercent ?? 0,
+                    reset: spent.formatted
                 )
-            } else {
-                // No on-demand cap reported — show the spend as a single
-                // metered row with no bar. Reuses the LimitBar header
-                // shape so it visually rhymes with capped rows.
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("On-demand")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary.opacity(0.95))
-                    Spacer(minLength: 8)
-                    Text("+" + onDemand.formatted)
-                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.primary.opacity(0.92))
+            }
+            if let onDemand = snapshot.onDemandSpend {
+                if let limit = onDemand.limit, limit > 0 {
+                    let pct = onDemand.amount / limit * 100
+                    LimitBar(
+                        name: "On-demand",
+                        percent: pct,
+                        reset: "+\(onDemand.formatted)"
+                    )
+                } else {
+                    // No on-demand cap reported — show the spend as a single
+                    // metered row with no bar. Reuses the LimitBar header
+                    // shape so it visually rhymes with capped rows.
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("On-demand")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary.opacity(0.95))
+                        Spacer(minLength: 8)
+                        Text("+" + onDemand.formatted)
+                            .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(.primary.opacity(0.92))
+                    }
                 }
             }
+        } else {
+            // Free / no-quota plan: explicit empty state so the card
+            // doesn't look broken.
+            Text("No usage limits on this plan")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary.opacity(0.7))
+                .italic()
         }
     }
 
