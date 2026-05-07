@@ -15,7 +15,8 @@ private let SQLITE_TRANSIENT_DEST = unsafeBitCast(
 final class LedgerStore: @unchecked Sendable {
 
     /// Schema version stored in `schema_meta`. Bump on `CREATE TABLE` changes.
-    static let schemaVersion = 1
+    /// v1 → v2: added `cost_by_model` JSON column to `ledger_entries`.
+    static let schemaVersion = 2
 
     private let path: String
     private var db: OpaquePointer?
@@ -119,17 +120,32 @@ final class LedgerStore: @unchecked Sendable {
 
         try exec("""
             CREATE TABLE IF NOT EXISTS ledger_entries (
-                device_id    TEXT    NOT NULL,
-                account_id   TEXT    NOT NULL,
-                provider     TEXT    NOT NULL,
-                day          TEXT    NOT NULL,
-                cost_usd     REAL    NOT NULL,
-                source_hash  TEXT    NOT NULL,
-                schema_ver   INTEGER NOT NULL DEFAULT 1,
-                recorded_at  INTEGER NOT NULL,
+                device_id     TEXT    NOT NULL,
+                account_id    TEXT    NOT NULL,
+                provider      TEXT    NOT NULL,
+                day           TEXT    NOT NULL,
+                cost_usd      REAL    NOT NULL,
+                cost_by_model TEXT,
+                source_hash   TEXT    NOT NULL,
+                schema_ver    INTEGER NOT NULL DEFAULT 1,
+                recorded_at   INTEGER NOT NULL,
                 PRIMARY KEY (device_id, account_id, provider, source_hash)
             );
         """)
+
+        // v1 → v2: existing installs need ALTER TABLE to add the new column.
+        // SQLite `ADD COLUMN` is fast (metadata-only) and tolerates re-runs
+        // via duplicate-column check. CREATE TABLE above already includes
+        // the column for fresh installs; ALTER is a no-op there.
+        if let current, current < 2 {
+            do {
+                try exec("ALTER TABLE ledger_entries ADD COLUMN cost_by_model TEXT;")
+            } catch {
+                // Column may already exist on some replays — that's fine.
+                // Any other failure surfaces below in the schema_meta update.
+            }
+            try exec("UPDATE schema_meta SET version = \(Self.schemaVersion);")
+        }
 
         try exec("""
             CREATE INDEX IF NOT EXISTS idx_ledger_month
@@ -162,15 +178,17 @@ final class LedgerStore: @unchecked Sendable {
         let sql = """
             INSERT INTO ledger_entries
                 (device_id, account_id, provider, day, cost_usd,
-                 source_hash, schema_ver, recorded_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 cost_by_model, source_hash, schema_ver, recorded_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(device_id, account_id, provider, source_hash)
             DO UPDATE SET
-                cost_usd    = excluded.cost_usd,
-                day         = excluded.day,
-                recorded_at = excluded.recorded_at
+                cost_usd      = excluded.cost_usd,
+                cost_by_model = excluded.cost_by_model,
+                day           = excluded.day,
+                recorded_at   = excluded.recorded_at
             WHERE excluded.recorded_at >= ledger_entries.recorded_at
-               AND excluded.cost_usd   <> ledger_entries.cost_usd;
+               AND (excluded.cost_usd      <> ledger_entries.cost_usd
+                 OR COALESCE(excluded.cost_by_model, '') <> COALESCE(ledger_entries.cost_by_model, ''));
         """
 
         var stmt: OpaquePointer?
@@ -197,9 +215,18 @@ final class LedgerStore: @unchecked Sendable {
             sqlite3_bind_text(stmt, 3, entry.provider, -1, SQLITE_TRANSIENT_DEST)
             sqlite3_bind_text(stmt, 4, entry.day, -1, SQLITE_TRANSIENT_DEST)
             sqlite3_bind_double(stmt, 5, entry.costUSD)
-            sqlite3_bind_text(stmt, 6, entry.sourceHash, -1, SQLITE_TRANSIENT_DEST)
-            sqlite3_bind_int(stmt, 7, Int32(Self.schemaVersion))
-            sqlite3_bind_int64(stmt, 8, entry.recordedAt)
+            // cost_by_model: JSON-encode the per-model dict; nil → SQL NULL
+            if let cbm = entry.costByModel,
+               !cbm.isEmpty,
+               let data = try? JSONSerialization.data(withJSONObject: cbm, options: [.sortedKeys]),
+               let str = String(data: data, encoding: .utf8) {
+                sqlite3_bind_text(stmt, 6, str, -1, SQLITE_TRANSIENT_DEST)
+            } else {
+                sqlite3_bind_null(stmt, 6)
+            }
+            sqlite3_bind_text(stmt, 7, entry.sourceHash, -1, SQLITE_TRANSIENT_DEST)
+            sqlite3_bind_int(stmt, 8, Int32(Self.schemaVersion))
+            sqlite3_bind_int64(stmt, 9, entry.recordedAt)
 
             let rc = sqlite3_step(stmt)
             guard rc == SQLITE_DONE else {
@@ -392,7 +419,7 @@ final class LedgerStore: @unchecked Sendable {
     func entries(forDevice deviceID: String) throws -> [LedgerEntry] {
         let sql = """
             SELECT device_id, account_id, provider, day, cost_usd,
-                   source_hash, recorded_at, schema_ver
+                   cost_by_model, source_hash, recorded_at, schema_ver
             FROM ledger_entries
             WHERE device_id = ?1
             ORDER BY provider, account_id, day, source_hash;
@@ -415,8 +442,20 @@ final class LedgerStore: @unchecked Sendable {
                   let accountCStr = sqlite3_column_text(stmt, 1),
                   let providerCStr = sqlite3_column_text(stmt, 2),
                   let dayCStr = sqlite3_column_text(stmt, 3),
-                  let sourceCStr = sqlite3_column_text(stmt, 5)
+                  let sourceCStr = sqlite3_column_text(stmt, 6)
             else { continue }
+
+            // cost_by_model column (idx 5) — JSON-decoded, nil if SQL NULL
+            // or malformed (treat malformed as missing rather than crashing).
+            var costByModel: [String: Double]? = nil
+            if sqlite3_column_type(stmt, 5) != SQLITE_NULL,
+               let cbmCStr = sqlite3_column_text(stmt, 5) {
+                let cbmStr = String(cString: cbmCStr)
+                if let data = cbmStr.data(using: .utf8),
+                   let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Double] {
+                    costByModel = dict
+                }
+            }
 
             entries.append(LedgerEntry(
                 deviceId: String(cString: deviceCStr),
@@ -424,9 +463,10 @@ final class LedgerStore: @unchecked Sendable {
                 providerRaw: String(cString: providerCStr),
                 day: String(cString: dayCStr),
                 costUSD: sqlite3_column_double(stmt, 4),
+                costByModel: costByModel,
                 sourceHash: String(cString: sourceCStr),
-                recordedAt: sqlite3_column_int64(stmt, 6),
-                v: Int(sqlite3_column_int64(stmt, 7))
+                recordedAt: sqlite3_column_int64(stmt, 7),
+                v: Int(sqlite3_column_int64(stmt, 8))
             ))
         }
         return entries

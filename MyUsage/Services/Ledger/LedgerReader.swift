@@ -219,9 +219,10 @@ actor LedgerReader {
         guard let entry = try? decoder.decode(LedgerEntry.self, from: lineData) else {
             return nil
         }
-        // Reject rows whose wire version we don't recognise; future schemas
-        // can be ignored without corrupting our state.
-        guard entry.v == LedgerEntry.wireVersion else { return nil }
+        // Tolerate any v ≤ wireVersion (peer running an older release).
+        // v1 entries simply have `costByModel = nil`; the rest of the
+        // fields are unchanged. Reject only futures we don't know.
+        guard entry.v <= LedgerEntry.wireVersion else { return nil }
         return entry
     }
 }
