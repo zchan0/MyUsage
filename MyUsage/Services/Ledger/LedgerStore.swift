@@ -274,6 +274,47 @@ final class LedgerStore: @unchecked Sendable {
         return sqlite3_column_double(stmt, 0)
     }
 
+    /// Sum of `cost_by_model` for the given provider within the given
+    /// `YYYY-MM` month, **across all devices**. Returns `[modelFamily: USD]`.
+    /// Rows with NULL `cost_by_model` are silently dropped; consequently the
+    /// returned breakdown can sum to less than `monthlyTotal()` (the
+    /// difference is from days where Anthropic gave us a server-computed
+    /// cost without token attribution — see `ClaudeLogParser.DailyBreakdown`).
+    func monthlyByModel(provider: ProviderKind, monthKey: String) throws -> [String: Double] {
+        let sql = """
+            SELECT cost_by_model
+            FROM ledger_entries
+            WHERE provider = ?1
+              AND substr(day, 1, 7) = ?2
+              AND cost_by_model IS NOT NULL;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, monthKey, -1, SQLITE_TRANSIENT_DEST)
+
+        var totals: [String: Double] = [:]
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let cStr = sqlite3_column_text(stmt, 0) else { continue }
+            let json = String(cString: cStr)
+            guard let data = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Double]
+            else { continue }
+            for (model, cost) in dict {
+                totals[model, default: 0] += cost
+            }
+        }
+        return totals
+    }
+
     /// Per-device subtotal for a given (provider, month). Used by the
     /// provider-card popover.
     struct DeviceTotal: Sendable, Equatable {

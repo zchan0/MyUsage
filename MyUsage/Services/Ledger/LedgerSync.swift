@@ -177,13 +177,18 @@ final class LedgerSync {
 
     /// Record the current device's daily costs for a provider. Thin wrapper
     /// that refreshes published aggregates after a successful write.
+    /// `perModelByDay` is optional: when provided, populates `costByModel`
+    /// on each ledger entry so the cross-device aggregator can render
+    /// per-model breakdowns.
     func recordDailyCosts(
         provider: ProviderKind,
-        byDay: [String: Double]
+        byDay: [String: Double],
+        perModelByDay: [String: [String: Double]]? = nil
     ) async {
         let result = await writer.recordDailyCosts(
             provider: provider,
-            dailyCostsByDay: byDay
+            dailyCostsByDay: byDay,
+            perModelByDay: perModelByDay
         )
         lastWriteIssue = result.issue
         guard !result.applied.isEmpty else {
@@ -193,6 +198,18 @@ final class LedgerSync {
         lastFolderChangeAt = .now
         reloadAggregates()
         reloadSyncFolderState()
+    }
+
+    /// Cross-device per-model breakdown for a provider in the given
+    /// `YYYY-MM` month — sums every peer's `cost_by_model` for that
+    /// (provider, month). Returns `[modelFamily: USD]`. Empty when no
+    /// peer has any per-model attribution recorded yet (pre-v2 rows or
+    /// providers without per-model data like Cursor).
+    func monthlyByModel(
+        provider: ProviderKind,
+        monthKey: String
+    ) -> [String: Double] {
+        (try? store.monthlyByModel(provider: provider, monthKey: monthKey)) ?? [:]
     }
 
     /// Fetch aggregated contributions for a provider in the given month —

@@ -230,6 +230,27 @@ struct ClaudeLogParserTests {
         #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 10, output: 5))
     }
 
+    // MARK: - Model family normalization
+
+    @Test("normalizeModelFamily extracts the family token and capitalises it")
+    func normalizeModelFamilyHappy() {
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-opus-4-7") == "Opus")
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-sonnet-4-5-20251201") == "Sonnet")
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-haiku-4-5") == "Haiku")
+        // Hyphen-less tail (no version suffix) — full tail becomes the family.
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-opus") == "Opus")
+        // Case-insensitive input.
+        #expect(ClaudeLogParser.normalizeModelFamily("CLAUDE-Sonnet-4-5") == "Sonnet")
+    }
+
+    @Test("normalizeModelFamily returns nil for non-claude / synthetic model strings")
+    func normalizeModelFamilyRejects() {
+        #expect(ClaudeLogParser.normalizeModelFamily("<synthetic>") == nil)
+        #expect(ClaudeLogParser.normalizeModelFamily("gpt-4-turbo") == nil)
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-") == nil)
+        #expect(ClaudeLogParser.normalizeModelFamily("") == nil)
+    }
+
     // MARK: - Start-of-month helper
 
     @Test("startOfCurrentMonth returns day 1 at 00:00 in given calendar")

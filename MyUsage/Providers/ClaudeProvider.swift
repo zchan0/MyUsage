@@ -300,6 +300,29 @@ final class ClaudeProvider: UsageProvider {
             // never blocks the card update.
             await recordDailyCostsToLedger()
 
+            // Overlay per-model breakdown computed from the ledger
+            // (cross-device, current-month). The API per-bucket fields
+            // populated mapped.weeklyByModel for plans that expose them;
+            // for everyone else (Max 5x and most others) the API returns
+            // nothing useful, and the ledger is the only source. When
+            // both have data, ledger wins — it reflects what the user
+            // actually ran across every Mac.
+            if let ledger, var s = snapshot {
+                let modelCosts = ledger.monthlyByModel(
+                    provider: .claude,
+                    monthKey: LedgerCalendar.monthKey(for: .now)
+                )
+                if !modelCosts.isEmpty {
+                    let total = modelCosts.values.reduce(0, +)
+                    if total > 0 {
+                        s.weeklyByModel = modelCosts
+                            .map { WeeklyModelUsage(label: $0.key, percent: $0.value / total * 100) }
+                            .sorted { $0.percent > $1.percent }
+                        snapshot = s
+                    }
+                }
+            }
+
         } catch ProviderError.rateLimited(let retryAfter) {
             let delay = retryAfter ?? Self.defaultRateLimitCooldown
             nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
@@ -440,14 +463,18 @@ final class ClaudeProvider: UsageProvider {
 
     private func recordDailyCostsToLedger() async {
         guard let ledger else { return }
-        let byDay = await Task.detached(priority: .utility) {
-            ClaudeLogParser.scanDailyCost(
+        let breakdown = await Task.detached(priority: .utility) {
+            ClaudeLogParser.scanDailyBreakdown(
                 roots: ClaudeLogParser.defaultRoots(),
                 since: Date.startOfCurrentMonth()
             )
         }.value
-        guard !byDay.isEmpty else { return }
-        await ledger.recordDailyCosts(provider: .claude, byDay: byDay)
+        guard !breakdown.total.isEmpty else { return }
+        await ledger.recordDailyCosts(
+            provider: .claude,
+            byDay: breakdown.total,
+            perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel
+        )
     }
 
     // MARK: - Detection

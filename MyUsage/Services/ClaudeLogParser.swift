@@ -176,23 +176,38 @@ enum ClaudeLogParser {
 
     // MARK: - Per-day cost breakdown (ledger)
 
-    /// Scan default roots, producing a `YYYY-MM-DD` (UTC) → USD map for all
-    /// JSONL files modified since `since`. Used by the multi-device ledger
-    /// (spec 12) — each day is one ledger entry.
-    static func scanDailyCost(
-        since: Date,
-        catalog: PricingCatalog = .shared
-    ) -> [String: Double] {
-        scanDailyCost(roots: defaultRoots(), since: since, catalog: catalog)
+    /// Per-day breakdown returned by the ledger scan. `total[day]` is the
+    /// authoritative dollar amount that goes into a `LedgerEntry.costUSD`;
+    /// `byModel[day]` is a parallel `[modelFamily: USD]` dict — labels
+    /// already normalised via `normalizeModelFamily` so callers can pass
+    /// it straight to `LedgerEntry.costByModel`.
+    ///
+    /// `byModel[day]` is missing (not present) for days where every line
+    /// took the "server-provided costUSD" fast path — we don't have token
+    /// counts for those, so we can't attribute by model.
+    struct DailyBreakdown: Sendable, Equatable {
+        var total: [String: Double] = [:]
+        var byModel: [String: [String: Double]] = [:]
     }
 
-    /// Testable core of `scanDailyCost`.
-    static func scanDailyCost(
+    /// Scan default roots, producing a per-day cost + per-model breakdown
+    /// for all JSONL files modified since `since`. Used by the multi-device
+    /// ledger — each day is one ledger entry, the per-model dict goes into
+    /// that entry's `costByModel`.
+    static func scanDailyBreakdown(
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> DailyBreakdown {
+        scanDailyBreakdown(roots: defaultRoots(), since: since, catalog: catalog)
+    }
+
+    /// Testable core of `scanDailyBreakdown`.
+    static func scanDailyBreakdown(
         roots: [URL],
         since: Date,
         catalog: PricingCatalog = .shared
-    ) -> [String: Double] {
-        var result: [String: Double] = [:]
+    ) -> DailyBreakdown {
+        var result = DailyBreakdown()
         let fm = FileManager.default
         for root in roots {
             guard fm.fileExists(atPath: root.path) else { continue }
@@ -217,10 +232,50 @@ enum ClaudeLogParser {
         return result
     }
 
+    /// Backwards-compatible convenience — returns just the day → total cost
+    /// map. Prefer `scanDailyBreakdown` for new callers that also want
+    /// the per-model breakdown.
+    static func scanDailyCost(
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> [String: Double] {
+        scanDailyBreakdown(since: since, catalog: catalog).total
+    }
+
+    /// Testable core (legacy signature). See `scanDailyBreakdown` for the
+    /// richer return type.
+    static func scanDailyCost(
+        roots: [URL],
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> [String: Double] {
+        scanDailyBreakdown(roots: roots, since: since, catalog: catalog).total
+    }
+
+    /// Normalise a raw Anthropic model identifier (e.g.
+    /// `"claude-opus-4-7-20251201"`) into a display family
+    /// (`"Opus"`). Drops version suffixes, capitalises the family,
+    /// returns nil for `"<synthetic>"` and other non-conforming
+    /// strings so callers can skip them.
+    static func normalizeModelFamily(_ raw: String) -> String? {
+        let lc = raw.lowercased()
+        guard lc.hasPrefix("claude-") else { return nil }
+        let rest = lc.dropFirst("claude-".count)
+        // Family token is the first segment before the next '-' (which
+        // begins the version digits). e.g. "opus-4-7" → "opus".
+        guard let dashIdx = rest.firstIndex(of: "-") else {
+            // No version suffix at all — treat the whole tail as the family.
+            return rest.isEmpty ? nil : rest.capitalized
+        }
+        let family = String(rest[..<dashIdx])
+        guard !family.isEmpty else { return nil }
+        return family.capitalized
+    }
+
     private static func parseFileDaily(
         url: URL,
         mtime: Date,
-        into result: inout [String: Double],
+        into result: inout DailyBreakdown,
         catalog: PricingCatalog
     ) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
@@ -244,8 +299,11 @@ enum ClaudeLogParser {
                 .flatMap(Self.parseTimestamp)
                 .map(LedgerCalendar.dayKey) ?? fallbackDay
 
+            // Server-provided costUSD: rolls into total but skips per-model
+            // attribution (we don't have token counts to ratio it). The
+            // mixed-attribution case is documented on `DailyBreakdown`.
             if let cost = row.costUSD, cost > 0 {
-                acc[day, default: 0] += cost
+                acc.total[day, default: 0] += cost
                 return
             }
 
@@ -265,7 +323,16 @@ enum ClaudeLogParser {
             )
             guard usd > 0 else { return }
 
-            acc[day, default: 0] += usd
+            acc.total[day, default: 0] += usd
+
+            // Attribute to a normalised family. Skip non-conforming model
+            // strings (e.g. "<synthetic>") rather than littering the
+            // breakdown with one-off labels.
+            if let family = normalizeModelFamily(model) {
+                var dayMap = acc.byModel[day, default: [:]]
+                dayMap[family, default: 0] += usd
+                acc.byModel[day] = dayMap
+            }
         }
         result = acc
     }

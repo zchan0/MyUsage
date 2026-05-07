@@ -51,12 +51,19 @@ actor LedgerWriter {
     /// `YYYY-MM-DD` (UTC) → USD and should cover at least the current
     /// calendar month.
     ///
+    /// `perModelByDay` (optional) carries the per-model-family USD breakdown
+    /// for each day, used to populate `LedgerEntry.costByModel`. Days that
+    /// don't appear in the dict get nil — meaning "no per-model data" rather
+    /// than "zero". Pass nil when the provider can't produce per-model
+    /// breakdown (Cursor's billed-dollar path).
+    ///
     /// Returns the entries that actually changed on disk (new or updated),
     /// so callers can log + decide whether to refresh UI caches.
     @discardableResult
     func recordDailyCosts(
         provider: ProviderKind,
         dailyCostsByDay: [String: Double],
+        perModelByDay: [String: [String: Double]]? = nil,
         accountID: String = "default",
         now: Date = .now
     ) async -> WriteResult {
@@ -67,6 +74,7 @@ actor LedgerWriter {
                 provider: provider,
                 day: day,
                 costUSD: cost,
+                costByModel: perModelByDay?[day],
                 recordedAt: now
             )
         }
