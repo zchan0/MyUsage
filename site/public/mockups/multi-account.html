@@ -1,0 +1,1332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyUsage · Multi-account UI mockup</title>
+<style>
+/* ============================================================
+   TOKENS — inherited from site/src/styles/global.css
+   (mockup uses system fonts so it's portable; production renders
+   the same shapes in Geist Variable)
+   ============================================================ */
+:root {
+  --sage:        hsl(145 29% 43%);
+  --sage-deep:   hsl(145 33% 32%);
+  --sage-tint:   hsl(145 25% 95%);
+  --warn:        hsl(28 70% 42%);
+  --warn-tint:   hsl(28 80% 55% / 0.18);
+
+  --tile-claude:    hsl(14 81% 57%);
+  --tile-codex:     hsl(220 3% 29%);
+  --tile-cursor:    hsl(0 0% 12%);
+  --tile-antigrav:  hsl(257 39% 54%);
+
+  --font-body:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+
+/* Per-popover theme tokens. We do this on .popover instead of :root so
+   we can show light + dark side-by-side without media queries. */
+.popover.theme-light {
+  --ink: hsl(220 8% 13%);
+  --ink-mute: hsl(220 6% 38%);
+  --ink-fade: hsl(220 6% 58%);
+  --paper: hsl(0 0% 100%);
+  --paper-warm: hsl(220 14% 98%);
+  --vellum: hsl(220 14% 96%);
+  --rule: hsl(220 8% 13% / 0.10);
+  --rule-soft: hsl(220 8% 13% / 0.05);
+  --pcard-bg: hsl(0 0% 100% / 0.7);
+  --pcard-border: hsl(220 8% 13% / 0.08);
+  --bar-track-bg: hsl(220 8% 13% / 0.08);
+  --plan-pill-bg: hsl(220 8% 13% / 0.06);
+  --pop-bg-from: hsl(0 0% 100% / 0.92);
+  --pop-bg-to: hsl(0 0% 100% / 0.78);
+  --pop-border: hsl(220 8% 13% / 0.12);
+  --pop-shadow: 0 24px 48px hsl(220 14% 12% / 0.10), 0 1px 0 hsl(0 0% 100% / 0.7) inset;
+  --account-row-hover-bg: hsl(220 14% 96%);
+  --account-expanded-bg: hsl(220 14% 97%);
+  --account-expanded-border: hsl(220 8% 13% / 0.06);
+}
+.popover.theme-dark {
+  --ink: hsl(220 12% 92%);
+  --ink-mute: hsl(220 6% 65%);
+  --ink-fade: hsl(220 6% 48%);
+  --paper: hsl(220 14% 8%);
+  --paper-warm: hsl(220 14% 10%);
+  --vellum: hsl(220 12% 13%);
+  --rule: hsl(220 12% 92% / 0.08);
+  --rule-soft: hsl(220 12% 92% / 0.04);
+  --pcard-bg: hsl(0 0% 100% / 0.04);
+  --pcard-border: hsl(0 0% 100% / 0.07);
+  --bar-track-bg: hsl(0 0% 100% / 0.10);
+  --plan-pill-bg: hsl(0 0% 100% / 0.10);
+  --pop-bg-from: hsl(220 14% 16% / 0.92);
+  --pop-bg-to: hsl(220 14% 12% / 0.78);
+  --pop-border: hsl(0 0% 100% / 0.08);
+  --pop-shadow: 0 24px 48px hsl(0 0% 0% / 0.45), 0 1px 0 hsl(0 0% 100% / 0.06) inset;
+  --account-row-hover-bg: hsl(220 12% 16%);
+  --account-expanded-bg: hsl(220 12% 11%);
+  --account-expanded-border: hsl(0 0% 100% / 0.06);
+}
+
+/* ============================================================
+   PAGE CHROME
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: hsl(220 8% 13%);
+  background:
+    radial-gradient(900px 500px at 12% -10%, hsl(145 25% 95%), transparent 60%),
+    radial-gradient(900px 600px at 100% 100%, hsl(40 25% 95%), transparent 60%),
+    hsl(45 12% 97%);
+  min-height: 100vh;
+  padding: 56px 24px 96px;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.page-head {
+  margin-bottom: 64px;
+  padding-bottom: 32px;
+  border-bottom: 0.5px solid hsl(220 8% 13% / 0.10);
+}
+.page-head h1 {
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin-bottom: 12px;
+  color: hsl(220 8% 10%);
+}
+.page-head .lede {
+  font-size: 17px;
+  color: hsl(220 6% 38%);
+  max-width: 60ch;
+  letter-spacing: -0.013em;
+  font-weight: 400;
+}
+.page-head .meta {
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: hsl(145 33% 32%);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   DEMO SECTION — label + side-by-side popover pair
+   ============================================================ */
+.demo {
+  margin-bottom: 80px;
+}
+.demo-head {
+  margin-bottom: 24px;
+}
+.demo-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: hsl(145 33% 32%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.demo-label::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: var(--sage);
+  display: inline-block;
+}
+.demo h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  color: hsl(220 8% 10%);
+}
+.demo p.note {
+  font-size: 14px;
+  color: hsl(220 6% 38%);
+  max-width: 60ch;
+}
+
+.popover-pair {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 32px;
+  margin-top: 24px;
+  justify-content: start;
+  align-items: start;
+}
+.popover-pair > .frame {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.frame-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(220 6% 58%);
+}
+.frame-label .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.frame-label .dot.light { background: hsl(45 90% 80%); border: 0.5px solid hsl(45 60% 50%); }
+.frame-label .dot.dark { background: hsl(220 14% 14%); border: 0.5px solid hsl(220 14% 35%); }
+
+@media (max-width: 740px) {
+  body { padding: 32px 16px 64px; }
+  .popover-pair {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    justify-content: center;
+  }
+  .popover-pair > .frame { align-items: center; }
+}
+
+/* ============================================================
+   POPOVER + CHILDREN (mirrors site/src/styles/global.css)
+   ============================================================ */
+.popover {
+  --pop-w: 340px;
+  width: var(--pop-w);
+  background: linear-gradient(180deg, var(--pop-bg-from), var(--pop-bg-to));
+  backdrop-filter: blur(40px) saturate(160%);
+  -webkit-backdrop-filter: blur(40px) saturate(160%);
+  border: 0.5px solid var(--pop-border);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: var(--pop-shadow);
+  font-family: var(--font-body);
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+.pop-head-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 0.5px solid var(--rule);
+  margin-bottom: 12px;
+}
+.pop-title { font-weight: 700; font-size: 13px; letter-spacing: -0.012em; }
+.pop-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-fade);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.refresh-glyph {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.2px solid currentColor;
+  border-top-color: transparent;
+  display: inline-block;
+}
+
+.pcard {
+  background: var(--pcard-bg);
+  border: 0.5px solid var(--pcard-border);
+  border-radius: 11px;
+  padding: 12px 13px;
+  box-shadow: 0 1px 1.5px hsl(220 14% 12% / 0.04);
+}
+.pcard + .pcard { margin-top: 10px; }
+.pcard-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+
+.tile {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: white;
+  flex: none;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.16);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.tile.claude   { background: var(--tile-claude); }
+.tile.codex    { background: var(--tile-codex); }
+.tile.cursor   { background: var(--tile-cursor); }
+.tile.antigrav { background: var(--tile-antigrav); }
+
+.pcard-name { font-weight: 700; font-size: 13px; color: var(--ink); letter-spacing: -0.012em; }
+.plan-pill {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: var(--plan-pill-bg);
+  color: var(--ink-mute);
+  letter-spacing: 0.02em;
+}
+
+.limit { margin-top: 10px; }
+.limit:first-of-type { margin-top: 0; }
+.limit-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 5px; }
+.limit-name { font-size: 11px; font-weight: 600; color: var(--ink-mute); }
+.limit-pct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.bar-wrap { position: relative; width: 100%; margin: 4px 0 6px; }
+.bar-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--bar-track-bg);
+  border-radius: 99px;
+}
+.bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sage);
+  border-radius: 99px;
+}
+
+.bar-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-fade);
+}
+
+.cost-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--rule);
+  display: flex;
+  align-items: baseline;
+  font-size: 12px;
+}
+.cost-row .lbl { color: var(--ink-mute); }
+.cost-row .amount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.devices-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 1.5px 5px 1.5px 4px;
+  border-radius: 8px;
+  background: var(--plan-pill-bg);
+  color: var(--ink-mute);
+  margin-left: 8px;
+}
+
+/* ============================================================
+   NEW: ACCOUNTS STRIP (the multi-account UI element)
+   ============================================================ */
+.accounts-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--rule);
+}
+.accounts-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--ink-fade);
+  margin-bottom: 6px;
+}
+.accounts-eyebrow .count {
+  color: var(--sage-deep);
+  margin-left: 4px;
+}
+
+.accounts-list {
+  display: flex;
+  flex-direction: column;
+  /* Cap at ~4 visible rows; scroll within when N > 4 */
+  max-height: 132px;
+  overflow-y: auto;
+  /* Subtle scrollbar (macOS-feeling) */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-fade) transparent;
+}
+.accounts-list::-webkit-scrollbar { width: 4px; }
+.accounts-list::-webkit-scrollbar-thumb {
+  background: var(--ink-fade);
+  border-radius: 2px;
+  opacity: 0.4;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.15s var(--ease);
+}
+.account-row.inactive {
+  cursor: pointer;
+}
+.account-row.inactive:hover {
+  background: var(--account-row-hover-bg);
+}
+
+.account-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: transparent;
+  border: 1.2px solid var(--sage);
+}
+.account-dot.active {
+  background: var(--sage);
+  border-color: var(--sage);
+  box-shadow: 0 0 0 2px hsl(145 29% 43% / 0.18);
+}
+
+.account-email {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0;
+}
+.account-email.active { font-weight: 500; }
+.account-email.fallback {
+  color: var(--ink-fade);
+  font-style: italic;
+}
+
+.account-amount {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.account-row.inactive .account-amount { color: var(--ink-fade); }
+
+/* Inline-expanded panel */
+.account-expanded {
+  margin: 4px 16px 6px 16px;
+  padding: 9px 11px;
+  background: var(--account-expanded-bg);
+  border: 0.5px solid var(--account-expanded-border);
+  border-radius: 6px;
+}
+.account-expanded .ae-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-expanded .ae-row {
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+.account-expanded .ae-row .key {
+  flex: 1;
+  letter-spacing: 0.02em;
+}
+.account-expanded .ae-row .val {
+  color: var(--ink);
+  font-weight: 500;
+}
+.account-expanded .ae-divider {
+  height: 0.5px;
+  background: var(--rule);
+  margin: 7px -11px 7px -11px;
+}
+.account-expanded .ae-models {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 1.5px 6px;
+  border-radius: 99px;
+  background: var(--plan-pill-bg);
+  color: var(--ink-mute);
+}
+.model-chip .pct {
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   NOTIFICATION BUBBLE (demo E)
+   ============================================================ */
+.notification-mock {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.notification-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(220 6% 58%);
+}
+.notif-bubble {
+  width: 340px;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.88), hsl(0 0% 100% / 0.72));
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 0.5px solid hsl(220 8% 13% / 0.14);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 18px 40px hsl(220 14% 12% / 0.18);
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-family: var(--font-body);
+  color: hsl(220 8% 13%);
+}
+.notif-bubble .icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--tile-claude);
+  display: grid;
+  place-items: center;
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.notif-bubble .body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.notif-bubble .body .title {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: hsl(220 8% 13%);
+}
+.notif-bubble .body .subtitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: hsl(220 6% 38%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-bubble .ago {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: hsl(220 6% 58%);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   DECISION RULES (footer callout)
+   ============================================================ */
+.rules {
+  margin-top: 96px;
+  padding: 32px;
+  background: hsl(0 0% 100%);
+  border: 0.5px solid hsl(220 8% 13% / 0.10);
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.rules h3 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  margin-bottom: 16px;
+  color: hsl(220 8% 10%);
+}
+.rules table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+.rules th, .rules td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 0.5px solid hsl(220 8% 13% / 0.08);
+  vertical-align: top;
+  font-size: 13.5px;
+}
+.rules th {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(220 6% 38%);
+  border-bottom: 1px solid hsl(220 8% 10%);
+}
+.rules td code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: hsl(220 14% 96%);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.rules .legend-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.rules .legend-dot.active {
+  background: var(--sage);
+  border: 1.2px solid var(--sage);
+  box-shadow: 0 0 0 2px hsl(145 29% 43% / 0.18);
+}
+.rules .legend-dot.inactive {
+  background: transparent;
+  border: 1.2px solid var(--sage);
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="page-head">
+    <div class="meta">Spec 15 · UI mockup</div>
+    <h1 style="margin-top: 16px;">Multi-account popover</h1>
+    <p class="lede">
+      Layout B from spec 15: one card per provider, with a compact
+      accounts strip appearing only when ≥ 2 accounts have been observed.
+      The strip lives below the headline 5h / Weekly bars and above the
+      cost row — small enough that single-account users see no change,
+      structured enough that multi-account users see all accounts at a
+      glance.
+    </p>
+    <p class="lede" style="margin-top: 12px;">
+      Each demo shows the popover in <strong>light</strong> + <strong>dark</strong>
+      side by side so visual review covers both modes without toggling.
+      All widths are pixel-faithful to the live 340 pt popover.
+    </p>
+  </header>
+
+  <!-- ============================================================
+       DEMO A — Single account (no change)
+       ============================================================ -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="demo-label">Demo A · N = 1</span>
+      <h2>Single account — strip is invisible.</h2>
+      <p class="note">
+        The 99 % case. When MyUsage has only ever observed one account
+        for a provider, the accounts strip never renders. Existing
+        single-account users see exactly today's UI.
+      </p>
+    </div>
+
+    <div class="popover-pair">
+      <!-- Light -->
+      <div class="frame">
+        <span class="frame-label"><span class="dot light"></span>Light</span>
+        <div class="popover theme-light">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <!-- accounts-section deliberately absent -->
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$321.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dark -->
+      <div class="frame">
+        <span class="frame-label"><span class="dot dark"></span>Dark</span>
+        <div class="popover theme-dark">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$321.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       DEMO B — N = 2, active + inactive
+       ============================================================ -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="demo-label">Demo B · N = 2</span>
+      <h2>Two accounts — strip appears, sorted active-first.</h2>
+      <p class="note">
+        Filled sage dot = active credentials (currently signed-in). Hollow
+        ring = inactive (historical — user has logged into this account on
+        this Mac before, ledger still has rows). Cost row at the bottom
+        shows the cross-account sum, not just the active account.
+      </p>
+    </div>
+
+    <div class="popover-pair">
+      <div class="frame">
+        <span class="frame-label"><span class="dot light"></span>Light</span>
+        <div class="popover theme-light">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="accounts-section">
+              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
+              <div class="accounts-list">
+                <div class="account-row">
+                  <span class="account-dot active"></span>
+                  <span class="account-email active">user@company.com</span>
+                  <span class="account-amount">$321.00</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email">me@personal.dev</span>
+                  <span class="account-amount">$43.10</span>
+                </div>
+              </div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame">
+        <span class="frame-label"><span class="dot dark"></span>Dark</span>
+        <div class="popover theme-dark">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="accounts-section">
+              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
+              <div class="accounts-list">
+                <div class="account-row">
+                  <span class="account-dot active"></span>
+                  <span class="account-email active">user@company.com</span>
+                  <span class="account-amount">$321.00</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email">me@personal.dev</span>
+                  <span class="account-amount">$43.10</span>
+                </div>
+              </div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       DEMO C — N = 4 with overflow + fallback
+       ============================================================ -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="demo-label">Demo C · N = 4</span>
+      <h2>Four accounts — strip scrolls, fallback ID renders italic.</h2>
+      <p class="note">
+        The strip caps at 4 visible rows (~132 px) and scrolls within
+        when N exceeds that. The third row shows the fallback path for
+        accounts where MyUsage couldn't extract an email — rendered
+        italic + dim with a clear <code>Account id:</code> prefix.
+      </p>
+    </div>
+
+    <div class="popover-pair">
+      <div class="frame">
+        <span class="frame-label"><span class="dot light"></span>Light</span>
+        <div class="popover theme-light">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="accounts-section">
+              <div class="accounts-eyebrow">Accounts<span class="count">· 4</span></div>
+              <div class="accounts-list">
+                <div class="account-row">
+                  <span class="account-dot active"></span>
+                  <span class="account-email active">user@company.com</span>
+                  <span class="account-amount">$321.00</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email">me@personal.dev</span>
+                  <span class="account-amount">$98.40</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email fallback">Account id:ab12cd34</span>
+                  <span class="account-amount">$57.20</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email">consult@really-long-client-domain-name.org</span>
+                  <span class="account-amount">$24.10</span>
+                </div>
+              </div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$500.70<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame">
+        <span class="frame-label"><span class="dot dark"></span>Dark</span>
+        <div class="popover theme-dark">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="accounts-section">
+              <div class="accounts-eyebrow">Accounts<span class="count">· 4</span></div>
+              <div class="accounts-list">
+                <div class="account-row">
+                  <span class="account-dot active"></span>
+                  <span class="account-email active">user@company.com</span>
+                  <span class="account-amount">$321.00</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email">me@personal.dev</span>
+                  <span class="account-amount">$98.40</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email fallback">Account id:ab12cd34</span>
+                  <span class="account-amount">$57.20</span>
+                </div>
+                <div class="account-row inactive">
+                  <span class="account-dot"></span>
+                  <span class="account-email">consult@really-long-client-domain-name.org</span>
+                  <span class="account-amount">$24.10</span>
+                </div>
+              </div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$500.70<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       DEMO D — Click-expanded inactive account
+       ============================================================ -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="demo-label">Demo D · Expanded</span>
+      <h2>Click an inactive account — inline detail panel.</h2>
+      <p class="note">
+        Clicking the inactive row pushes an inline panel open beneath
+        it. No modal, no overlay, no chevron. The panel shows the
+        per-device contributions for that account this month plus the
+        per-model breakdown chips. Click the row again to collapse.
+      </p>
+    </div>
+
+    <div class="popover-pair">
+      <div class="frame">
+        <span class="frame-label"><span class="dot light"></span>Light</span>
+        <div class="popover theme-light">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="accounts-section">
+              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
+              <div class="accounts-list" style="max-height: none;">
+                <div class="account-row">
+                  <span class="account-dot active"></span>
+                  <span class="account-email active">user@company.com</span>
+                  <span class="account-amount">$321.00</span>
+                </div>
+                <div class="account-row inactive" style="background: var(--account-row-hover-bg);">
+                  <span class="account-dot"></span>
+                  <span class="account-email">me@personal.dev</span>
+                  <span class="account-amount">$43.10</span>
+                </div>
+                <div class="account-expanded">
+                  <div class="ae-section">
+                    <div class="ae-row"><span class="key">MAC AIR</span><span class="val">$25.60</span></div>
+                    <div class="ae-row"><span class="key">MAC STUDIO</span><span class="val">$17.50</span></div>
+                  </div>
+                  <div class="ae-divider"></div>
+                  <div class="ae-models">
+                    <span class="model-chip">sonnet <span class="pct">82%</span></span>
+                    <span class="model-chip">opus <span class="pct">18%</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame">
+        <span class="frame-label"><span class="dot dark"></span>Dark</span>
+        <div class="popover theme-dark">
+          <div class="pop-head-bar">
+            <span class="pop-title">MyUsage</span>
+            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
+          </div>
+          <div class="pcard">
+            <div class="pcard-head">
+              <div class="tile claude">C</div>
+              <span class="pcard-name">Claude Code</span>
+              <span class="plan-pill">Max</span>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">5-hour</span>
+                <span class="limit-pct">47%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
+            </div>
+            <div class="limit">
+              <div class="limit-meta">
+                <span class="limit-name">Weekly</span>
+                <span class="limit-pct">62%</span>
+              </div>
+              <div class="bar-wrap">
+                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+              </div>
+              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
+            </div>
+            <div class="accounts-section">
+              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
+              <div class="accounts-list" style="max-height: none;">
+                <div class="account-row">
+                  <span class="account-dot active"></span>
+                  <span class="account-email active">user@company.com</span>
+                  <span class="account-amount">$321.00</span>
+                </div>
+                <div class="account-row inactive" style="background: var(--account-row-hover-bg);">
+                  <span class="account-dot"></span>
+                  <span class="account-email">me@personal.dev</span>
+                  <span class="account-amount">$43.10</span>
+                </div>
+                <div class="account-expanded">
+                  <div class="ae-section">
+                    <div class="ae-row"><span class="key">MAC AIR</span><span class="val">$25.60</span></div>
+                    <div class="ae-row"><span class="key">MAC STUDIO</span><span class="val">$17.50</span></div>
+                  </div>
+                  <div class="ae-divider"></div>
+                  <div class="ae-models">
+                    <span class="model-chip">sonnet <span class="pct">82%</span></span>
+                    <span class="model-chip">opus <span class="pct">18%</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="cost-row">
+              <span class="lbl">This month</span>
+              <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       DEMO E — Notification text language
+       ============================================================ -->
+  <section class="demo">
+    <div class="demo-head">
+      <span class="demo-label">Demo E · Notification</span>
+      <h2>System notification — account name in subtitle when N ≥ 2.</h2>
+      <p class="note">
+        macOS banner notification (the surface that fires when a tracked
+        limit crosses the warn / crit threshold). When the user has only
+        one account observed, today's wording stays
+        ("Claude — Weekly at 80%"). When N ≥ 2, the subtitle gains the
+        active account email so the user knows <em>which</em> account
+        triggered.
+      </p>
+    </div>
+
+    <div class="notification-mock">
+      <span class="notification-label">N = 1 (today's wording)</span>
+      <div class="notif-bubble">
+        <div class="icon">C</div>
+        <div class="body">
+          <span class="title">Claude Code</span>
+          <span class="subtitle">Weekly at 80% — resets in 5d 12h</span>
+        </div>
+        <span class="ago">now</span>
+      </div>
+
+      <span class="notification-label" style="margin-top: 16px;">N ≥ 2 (new wording)</span>
+      <div class="notif-bubble">
+        <div class="icon">C</div>
+        <div class="body">
+          <span class="title">Claude Code · user@company.com</span>
+          <span class="subtitle">Weekly at 80% — resets in 5d 12h</span>
+        </div>
+        <span class="ago">now</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       DECISION RULES — concise reference
+       ============================================================ -->
+  <div class="rules">
+    <h3>State table — one source of truth for the implementation.</h3>
+    <p style="color: hsl(220 6% 38%);">
+      Pulled from spec 15. Drives both the popover and the notification
+      side. Each rule tested, each row independently verifiable.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Condition</th>
+          <th>Strip rendered?</th>
+          <th>Rows shown</th>
+          <th>Notification subtitle</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>N == 1</code> for this provider</td>
+          <td>No</td>
+          <td>—</td>
+          <td><code>Weekly at 80% — resets in 5d 12h</code> (today)</td>
+        </tr>
+        <tr>
+          <td><code>N == 2..4</code></td>
+          <td>Yes — full list</td>
+          <td>All N rows, active first</td>
+          <td>title prefixed with <code>· user@company.com</code></td>
+        </tr>
+        <tr>
+          <td><code>N &gt; 4</code></td>
+          <td>Yes — scrolls</td>
+          <td>~4 visible, scroll for rest</td>
+          <td>same (active account in title)</td>
+        </tr>
+        <tr>
+          <td>account has no email</td>
+          <td>—</td>
+          <td>row renders <code>Account id:xxxx</code> italic + dim</td>
+          <td>title falls back to <code>· id:xxxx</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top: 32px;">Visual legend</h3>
+    <p>
+      <span class="legend-dot active"></span>
+      <strong>Active</strong> — credentials currently point at this account
+      (will be filled in for fresh data on every refresh).
+    </p>
+    <p>
+      <span class="legend-dot inactive"></span>
+      <strong>Inactive</strong> — account observed historically; ledger has
+      rows for it. Click the row to see per-device contributions and a
+      per-model breakdown.
+    </p>
+
+    <h3 style="margin-top: 32px;">Anti-patterns rejected</h3>
+    <ul style="padding-left: 20px; color: hsl(220 6% 38%);">
+      <li>Switch-account dropdown (hides accounts behind a click — defeats glance-ability)</li>
+      <li>Modal overlay for expanded view (popover-in-popover feels wrong on macOS)</li>
+      <li>Chevron / "view" affordance on each inactive row (too SaaS-feeling; row hover is enough)</li>
+      <li>Account aliasing UI in v1 (deferred — email is recognizable enough)</li>
+      <li>Per-account warn/crit thresholds in v1 (deferred — same threshold for every account)</li>
+    </ul>
+  </div>
+
+</div>
+
+</body>
+</html>
