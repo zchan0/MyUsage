@@ -3,12 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MyUsage · Multi-account UI mockup</title>
+<title>MyUsage · Multi-account UI mockup (v2)</title>
 <style>
 /* ============================================================
    TOKENS — inherited from site/src/styles/global.css
-   (mockup uses system fonts so it's portable; production renders
-   the same shapes in Geist Variable)
    ============================================================ */
 :root {
   --sage:        hsl(145 29% 43%);
@@ -28,14 +26,11 @@
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
 }
 
-/* Per-popover theme tokens. We do this on .popover instead of :root so
-   we can show light + dark side-by-side without media queries. */
 .popover.theme-light {
   --ink: hsl(220 8% 13%);
   --ink-mute: hsl(220 6% 38%);
   --ink-fade: hsl(220 6% 58%);
   --paper: hsl(0 0% 100%);
-  --paper-warm: hsl(220 14% 98%);
   --vellum: hsl(220 14% 96%);
   --rule: hsl(220 8% 13% / 0.10);
   --rule-soft: hsl(220 8% 13% / 0.05);
@@ -47,16 +42,14 @@
   --pop-bg-to: hsl(0 0% 100% / 0.78);
   --pop-border: hsl(220 8% 13% / 0.12);
   --pop-shadow: 0 24px 48px hsl(220 14% 12% / 0.10), 0 1px 0 hsl(0 0% 100% / 0.7) inset;
-  --account-row-hover-bg: hsl(220 14% 96%);
-  --account-expanded-bg: hsl(220 14% 97%);
-  --account-expanded-border: hsl(220 8% 13% / 0.06);
+  --inactive-bg: hsl(220 14% 97%);
+  --inactive-border: hsl(220 8% 13% / 0.06);
 }
 .popover.theme-dark {
   --ink: hsl(220 12% 92%);
   --ink-mute: hsl(220 6% 65%);
   --ink-fade: hsl(220 6% 48%);
   --paper: hsl(220 14% 8%);
-  --paper-warm: hsl(220 14% 10%);
   --vellum: hsl(220 12% 13%);
   --rule: hsl(220 12% 92% / 0.08);
   --rule-soft: hsl(220 12% 92% / 0.04);
@@ -68,9 +61,8 @@
   --pop-bg-to: hsl(220 14% 12% / 0.78);
   --pop-border: hsl(0 0% 100% / 0.08);
   --pop-shadow: 0 24px 48px hsl(0 0% 0% / 0.45), 0 1px 0 hsl(0 0% 100% / 0.06) inset;
-  --account-row-hover-bg: hsl(220 12% 16%);
-  --account-expanded-bg: hsl(220 12% 11%);
-  --account-expanded-border: hsl(0 0% 100% / 0.06);
+  --inactive-bg: hsl(220 12% 11%);
+  --inactive-border: hsl(0 0% 100% / 0.06);
 }
 
 /* ============================================================
@@ -92,17 +84,9 @@ body {
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.011em;
 }
+.page { max-width: 1080px; margin: 0 auto; }
 
-.page {
-  max-width: 1080px;
-  margin: 0 auto;
-}
-
-.page-head {
-  margin-bottom: 64px;
-  padding-bottom: 32px;
-  border-bottom: 0.5px solid hsl(220 8% 13% / 0.10);
-}
+.page-head { margin-bottom: 64px; padding-bottom: 32px; border-bottom: 0.5px solid hsl(220 8% 13% / 0.10); }
 .page-head h1 {
   font-size: clamp(28px, 4vw, 36px);
   font-weight: 600;
@@ -125,16 +109,25 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.page-head .principle {
+  margin-top: 28px;
+  padding: 16px 20px;
+  background: white;
+  border: 0.5px solid hsl(220 8% 13% / 0.10);
+  border-left: 3px solid var(--sage);
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  color: hsl(220 8% 13%);
+  max-width: 760px;
+  line-height: 1.65;
+}
+.page-head .principle strong { color: hsl(220 8% 10%); }
 
 /* ============================================================
-   DEMO SECTION — label + side-by-side popover pair
+   DEMO SECTION
    ============================================================ */
-.demo {
-  margin-bottom: 80px;
-}
-.demo-head {
-  margin-bottom: 24px;
-}
+.demo { margin-bottom: 80px; }
+.demo-head { margin-bottom: 24px; }
 .demo-label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -146,13 +139,7 @@ body {
   align-items: center;
   gap: 8px;
 }
-.demo-label::before {
-  content: "";
-  width: 14px;
-  height: 1px;
-  background: var(--sage);
-  display: inline-block;
-}
+.demo-label::before { content: ""; width: 14px; height: 1px; background: var(--sage); display: inline-block; }
 .demo h2 {
   font-size: 22px;
   font-weight: 600;
@@ -175,11 +162,7 @@ body {
   justify-content: start;
   align-items: start;
 }
-.popover-pair > .frame {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+.popover-pair > .frame { display: flex; flex-direction: column; gap: 10px; }
 .frame-label {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -189,8 +172,7 @@ body {
 }
 .frame-label .dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 6px; height: 6px;
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: 1px;
@@ -200,16 +182,12 @@ body {
 
 @media (max-width: 740px) {
   body { padding: 32px 16px 64px; }
-  .popover-pair {
-    grid-template-columns: 1fr;
-    gap: 28px;
-    justify-content: center;
-  }
+  .popover-pair { grid-template-columns: 1fr; gap: 28px; justify-content: center; }
   .popover-pair > .frame { align-items: center; }
 }
 
 /* ============================================================
-   POPOVER + CHILDREN (mirrors site/src/styles/global.css)
+   POPOVER + CHILDREN
    ============================================================ */
 .popover {
   --pop-w: 340px;
@@ -244,8 +222,7 @@ body {
   gap: 6px;
 }
 .refresh-glyph {
-  width: 10px;
-  height: 10px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   border: 1.2px solid currentColor;
   border-top-color: transparent;
@@ -268,8 +245,7 @@ body {
 }
 
 .tile {
-  width: 22px;
-  height: 22px;
+  width: 22px; height: 22px;
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -297,6 +273,62 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* ============================================================
+   ACCOUNT BLOCK — one per (provider, account)
+   Active account: shows live 5h + Weekly bars (full)
+   Inactive account: shows historical $ + per-model chips (compact)
+   ============================================================ */
+
+/* Account header — small label that introduces the account block.
+   Only renders when N >= 2 (single-account hides this row). */
+.account-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.account-head .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+.account-head .dot.active {
+  background: var(--sage);
+  box-shadow: 0 0 0 2px hsl(145 29% 43% / 0.18);
+}
+.account-head .dot.inactive {
+  background: transparent;
+  border: 1.2px solid var(--sage);
+}
+.account-head .email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-head .email.fallback {
+  color: var(--ink-fade);
+  font-style: italic;
+}
+.account-head .badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-fade);
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: var(--plan-pill-bg);
+}
+
+/* Active block — same shape as today's LimitBar pair */
 .limit { margin-top: 10px; }
 .limit:first-of-type { margin-top: 0; }
 .limit-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 5px; }
@@ -309,7 +341,6 @@ body {
   font-variant-numeric: tabular-nums;
   margin-left: auto;
 }
-
 .bar-wrap { position: relative; width: 100%; margin: 4px 0 6px; }
 .bar-track {
   position: relative;
@@ -324,7 +355,6 @@ body {
   background: var(--sage);
   border-radius: 99px;
 }
-
 .bar-foot {
   display: flex;
   align-items: baseline;
@@ -336,8 +366,79 @@ body {
   color: var(--ink-fade);
 }
 
+/* Inactive block — compact "ledger snapshot" sub-card */
+.inactive-block {
+  margin-top: 12px;
+  padding: 10px 11px;
+  background: var(--inactive-bg);
+  border: 0.5px solid var(--inactive-border);
+  border-radius: 8px;
+}
+.inactive-block .account-head { margin: 0 0 7px; }
+.inactive-block .row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+.inactive-block .row .label {
+  flex: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: var(--ink-fade);
+  font-weight: 500;
+}
+.inactive-block .row .val {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+.inactive-block .models {
+  margin-top: 6px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 1.5px 6px;
+  border-radius: 99px;
+  background: var(--plan-pill-bg);
+  color: var(--ink-mute);
+}
+.model-chip .pct {
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inactive accounts container — caps height when N is large */
+.inactive-stack {
+  /* When 4+ inactive accounts present, scroll within rather than
+     unbounded growth. Tuned to ~2.5 inactive blocks visible. */
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-fade) transparent;
+}
+.inactive-stack::-webkit-scrollbar { width: 4px; }
+.inactive-stack::-webkit-scrollbar-thumb {
+  background: var(--ink-fade);
+  border-radius: 2px;
+  opacity: 0.4;
+}
+
+/* Cost row at the bottom of card (sum across accounts) */
 .cost-row {
-  margin-top: 10px;
+  margin-top: 12px;
   padding-top: 10px;
   border-top: 0.5px solid var(--rule);
   display: flex;
@@ -368,161 +469,7 @@ body {
 }
 
 /* ============================================================
-   NEW: ACCOUNTS STRIP (the multi-account UI element)
-   ============================================================ */
-.accounts-section {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 0.5px solid var(--rule);
-}
-.accounts-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.10em;
-  color: var(--ink-fade);
-  margin-bottom: 6px;
-}
-.accounts-eyebrow .count {
-  color: var(--sage-deep);
-  margin-left: 4px;
-}
-
-.accounts-list {
-  display: flex;
-  flex-direction: column;
-  /* Cap at ~4 visible rows; scroll within when N > 4 */
-  max-height: 132px;
-  overflow-y: auto;
-  /* Subtle scrollbar (macOS-feeling) */
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-fade) transparent;
-}
-.accounts-list::-webkit-scrollbar { width: 4px; }
-.accounts-list::-webkit-scrollbar-thumb {
-  background: var(--ink-fade);
-  border-radius: 2px;
-  opacity: 0.4;
-}
-
-.account-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  margin: 0 -6px;
-  border-radius: 6px;
-  cursor: default;
-  transition: background 0.15s var(--ease);
-}
-.account-row.inactive {
-  cursor: pointer;
-}
-.account-row.inactive:hover {
-  background: var(--account-row-hover-bg);
-}
-
-.account-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex: none;
-  background: transparent;
-  border: 1.2px solid var(--sage);
-}
-.account-dot.active {
-  background: var(--sage);
-  border-color: var(--sage);
-  box-shadow: 0 0 0 2px hsl(145 29% 43% / 0.18);
-}
-
-.account-email {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  letter-spacing: 0;
-}
-.account-email.active { font-weight: 500; }
-.account-email.fallback {
-  color: var(--ink-fade);
-  font-style: italic;
-}
-
-.account-amount {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-mute);
-  font-variant-numeric: tabular-nums;
-  flex: none;
-}
-.account-row.inactive .account-amount { color: var(--ink-fade); }
-
-/* Inline-expanded panel */
-.account-expanded {
-  margin: 4px 16px 6px 16px;
-  padding: 9px 11px;
-  background: var(--account-expanded-bg);
-  border: 0.5px solid var(--account-expanded-border);
-  border-radius: 6px;
-}
-.account-expanded .ae-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.account-expanded .ae-row {
-  display: flex;
-  align-items: baseline;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-mute);
-  font-variant-numeric: tabular-nums;
-}
-.account-expanded .ae-row .key {
-  flex: 1;
-  letter-spacing: 0.02em;
-}
-.account-expanded .ae-row .val {
-  color: var(--ink);
-  font-weight: 500;
-}
-.account-expanded .ae-divider {
-  height: 0.5px;
-  background: var(--rule);
-  margin: 7px -11px 7px -11px;
-}
-.account-expanded .ae-models {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.model-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  padding: 1.5px 6px;
-  border-radius: 99px;
-  background: var(--plan-pill-bg);
-  color: var(--ink-mute);
-}
-.model-chip .pct {
-  color: var(--ink);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ============================================================
-   NOTIFICATION BUBBLE (demo E)
+   NOTIFICATION BUBBLE (demo C)
    ============================================================ */
 .notification-mock {
   margin-top: 28px;
@@ -555,8 +502,7 @@ body {
   color: hsl(220 8% 13%);
 }
 .notif-bubble .icon {
-  width: 28px;
-  height: 28px;
+  width: 28px; height: 28px;
   border-radius: 7px;
   background: var(--tile-claude);
   display: grid;
@@ -566,17 +512,11 @@ body {
   font-size: 13px;
   font-weight: 700;
 }
-.notif-bubble .body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
+.notif-bubble .body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .notif-bubble .body .title {
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.005em;
-  color: hsl(220 8% 13%);
 }
 .notif-bubble .body .subtitle {
   font-family: var(--font-mono);
@@ -595,7 +535,7 @@ body {
 }
 
 /* ============================================================
-   DECISION RULES (footer callout)
+   DECISION RULES
    ============================================================ */
 .rules {
   margin-top: 96px;
@@ -613,11 +553,7 @@ body {
   margin-bottom: 16px;
   color: hsl(220 8% 10%);
 }
-.rules table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-}
+.rules table { width: 100%; border-collapse: collapse; margin-top: 12px; }
 .rules th, .rules td {
   text-align: left;
   padding: 10px 8px;
@@ -643,15 +579,13 @@ body {
 }
 .rules .legend-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 7px; height: 7px;
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: 1px;
 }
 .rules .legend-dot.active {
   background: var(--sage);
-  border: 1.2px solid var(--sage);
   box-shadow: 0 0 0 2px hsl(145 29% 43% / 0.18);
 }
 .rules .legend-dot.inactive {
@@ -665,21 +599,24 @@ body {
 <div class="page">
 
   <header class="page-head">
-    <div class="meta">Spec 15 · UI mockup</div>
-    <h1 style="margin-top: 16px;">Multi-account popover</h1>
+    <div class="meta">Spec 15 · UI mockup v2</div>
+    <h1 style="margin-top: 16px;">Multi-account popover — every account visible at a glance</h1>
     <p class="lede">
-      Layout B from spec 15: one card per provider, with a compact
-      accounts strip appearing only when ≥ 2 accounts have been observed.
-      The strip lives below the headline 5h / Weekly bars and above the
-      cost row — small enough that single-account users see no change,
-      structured enough that multi-account users see all accounts at a
-      glance.
+      v1 hid inactive accounts behind a click. v2 keeps every account
+      visible without interaction: <strong>active account</strong> shows
+      its live 5h + Weekly bars; <strong>inactive accounts</strong> show
+      a compact monthly snapshot (cost + per-model chips) directly below.
+      One scan top-to-bottom and you've seen them all.
     </p>
-    <p class="lede" style="margin-top: 12px;">
-      Each demo shows the popover in <strong>light</strong> + <strong>dark</strong>
-      side by side so visual review covers both modes without toggling.
-      All widths are pixel-faithful to the live 340 pt popover.
-    </p>
+    <div class="principle">
+      <strong>Constraint that drives the layout:</strong> live utilization
+      data (5-hour, weekly) only comes from API calls, which only succeed
+      for the currently signed-in account. Inactive accounts are visible
+      to MyUsage <em>only</em> through the multi-device ledger
+      (historical $ + per-model breakdown). The mockup reflects this
+      asymmetry honestly — active gets bars, inactive gets the
+      snapshot we actually have.
+    </div>
   </header>
 
   <!-- ============================================================
@@ -688,16 +625,15 @@ body {
   <section class="demo">
     <div class="demo-head">
       <span class="demo-label">Demo A · N = 1</span>
-      <h2>Single account — strip is invisible.</h2>
+      <h2>Single account — today's UI unchanged.</h2>
       <p class="note">
-        The 99 % case. When MyUsage has only ever observed one account
-        for a provider, the accounts strip never renders. Existing
-        single-account users see exactly today's UI.
+        With one account observed, the account header row above the bars
+        is suppressed and the card is byte-identical to today's. Existing
+        single-account users see no change.
       </p>
     </div>
 
     <div class="popover-pair">
-      <!-- Light -->
       <div class="frame">
         <span class="frame-label"><span class="dot light"></span>Light</span>
         <div class="popover theme-light">
@@ -711,14 +647,13 @@ body {
               <span class="pcard-name">Claude Code</span>
               <span class="plan-pill">Max</span>
             </div>
+            <!-- account-head NOT rendered for N=1 -->
             <div class="limit">
               <div class="limit-meta">
                 <span class="limit-name">5-hour</span>
                 <span class="limit-pct">47%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:47%"></div></div></div>
               <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
             </div>
             <div class="limit">
@@ -726,12 +661,9 @@ body {
                 <span class="limit-name">Weekly</span>
                 <span class="limit-pct">62%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
               <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
             </div>
-            <!-- accounts-section deliberately absent -->
             <div class="cost-row">
               <span class="lbl">This month</span>
               <span class="amount">~$321.00</span>
@@ -740,7 +672,6 @@ body {
         </div>
       </div>
 
-      <!-- Dark -->
       <div class="frame">
         <span class="frame-label"><span class="dot dark"></span>Dark</span>
         <div class="popover theme-dark">
@@ -759,9 +690,7 @@ body {
                 <span class="limit-name">5-hour</span>
                 <span class="limit-pct">47%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:47%"></div></div></div>
               <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
             </div>
             <div class="limit">
@@ -769,9 +698,7 @@ body {
                 <span class="limit-name">Weekly</span>
                 <span class="limit-pct">62%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
               <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
             </div>
             <div class="cost-row">
@@ -785,17 +712,18 @@ body {
   </section>
 
   <!-- ============================================================
-       DEMO B — N = 2, active + inactive
+       DEMO B — N = 2: active inline + inactive inline
        ============================================================ -->
   <section class="demo">
     <div class="demo-head">
       <span class="demo-label">Demo B · N = 2</span>
-      <h2>Two accounts — strip appears, sorted active-first.</h2>
+      <h2>Active gets bars, inactive gets a ledger snapshot — both visible.</h2>
       <p class="note">
-        Filled sage dot = active credentials (currently signed-in). Hollow
-        ring = inactive (historical — user has logged into this account on
-        this Mac before, ledger still has rows). Cost row at the bottom
-        shows the cross-account sum, not just the active account.
+        The active account's email sits as a small header above the bars.
+        The inactive account follows in its own compact sub-card with
+        cost + per-model breakdown — the data we actually have for it.
+        No clicks, no expansion: scroll the popover and you've seen every
+        account's state.
       </p>
     </div>
 
@@ -813,14 +741,18 @@ body {
               <span class="pcard-name">Claude Code</span>
               <span class="plan-pill">Max</span>
             </div>
+            <!-- ACTIVE -->
+            <div class="account-head">
+              <span class="dot active"></span>
+              <span class="email">user@company.com</span>
+              <span class="badge">Active</span>
+            </div>
             <div class="limit">
               <div class="limit-meta">
                 <span class="limit-name">5-hour</span>
                 <span class="limit-pct">47%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:47%"></div></div></div>
               <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
             </div>
             <div class="limit">
@@ -828,28 +760,26 @@ body {
                 <span class="limit-name">Weekly</span>
                 <span class="limit-pct">62%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
               <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
             </div>
-            <div class="accounts-section">
-              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
-              <div class="accounts-list">
-                <div class="account-row">
-                  <span class="account-dot active"></span>
-                  <span class="account-email active">user@company.com</span>
-                  <span class="account-amount">$321.00</span>
-                </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email">me@personal.dev</span>
-                  <span class="account-amount">$43.10</span>
-                </div>
+            <!-- INACTIVE -->
+            <div class="inactive-block">
+              <div class="account-head">
+                <span class="dot inactive"></span>
+                <span class="email">me@personal.dev</span>
+              </div>
+              <div class="row">
+                <span class="label">This month</span>
+                <span class="val">$43.10</span>
+              </div>
+              <div class="models">
+                <span class="model-chip">sonnet <span class="pct">82%</span></span>
+                <span class="model-chip">opus <span class="pct">18%</span></span>
               </div>
             </div>
             <div class="cost-row">
-              <span class="lbl">This month</span>
+              <span class="lbl">All accounts</span>
               <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
             </div>
           </div>
@@ -869,14 +799,17 @@ body {
               <span class="pcard-name">Claude Code</span>
               <span class="plan-pill">Max</span>
             </div>
+            <div class="account-head">
+              <span class="dot active"></span>
+              <span class="email">user@company.com</span>
+              <span class="badge">Active</span>
+            </div>
             <div class="limit">
               <div class="limit-meta">
                 <span class="limit-name">5-hour</span>
                 <span class="limit-pct">47%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:47%"></div></div></div>
               <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
             </div>
             <div class="limit">
@@ -884,28 +817,25 @@ body {
                 <span class="limit-name">Weekly</span>
                 <span class="limit-pct">62%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
               <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
             </div>
-            <div class="accounts-section">
-              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
-              <div class="accounts-list">
-                <div class="account-row">
-                  <span class="account-dot active"></span>
-                  <span class="account-email active">user@company.com</span>
-                  <span class="account-amount">$321.00</span>
-                </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email">me@personal.dev</span>
-                  <span class="account-amount">$43.10</span>
-                </div>
+            <div class="inactive-block">
+              <div class="account-head">
+                <span class="dot inactive"></span>
+                <span class="email">me@personal.dev</span>
+              </div>
+              <div class="row">
+                <span class="label">This month</span>
+                <span class="val">$43.10</span>
+              </div>
+              <div class="models">
+                <span class="model-chip">sonnet <span class="pct">82%</span></span>
+                <span class="model-chip">opus <span class="pct">18%</span></span>
               </div>
             </div>
             <div class="cost-row">
-              <span class="lbl">This month</span>
+              <span class="lbl">All accounts</span>
               <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
             </div>
           </div>
@@ -915,17 +845,19 @@ body {
   </section>
 
   <!-- ============================================================
-       DEMO C — N = 4 with overflow + fallback
+       DEMO C — N = 4: 1 active + 3 inactive, scroll if needed
        ============================================================ -->
   <section class="demo">
     <div class="demo-head">
       <span class="demo-label">Demo C · N = 4</span>
-      <h2>Four accounts — strip scrolls, fallback ID renders italic.</h2>
+      <h2>Four accounts — inactive stack scrolls, active stays pinned.</h2>
       <p class="note">
-        The strip caps at 4 visible rows (~132 px) and scrolls within
-        when N exceeds that. The third row shows the fallback path for
-        accounts where MyUsage couldn't extract an email — rendered
-        italic + dim with a clear <code>Account id:</code> prefix.
+        Active account stays at the top with full bars. The inactive
+        stack below caps at ~220 px and scrolls within when accounts
+        spill over. The card height stays bounded; no popover height
+        explosion. Third inactive shows the email-fallback path
+        (italic + dim) for accounts where MyUsage couldn't read the
+        email (rare).
       </p>
     </div>
 
@@ -943,14 +875,17 @@ body {
               <span class="pcard-name">Claude Code</span>
               <span class="plan-pill">Max</span>
             </div>
+            <div class="account-head">
+              <span class="dot active"></span>
+              <span class="email">user@company.com</span>
+              <span class="badge">Active</span>
+            </div>
             <div class="limit">
               <div class="limit-meta">
                 <span class="limit-name">5-hour</span>
                 <span class="limit-pct">47%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:47%"></div></div></div>
               <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
             </div>
             <div class="limit">
@@ -958,38 +893,45 @@ body {
                 <span class="limit-name">Weekly</span>
                 <span class="limit-pct">62%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
               <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
             </div>
-            <div class="accounts-section">
-              <div class="accounts-eyebrow">Accounts<span class="count">· 4</span></div>
-              <div class="accounts-list">
-                <div class="account-row">
-                  <span class="account-dot active"></span>
-                  <span class="account-email active">user@company.com</span>
-                  <span class="account-amount">$321.00</span>
+            <div class="inactive-stack">
+              <div class="inactive-block">
+                <div class="account-head">
+                  <span class="dot inactive"></span>
+                  <span class="email">me@personal.dev</span>
                 </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email">me@personal.dev</span>
-                  <span class="account-amount">$98.40</span>
+                <div class="row"><span class="label">This month</span><span class="val">$98.40</span></div>
+                <div class="models">
+                  <span class="model-chip">sonnet <span class="pct">71%</span></span>
+                  <span class="model-chip">opus <span class="pct">29%</span></span>
                 </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email fallback">Account id:ab12cd34</span>
-                  <span class="account-amount">$57.20</span>
+              </div>
+              <div class="inactive-block">
+                <div class="account-head">
+                  <span class="dot inactive"></span>
+                  <span class="email fallback">Account id:ab12cd34</span>
                 </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email">consult@really-long-client-domain-name.org</span>
-                  <span class="account-amount">$24.10</span>
+                <div class="row"><span class="label">This month</span><span class="val">$57.20</span></div>
+                <div class="models">
+                  <span class="model-chip">sonnet <span class="pct">100%</span></span>
+                </div>
+              </div>
+              <div class="inactive-block">
+                <div class="account-head">
+                  <span class="dot inactive"></span>
+                  <span class="email">consult@really-long-client-domain-name.org</span>
+                </div>
+                <div class="row"><span class="label">This month</span><span class="val">$24.10</span></div>
+                <div class="models">
+                  <span class="model-chip">sonnet <span class="pct">90%</span></span>
+                  <span class="model-chip">haiku <span class="pct">10%</span></span>
                 </div>
               </div>
             </div>
             <div class="cost-row">
-              <span class="lbl">This month</span>
+              <span class="lbl">All accounts</span>
               <span class="amount">~$500.70<span class="devices-pill">⊕ 3</span></span>
             </div>
           </div>
@@ -1009,14 +951,17 @@ body {
               <span class="pcard-name">Claude Code</span>
               <span class="plan-pill">Max</span>
             </div>
+            <div class="account-head">
+              <span class="dot active"></span>
+              <span class="email">user@company.com</span>
+              <span class="badge">Active</span>
+            </div>
             <div class="limit">
               <div class="limit-meta">
                 <span class="limit-name">5-hour</span>
                 <span class="limit-pct">47%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:47%"></div></div></div>
               <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
             </div>
             <div class="limit">
@@ -1024,38 +969,45 @@ body {
                 <span class="limit-name">Weekly</span>
                 <span class="limit-pct">62%</span>
               </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
+              <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div></div>
               <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
             </div>
-            <div class="accounts-section">
-              <div class="accounts-eyebrow">Accounts<span class="count">· 4</span></div>
-              <div class="accounts-list">
-                <div class="account-row">
-                  <span class="account-dot active"></span>
-                  <span class="account-email active">user@company.com</span>
-                  <span class="account-amount">$321.00</span>
+            <div class="inactive-stack">
+              <div class="inactive-block">
+                <div class="account-head">
+                  <span class="dot inactive"></span>
+                  <span class="email">me@personal.dev</span>
                 </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email">me@personal.dev</span>
-                  <span class="account-amount">$98.40</span>
+                <div class="row"><span class="label">This month</span><span class="val">$98.40</span></div>
+                <div class="models">
+                  <span class="model-chip">sonnet <span class="pct">71%</span></span>
+                  <span class="model-chip">opus <span class="pct">29%</span></span>
                 </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email fallback">Account id:ab12cd34</span>
-                  <span class="account-amount">$57.20</span>
+              </div>
+              <div class="inactive-block">
+                <div class="account-head">
+                  <span class="dot inactive"></span>
+                  <span class="email fallback">Account id:ab12cd34</span>
                 </div>
-                <div class="account-row inactive">
-                  <span class="account-dot"></span>
-                  <span class="account-email">consult@really-long-client-domain-name.org</span>
-                  <span class="account-amount">$24.10</span>
+                <div class="row"><span class="label">This month</span><span class="val">$57.20</span></div>
+                <div class="models">
+                  <span class="model-chip">sonnet <span class="pct">100%</span></span>
+                </div>
+              </div>
+              <div class="inactive-block">
+                <div class="account-head">
+                  <span class="dot inactive"></span>
+                  <span class="email">consult@really-long-client-domain-name.org</span>
+                </div>
+                <div class="row"><span class="label">This month</span><span class="val">$24.10</span></div>
+                <div class="models">
+                  <span class="model-chip">sonnet <span class="pct">90%</span></span>
+                  <span class="model-chip">haiku <span class="pct">10%</span></span>
                 </div>
               </div>
             </div>
             <div class="cost-row">
-              <span class="lbl">This month</span>
+              <span class="lbl">All accounts</span>
               <span class="amount">~$500.70<span class="devices-pill">⊕ 3</span></span>
             </div>
           </div>
@@ -1065,171 +1017,17 @@ body {
   </section>
 
   <!-- ============================================================
-       DEMO D — Click-expanded inactive account
+       DEMO D — Notification language
        ============================================================ -->
   <section class="demo">
     <div class="demo-head">
-      <span class="demo-label">Demo D · Expanded</span>
-      <h2>Click an inactive account — inline detail panel.</h2>
+      <span class="demo-label">Demo D · Notification</span>
+      <h2>System notification — title carries the active account when N ≥ 2.</h2>
       <p class="note">
-        Clicking the inactive row pushes an inline panel open beneath
-        it. No modal, no overlay, no chevron. The panel shows the
-        per-device contributions for that account this month plus the
-        per-model breakdown chips. Click the row again to collapse.
-      </p>
-    </div>
-
-    <div class="popover-pair">
-      <div class="frame">
-        <span class="frame-label"><span class="dot light"></span>Light</span>
-        <div class="popover theme-light">
-          <div class="pop-head-bar">
-            <span class="pop-title">MyUsage</span>
-            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
-          </div>
-          <div class="pcard">
-            <div class="pcard-head">
-              <div class="tile claude">C</div>
-              <span class="pcard-name">Claude Code</span>
-              <span class="plan-pill">Max</span>
-            </div>
-            <div class="limit">
-              <div class="limit-meta">
-                <span class="limit-name">5-hour</span>
-                <span class="limit-pct">47%</span>
-              </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
-              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
-            </div>
-            <div class="limit">
-              <div class="limit-meta">
-                <span class="limit-name">Weekly</span>
-                <span class="limit-pct">62%</span>
-              </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
-              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
-            </div>
-            <div class="accounts-section">
-              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
-              <div class="accounts-list" style="max-height: none;">
-                <div class="account-row">
-                  <span class="account-dot active"></span>
-                  <span class="account-email active">user@company.com</span>
-                  <span class="account-amount">$321.00</span>
-                </div>
-                <div class="account-row inactive" style="background: var(--account-row-hover-bg);">
-                  <span class="account-dot"></span>
-                  <span class="account-email">me@personal.dev</span>
-                  <span class="account-amount">$43.10</span>
-                </div>
-                <div class="account-expanded">
-                  <div class="ae-section">
-                    <div class="ae-row"><span class="key">MAC AIR</span><span class="val">$25.60</span></div>
-                    <div class="ae-row"><span class="key">MAC STUDIO</span><span class="val">$17.50</span></div>
-                  </div>
-                  <div class="ae-divider"></div>
-                  <div class="ae-models">
-                    <span class="model-chip">sonnet <span class="pct">82%</span></span>
-                    <span class="model-chip">opus <span class="pct">18%</span></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="cost-row">
-              <span class="lbl">This month</span>
-              <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="frame">
-        <span class="frame-label"><span class="dot dark"></span>Dark</span>
-        <div class="popover theme-dark">
-          <div class="pop-head-bar">
-            <span class="pop-title">MyUsage</span>
-            <span class="pop-meta">3 sec ago <span class="refresh-glyph"></span></span>
-          </div>
-          <div class="pcard">
-            <div class="pcard-head">
-              <div class="tile claude">C</div>
-              <span class="pcard-name">Claude Code</span>
-              <span class="plan-pill">Max</span>
-            </div>
-            <div class="limit">
-              <div class="limit-meta">
-                <span class="limit-name">5-hour</span>
-                <span class="limit-pct">47%</span>
-              </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:47%"></div></div>
-              </div>
-              <div class="bar-foot"><span>resets 2h 14m · 16:30</span></div>
-            </div>
-            <div class="limit">
-              <div class="limit-meta">
-                <span class="limit-name">Weekly</span>
-                <span class="limit-pct">62%</span>
-              </div>
-              <div class="bar-wrap">
-                <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
-              </div>
-              <div class="bar-foot"><span>resets 5d 12h · Tue 09:00</span></div>
-            </div>
-            <div class="accounts-section">
-              <div class="accounts-eyebrow">Accounts<span class="count">· 2</span></div>
-              <div class="accounts-list" style="max-height: none;">
-                <div class="account-row">
-                  <span class="account-dot active"></span>
-                  <span class="account-email active">user@company.com</span>
-                  <span class="account-amount">$321.00</span>
-                </div>
-                <div class="account-row inactive" style="background: var(--account-row-hover-bg);">
-                  <span class="account-dot"></span>
-                  <span class="account-email">me@personal.dev</span>
-                  <span class="account-amount">$43.10</span>
-                </div>
-                <div class="account-expanded">
-                  <div class="ae-section">
-                    <div class="ae-row"><span class="key">MAC AIR</span><span class="val">$25.60</span></div>
-                    <div class="ae-row"><span class="key">MAC STUDIO</span><span class="val">$17.50</span></div>
-                  </div>
-                  <div class="ae-divider"></div>
-                  <div class="ae-models">
-                    <span class="model-chip">sonnet <span class="pct">82%</span></span>
-                    <span class="model-chip">opus <span class="pct">18%</span></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="cost-row">
-              <span class="lbl">This month</span>
-              <span class="amount">~$364.10<span class="devices-pill">⊕ 3</span></span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       DEMO E — Notification text language
-       ============================================================ -->
-  <section class="demo">
-    <div class="demo-head">
-      <span class="demo-label">Demo E · Notification</span>
-      <h2>System notification — account name in subtitle when N ≥ 2.</h2>
-      <p class="note">
-        macOS banner notification (the surface that fires when a tracked
-        limit crosses the warn / crit threshold). When the user has only
-        one account observed, today's wording stays
-        ("Claude — Weekly at 80%"). When N ≥ 2, the subtitle gains the
-        active account email so the user knows <em>which</em> account
-        triggered.
+        Live limit-pressure notifications fire only for the active
+        account (it's the only one with live data). When the user has
+        multiple accounts observed, prefix the title with the active
+        account email so they know which one triggered.
       </p>
     </div>
 
@@ -1257,48 +1055,49 @@ body {
   </section>
 
   <!-- ============================================================
-       DECISION RULES — concise reference
+       DECISION RULES
        ============================================================ -->
   <div class="rules">
-    <h3>State table — one source of truth for the implementation.</h3>
-    <p style="color: hsl(220 6% 38%);">
-      Pulled from spec 15. Drives both the popover and the notification
-      side. Each rule tested, each row independently verifiable.
-    </p>
+    <h3>State table — one source of truth.</h3>
 
     <table>
       <thead>
         <tr>
           <th>Condition</th>
-          <th>Strip rendered?</th>
-          <th>Rows shown</th>
-          <th>Notification subtitle</th>
+          <th>Account header rendered?</th>
+          <th>Active block</th>
+          <th>Inactive blocks</th>
+          <th>Cost row label</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><code>N == 1</code> for this provider</td>
+          <td><code>N == 1</code></td>
           <td>No</td>
+          <td>5h + Weekly bars</td>
           <td>—</td>
-          <td><code>Weekly at 80% — resets in 5d 12h</code> (today)</td>
+          <td><code>This month</code></td>
         </tr>
         <tr>
-          <td><code>N == 2..4</code></td>
-          <td>Yes — full list</td>
-          <td>All N rows, active first</td>
-          <td>title prefixed with <code>· user@company.com</code></td>
+          <td><code>N == 2..3</code></td>
+          <td>Yes — both</td>
+          <td>5h + Weekly bars (with email header)</td>
+          <td>One sub-card per inactive: $ + per-model chips</td>
+          <td><code>All accounts</code></td>
         </tr>
         <tr>
-          <td><code>N &gt; 4</code></td>
-          <td>Yes — scrolls</td>
-          <td>~4 visible, scroll for rest</td>
-          <td>same (active account in title)</td>
+          <td><code>N &gt;= 4</code></td>
+          <td>Yes</td>
+          <td>same</td>
+          <td>Inactive stack scrolls within ~220 px max-height</td>
+          <td><code>All accounts</code></td>
         </tr>
         <tr>
           <td>account has no email</td>
+          <td>Yes — italic <code>Account id:xxxx</code></td>
           <td>—</td>
-          <td>row renders <code>Account id:xxxx</code> italic + dim</td>
-          <td>title falls back to <code>· id:xxxx</code></td>
+          <td>Same shape, header italic + dim</td>
+          <td>—</td>
         </tr>
       </tbody>
     </table>
@@ -1306,23 +1105,29 @@ body {
     <h3 style="margin-top: 32px;">Visual legend</h3>
     <p>
       <span class="legend-dot active"></span>
-      <strong>Active</strong> — credentials currently point at this account
-      (will be filled in for fresh data on every refresh).
+      <strong>Active</strong> — credentials currently point at this
+      account. Sage filled circle with soft 18 % halo. Bars are live
+      (5-hour / Weekly utilization from API).
     </p>
     <p>
       <span class="legend-dot inactive"></span>
-      <strong>Inactive</strong> — account observed historically; ledger has
-      rows for it. Click the row to see per-device contributions and a
-      per-model breakdown.
+      <strong>Inactive</strong> — observed historically; ledger has
+      data. Sage hollow ring. Block shows monthly $ + per-model chips
+      (no live bars — we can't fetch its API without its credentials).
     </p>
 
-    <h3 style="margin-top: 32px;">Anti-patterns rejected</h3>
+    <h3 style="margin-top: 32px;">What changed from v1</h3>
     <ul style="padding-left: 20px; color: hsl(220 6% 38%);">
-      <li>Switch-account dropdown (hides accounts behind a click — defeats glance-ability)</li>
-      <li>Modal overlay for expanded view (popover-in-popover feels wrong on macOS)</li>
-      <li>Chevron / "view" affordance on each inactive row (too SaaS-feeling; row hover is enough)</li>
-      <li>Account aliasing UI in v1 (deferred — email is recognizable enough)</li>
-      <li>Per-account warn/crit thresholds in v1 (deferred — same threshold for every account)</li>
+      <li><strong>Inactive accounts no longer hidden behind a click.</strong> v1 reduced inactive accounts to a $ amount in a tiny strip; you couldn't see <em>any</em> usage info without clicking. v2 shows what we have inline: monthly cost + per-model breakdown.</li>
+      <li><strong>Active account gets an explicit email header.</strong> Previously the bars were untagged — confusing once 2+ accounts exist. Now there's no ambiguity which account the bars belong to.</li>
+      <li><strong>Cost row label flips to "All accounts" when N ≥ 2.</strong> Was "This month" (which is technically still correct but now the sum semantic matters more).</li>
+      <li><strong>Click-to-expand interaction removed.</strong> Inactive blocks already show everything we have; nothing left to expand into.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Honest limit (worth flagging in spec)</h3>
+    <ul style="padding-left: 20px; color: hsl(220 6% 38%);">
+      <li>We <em>cannot</em> show live 5-hour or weekly utilization for inactive accounts. Their credentials aren't available — Claude/Codex/Cursor CLIs only hold one auth artifact at a time. The historical ledger view (monthly cost + per-model) is the closest we can get for inactive accounts.</li>
+      <li>"Active" can change between refreshes if the user runs <code>claude logout && claude login</code> as a different account. The next refresh re-derives identity and the previously-active account becomes inactive (its data flows from API + ledger to ledger-only).</li>
     </ul>
   </div>
 
