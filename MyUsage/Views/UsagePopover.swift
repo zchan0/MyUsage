@@ -22,7 +22,7 @@ struct UsagePopover: View {
                 ScrollView {
                     LazyVStack(spacing: 7) {
                         ForEach(enabledProviders, id: \.kind) { provider in
-                            ProviderCard(provider: provider)
+                            providerSlot(for: provider)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -149,6 +149,21 @@ struct UsagePopover: View {
 
     private var enabledProviders: [any UsageProvider] {
         manager.orderedProviders.filter { $0.isEnabled }
+    }
+
+    /// Single-account providers render the original `ProviderCard`
+    /// directly (today's UX preserved verbatim). Multi-account providers
+    /// (≥ 2 observed) render the swipeable `ProviderSwitcherCard`. The
+    /// branch is per-provider so signing into a second Claude account
+    /// only affects Claude's card, not the others.
+    @ViewBuilder
+    private func providerSlot(for provider: any UsageProvider) -> some View {
+        let accounts = manager.accountStore.accounts(for: provider.kind)
+        if accounts.count >= 2 {
+            ProviderSwitcherCard(provider: provider, accounts: accounts)
+        } else {
+            ProviderCard(provider: provider)
+        }
     }
 }
 

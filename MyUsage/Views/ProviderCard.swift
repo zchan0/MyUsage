@@ -16,11 +16,23 @@ import SwiftUI
 ///   └────────────────────────────────────────┘
 struct ProviderCard: View {
     let provider: any UsageProvider
+    /// When non-nil, render the email pill in the card head + (if !isActive)
+    /// surface the cached snapshot under a stale banner. nil = today's UX,
+    /// no account chrome — used for the single-account case.
+    var account: AccountStore.AccountRecord? = nil
+    /// Whether `account` is the one the credentials file currently points
+    /// at. `true` shows live data + filled sage dot; `false` shows the
+    /// cached snapshot + hollow ring + saturate(0.65) wash.
+    var isActive: Bool = true
+
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             cardHead
+            if showStaleBanner, let captured = account?.snapshot?.capturedAt {
+                StaleSnapshotBanner(capturedAt: captured)
+            }
             bodySection
         }
         .padding(.horizontal, 13)
@@ -36,6 +48,22 @@ struct ProviderCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 1.5, x: 0, y: 1)
         .opacity(isDimmed ? 0.7 : 1.0)
+        .saturation(showStaleBanner ? 0.65 : 1.0)
+    }
+
+    /// Snapshot driving every renderable bar / number in this card. For
+    /// the active account (or single-account default) this is the live
+    /// `provider.snapshot`; for an inactive account it's the cached
+    /// `AccountSnapshot` reconstituted as a `UsageSnapshot`.
+    private var effectiveSnapshot: UsageSnapshot? {
+        if !isActive, let cached = account?.snapshot {
+            return cached.asUsageSnapshot
+        }
+        return provider.snapshot
+    }
+
+    private var showStaleBanner: Bool {
+        !isActive && account?.snapshot != nil
     }
 
     // MARK: - Head
@@ -52,6 +80,15 @@ struct ProviderCard: View {
 
                 if let plan = planLabel {
                     PlanPill(text: plan)
+                }
+
+                if let account {
+                    AccountEmailPill(
+                        displayName: account.displayName,
+                        isActive: isActive,
+                        isOpaque: account.isOpaque
+                    )
+                    .layoutPriority(-1)
                 }
 
                 if isStale {
@@ -80,11 +117,11 @@ struct ProviderCard: View {
 
     @ViewBuilder
     private var bodySection: some View {
-        if provider.isLoading && provider.snapshot == nil {
+        if provider.isLoading && effectiveSnapshot == nil {
             loadingView
-        } else if let error = provider.error, provider.snapshot == nil {
+        } else if let error = provider.error, effectiveSnapshot == nil, isActive {
             errorView(error)
-        } else if let snapshot = provider.snapshot {
+        } else if let snapshot = effectiveSnapshot {
             snapshotBody(snapshot)
         } else {
             notConfiguredView
@@ -98,7 +135,10 @@ struct ProviderCard: View {
         // head says everything we need (no historical timestamp).
         if provider.kind == .antigravity, !isAntigravityLive {
             EmptyView()
-        } else if let staleMessage = provider.error {
+        } else if isActive, let staleMessage = provider.error {
+            // Live error rows belong to the active account only — the
+            // cached snapshot view already explains its own staleness via
+            // the StaleSnapshotBanner above.
             VStack(alignment: .leading, spacing: 9) {
                 limits(snapshot)
                 costRowIfAny(snapshot)
@@ -280,7 +320,7 @@ struct ProviderCard: View {
             provider: provider.kind,
             monthKey: monthKey
         )
-        let aggregate = manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0
+        let aggregate = scopedMonthlyAggregate(monthKey: monthKey)
         let hasPeers = contributions.contains { !$0.isSelf }
         let displayed: Double = aggregate > 0 ? aggregate : (fallbackLocal ?? 0)
 
@@ -294,6 +334,21 @@ struct ProviderCard: View {
                 contributions: contributions
             )
         }
+    }
+
+    /// When this card is bound to a specific account, scope the displayed
+    /// total to that account's cross-device sum so the cost row reflects
+    /// what *this* account spent — not the provider's grand total across
+    /// all accounts.
+    private func scopedMonthlyAggregate(monthKey: String) -> Double {
+        if let account {
+            return manager.ledger.monthlyTotal(
+                provider: provider.kind,
+                monthKey: monthKey,
+                accountID: account.accountID
+            )
+        }
+        return manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0
     }
 
     private func cursorCycleRow(_ snapshot: UsageSnapshot) -> some View {
@@ -392,7 +447,7 @@ struct ProviderCard: View {
         if provider.kind == .antigravity {
             return isAntigravityLive ? nil : "IDE off"
         }
-        return provider.snapshot?.planName
+        return effectiveSnapshot?.planName
     }
 
     private var isStale: Bool {
