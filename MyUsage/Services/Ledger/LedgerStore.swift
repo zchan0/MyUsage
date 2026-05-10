@@ -385,6 +385,50 @@ final class LedgerStore: @unchecked Sendable {
         return totals
     }
 
+    /// One-shot migration: reassign every legacy `account_id = 'default'`
+    /// row for `provider` to `accountID`. Used after a provider derives
+    /// its first real account identity on a device that has been
+    /// recording rows under `"default"` since spec 12 (pre-spec-15).
+    /// Returns the number of rows updated.
+    ///
+    /// Safe to call repeatedly — once `default` rows are gone, subsequent
+    /// invocations are zero-row no-ops. Callers should still gate on "this
+    /// is the first observation for this provider" so they don't merge a
+    /// new account's identity into another account's historical rows.
+    @discardableResult
+    func rewriteDefaultAccountID(
+        provider: ProviderKind,
+        to accountID: String
+    ) throws -> Int {
+        let sql = """
+            UPDATE ledger_entries
+            SET account_id = ?1
+            WHERE provider = ?2 AND account_id = 'default';
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, accountID, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+
+        let rc = sqlite3_step(stmt)
+        guard rc == SQLITE_DONE else {
+            throw StoreError.step(
+                sql: sql,
+                code: rc,
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        return Int(sqlite3_changes(db))
+    }
+
     /// Per-device subtotal for a given (provider, month). Used by the
     /// provider-card popover.
     struct DeviceTotal: Sendable, Equatable {

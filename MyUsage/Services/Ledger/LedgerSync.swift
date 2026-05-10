@@ -235,6 +235,26 @@ final class LedgerSync {
         (try? store.monthlyTotal(provider: provider, monthKey: monthKey, accountID: accountID)) ?? 0
     }
 
+    /// One-shot legacy `default` → email migration (spec 15). Refreshes
+    /// published aggregates if any rows were updated so the popover/cost
+    /// numbers reflect the new bucket immediately. Caller must gate on
+    /// "first observation for this provider" — see ClaudeProvider /
+    /// CodexProvider / CursorProvider refresh paths.
+    @discardableResult
+    func rewriteDefaultAccountID(
+        provider: ProviderKind,
+        to accountID: String
+    ) -> Int {
+        let n = (try? store.rewriteDefaultAccountID(provider: provider, to: accountID)) ?? 0
+        if n > 0 {
+            Logger.ledger.info(
+                "Migrated \(n, privacy: .public) default rows to account for provider \(provider.rawValue, privacy: .public)"
+            )
+            reloadAggregates()
+        }
+        return n
+    }
+
     /// Fetch aggregated contributions for a provider in the given month —
     /// used by the popover when the user clicks the ⊕ badge.
     func contributions(

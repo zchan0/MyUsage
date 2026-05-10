@@ -251,11 +251,15 @@ final class CodexProvider: UsageProvider {
 
             let identity = currentAccount()
             if let identity, let snapshot {
+                let isFirstObservation = (accountStore?.count(for: .codex) ?? 0) == 0
                 accountStore?.recordObservation(
                     provider: .codex,
                     identity: identity,
                     snapshot: snapshot
                 )
+                if isFirstObservation, identity.email != nil {
+                    ledger?.rewriteDefaultAccountID(provider: .codex, to: identity.id)
+                }
             }
             await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
 

@@ -236,6 +236,46 @@ struct LedgerStoreTests {
         #expect(try store.monthlyTotal(provider: .claude, monthKey: "2026-04", accountID: "never@x.com") == 0)
     }
 
+    @Test("rewriteDefaultAccountID merges legacy rows into the new account")
+    func rewriteDefaultAccountID() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "Mac1", accountId: "default", provider: .claude, day: "2026-04-01", costUSD: 5, recordedAt: now),
+            LedgerEntry(deviceId: "Mac1", accountId: "default", provider: .claude, day: "2026-04-02", costUSD: 7, recordedAt: now),
+            // Different provider — must not migrate.
+            LedgerEntry(deviceId: "Mac1", accountId: "default", provider: .codex, day: "2026-04-01", costUSD: 100, recordedAt: now),
+            // Already-tagged row — must stay.
+            LedgerEntry(deviceId: "Mac1", accountId: "b@x.com", provider: .claude, day: "2026-04-03", costUSD: 1, recordedAt: now)
+        ])
+
+        let updated = try store.rewriteDefaultAccountID(provider: .claude, to: "a@x.com")
+        #expect(updated == 2)
+
+        let totals = try store.monthlyTotalsByAccount(provider: .claude, monthKey: "2026-04")
+        #expect(totals["a@x.com"] == 12)
+        #expect(totals["b@x.com"] == 1)
+        #expect(totals["default"] == nil, "Claude default rows are gone")
+
+        // Codex's default row must remain.
+        let codex = try store.monthlyTotalsByAccount(provider: .codex, monthKey: "2026-04")
+        #expect(codex["default"] == 100)
+    }
+
+    @Test("rewriteDefaultAccountID is a no-op when nothing to migrate")
+    func rewriteDefaultAccountIDNoop() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "Mac1", accountId: "a@x.com", provider: .claude, day: "2026-04-01", costUSD: 5, recordedAt: now)
+        ])
+
+        let updated = try store.rewriteDefaultAccountID(provider: .claude, to: "a@x.com")
+        #expect(updated == 0)
+        let totals = try store.monthlyTotalsByAccount(provider: .claude, monthKey: "2026-04")
+        #expect(totals["a@x.com"] == 5)
+    }
+
     @Test("monthlyTotalsByAccount keeps legacy default rows under their bucket")
     func monthlyTotalsByAccountIncludesDefault() throws {
         let store = try makeStore()

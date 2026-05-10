@@ -307,11 +307,20 @@ final class ClaudeProvider: UsageProvider {
             // tag ledger writes so cross-device aggregates split per account.
             let identity = currentAccount()
             if let identity, let snapshot {
+                // Spec 15 migration: if this is the first identity ever
+                // observed for this provider on this device, fold legacy
+                // `account_id = 'default'` rows into it. Email-typed only —
+                // we don't want to assign historical rows to an opaque
+                // `id:xxxx` placeholder (which can drift between sessions).
+                let isFirstObservation = (accountStore?.count(for: .claude) ?? 0) == 0
                 accountStore?.recordObservation(
                     provider: .claude,
                     identity: identity,
                     snapshot: snapshot
                 )
+                if isFirstObservation, identity.email != nil {
+                    ledger?.rewriteDefaultAccountID(provider: .claude, to: identity.id)
+                }
             }
 
             // Write per-day totals into the multi-device ledger (spec 12).
