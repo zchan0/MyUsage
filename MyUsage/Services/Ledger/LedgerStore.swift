@@ -315,6 +315,76 @@ final class LedgerStore: @unchecked Sendable {
         return totals
     }
 
+    /// Same as `monthlyTotal(provider:monthKey:)` but scoped to one
+    /// `accountID`. Used by the popover's per-account cost row when the
+    /// account switcher is active. Returns `0` for accounts that have
+    /// never written into the ledger on any device.
+    func monthlyTotal(
+        provider: ProviderKind,
+        monthKey: String,
+        accountID: String
+    ) throws -> Double {
+        let sql = """
+            SELECT COALESCE(SUM(cost_usd), 0)
+            FROM ledger_entries
+            WHERE provider = ?1 AND substr(day, 1, 7) = ?2 AND account_id = ?3;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, monthKey, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 3, accountID, -1, SQLITE_TRANSIENT_DEST)
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else { return 0 }
+        return sqlite3_column_double(stmt, 0)
+    }
+
+    /// Cross-device per-account totals for a given (provider, month).
+    /// Returns `[accountID: USD]`. Drives the popover's account switcher
+    /// + Settings → Providers inline accounts strip cost columns.
+    ///
+    /// Includes legacy `"default"` rows (pre-spec-15 entries that weren't
+    /// tagged with an account). Callers render those under "Older usage"
+    /// or fold them into the active account per the migration choice.
+    func monthlyTotalsByAccount(
+        provider: ProviderKind,
+        monthKey: String
+    ) throws -> [String: Double] {
+        let sql = """
+            SELECT account_id, SUM(cost_usd)
+            FROM ledger_entries
+            WHERE provider = ?1 AND substr(day, 1, 7) = ?2
+            GROUP BY account_id;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, monthKey, -1, SQLITE_TRANSIENT_DEST)
+
+        var totals: [String: Double] = [:]
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let idCStr = sqlite3_column_text(stmt, 0) else { continue }
+            totals[String(cString: idCStr)] = sqlite3_column_double(stmt, 1)
+        }
+        return totals
+    }
+
     /// Per-device subtotal for a given (provider, month). Used by the
     /// provider-card popover.
     struct DeviceTotal: Sendable, Equatable {

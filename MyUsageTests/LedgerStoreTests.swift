@@ -199,4 +199,53 @@ struct LedgerStoreTests {
         #expect(entries.map(\.day) == ["2026-04-01", "2026-04-02"])
         #expect(entries.map(\.costUSD) == [1, 2])
     }
+
+    @Test("monthlyTotalsByAccount groups across devices and surfaces every account")
+    func monthlyTotalsByAccount() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            // Account A on two devices, plus a different month
+            LedgerEntry(deviceId: "Mac1", accountId: "a@x.com", provider: .claude, day: "2026-04-01", costUSD: 1, recordedAt: now),
+            LedgerEntry(deviceId: "Mac2", accountId: "a@x.com", provider: .claude, day: "2026-04-02", costUSD: 2, recordedAt: now),
+            LedgerEntry(deviceId: "Mac1", accountId: "a@x.com", provider: .claude, day: "2026-03-31", costUSD: 99, recordedAt: now),
+            // Account B on one device
+            LedgerEntry(deviceId: "Mac1", accountId: "b@x.com", provider: .claude, day: "2026-04-03", costUSD: 5, recordedAt: now),
+            // Different provider — must not bleed in
+            LedgerEntry(deviceId: "Mac1", accountId: "a@x.com", provider: .codex, day: "2026-04-01", costUSD: 100, recordedAt: now)
+        ])
+
+        let totals = try store.monthlyTotalsByAccount(provider: .claude, monthKey: "2026-04")
+        #expect(totals.count == 2)
+        #expect(totals["a@x.com"] == 3)
+        #expect(totals["b@x.com"] == 5)
+    }
+
+    @Test("monthlyTotal scoped to one accountID excludes other accounts")
+    func monthlyTotalScopedToAccount() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "Mac1", accountId: "a@x.com", provider: .claude, day: "2026-04-01", costUSD: 7, recordedAt: now),
+            LedgerEntry(deviceId: "Mac2", accountId: "a@x.com", provider: .claude, day: "2026-04-02", costUSD: 3, recordedAt: now),
+            LedgerEntry(deviceId: "Mac1", accountId: "b@x.com", provider: .claude, day: "2026-04-01", costUSD: 100, recordedAt: now)
+        ])
+
+        #expect(try store.monthlyTotal(provider: .claude, monthKey: "2026-04", accountID: "a@x.com") == 10)
+        #expect(try store.monthlyTotal(provider: .claude, monthKey: "2026-04", accountID: "b@x.com") == 100)
+        #expect(try store.monthlyTotal(provider: .claude, monthKey: "2026-04", accountID: "never@x.com") == 0)
+    }
+
+    @Test("monthlyTotalsByAccount keeps legacy default rows under their bucket")
+    func monthlyTotalsByAccountIncludesDefault() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "Mac1", accountId: "default", provider: .claude, day: "2026-04-01", costUSD: 5, recordedAt: now),
+            LedgerEntry(deviceId: "Mac1", accountId: "a@x.com", provider: .claude, day: "2026-04-01", costUSD: 2, recordedAt: now)
+        ])
+        let totals = try store.monthlyTotalsByAccount(provider: .claude, monthKey: "2026-04")
+        #expect(totals["default"] == 5)
+        #expect(totals["a@x.com"] == 2)
+    }
 }

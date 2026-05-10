@@ -214,6 +214,27 @@ final class LedgerSync {
         (try? store.monthlyByModel(provider: provider, monthKey: monthKey)) ?? [:]
     }
 
+    /// Cross-device per-account totals for a provider in the given
+    /// `YYYY-MM` month. Returns `[accountID: USD]`. Drives the popover
+    /// account switcher's per-account cost numbers.
+    func monthlyTotalsByAccount(
+        provider: ProviderKind,
+        monthKey: String
+    ) -> [String: Double] {
+        (try? store.monthlyTotalsByAccount(provider: provider, monthKey: monthKey)) ?? [:]
+    }
+
+    /// Single-account scoped monthly total. Used when the popover renders
+    /// the cost row inside one account's card and needs that account's
+    /// cross-device sum.
+    func monthlyTotal(
+        provider: ProviderKind,
+        monthKey: String,
+        accountID: String
+    ) -> Double {
+        (try? store.monthlyTotal(provider: provider, monthKey: monthKey, accountID: accountID)) ?? 0
+    }
+
     /// Fetch aggregated contributions for a provider in the given month —
     /// used by the popover when the user clicks the ⊕ badge.
     func contributions(
