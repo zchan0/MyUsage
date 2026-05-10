@@ -168,10 +168,14 @@ final class CodexProvider: UsageProvider {
     /// `computeMonthlyCost`.
     private weak var ledger: LedgerSync?
 
+    /// Optional account registry (spec 15) — see ClaudeProvider for shape.
+    private weak var accountStore: AccountStore?
+
     // MARK: - Init
 
-    init(ledger: LedgerSync? = nil) {
+    init(ledger: LedgerSync? = nil, accountStore: AccountStore? = nil) {
         self.ledger = ledger
+        self.accountStore = accountStore
         detectAvailability()
     }
 
@@ -245,14 +249,22 @@ final class CodexProvider: UsageProvider {
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
 
-            await recordDailyCostsToLedger()
+            let identity = currentAccount()
+            if let identity, let snapshot {
+                accountStore?.recordObservation(
+                    provider: .codex,
+                    identity: identity,
+                    snapshot: snapshot
+                )
+            }
+            await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
 
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    private func recordDailyCostsToLedger() async {
+    private func recordDailyCostsToLedger(accountID: String) async {
         guard let ledger else { return }
         let byDay = await Task.detached(priority: .utility) {
             CodexLogParser.scanDailyCost(
@@ -261,7 +273,7 @@ final class CodexProvider: UsageProvider {
             )
         }.value
         guard !byDay.isEmpty else { return }
-        await ledger.recordDailyCosts(provider: .codex, byDay: byDay)
+        await ledger.recordDailyCosts(provider: .codex, byDay: byDay, accountID: accountID)
     }
 
     /// Scan `~/.codex/sessions` + `archived_sessions` modified since the first

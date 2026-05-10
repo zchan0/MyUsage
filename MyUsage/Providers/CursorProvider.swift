@@ -87,9 +87,17 @@ final class CursorProvider: UsageProvider {
     private static let emailKey = "cursorAuth/cachedEmail"
     private static let membershipKey = "cursorAuth/stripeMembershipType"
 
+    // MARK: - State
+
+    /// Optional account registry (spec 15) — Cursor exposes the email
+    /// directly via the local SQLite cache, so the AccountStore wiring
+    /// is the simplest of the three.
+    private weak var accountStore: AccountStore?
+
     // MARK: - Init
 
-    init() {
+    init(accountStore: AccountStore? = nil) {
+        self.accountStore = accountStore
         detectAvailability()
     }
 
@@ -126,6 +134,14 @@ final class CursorProvider: UsageProvider {
 
             // 4. Map to snapshot
             snapshot = Self.mapToSnapshot(usage: usage, plan: plan, email: tokens.email, membership: tokens.membership)
+
+            if let identity = currentAccount(), let snapshot {
+                accountStore?.recordObservation(
+                    provider: .cursor,
+                    identity: identity,
+                    snapshot: snapshot
+                )
+            }
 
         } catch {
             self.error = error.localizedDescription

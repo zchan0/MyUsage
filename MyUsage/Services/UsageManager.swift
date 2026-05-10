@@ -17,6 +17,12 @@ final class UsageManager {
     /// instance and the UI can observe aggregate state.
     let ledger: LedgerSync
 
+    /// Per-(provider, account) registry + cached snapshots — see spec 15.
+    /// Owns `accounts.json`. Lives on the manager so every provider records
+    /// its observations through a single instance and the UI can observe
+    /// the active/inactive list.
+    let accountStore: AccountStore
+
     // MARK: - Settings
 
     var refreshInterval: RefreshInterval {
@@ -65,7 +71,10 @@ final class UsageManager {
 
     // MARK: - Init
 
-    init(ledger: LedgerSync = LedgerSync()) {
+    init(
+        ledger: LedgerSync = LedgerSync(),
+        accountStore: AccountStore = AccountStore()
+    ) {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
         let storedOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
@@ -79,10 +88,11 @@ final class UsageManager {
         self.notifyWarnThreshold = (UserDefaults.standard.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
         self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
         self.ledger = ledger
+        self.accountStore = accountStore
 
-        register(ClaudeProvider(ledger: ledger))
-        register(CodexProvider(ledger: ledger))
-        register(CursorProvider())
+        register(ClaudeProvider(ledger: ledger, accountStore: accountStore))
+        register(CodexProvider(ledger: ledger, accountStore: accountStore))
+        register(CursorProvider(accountStore: accountStore))
         register(AntigravityProvider())
 
         Task { await ledger.start() }

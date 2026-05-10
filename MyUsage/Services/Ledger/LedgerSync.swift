@@ -183,12 +183,14 @@ final class LedgerSync {
     func recordDailyCosts(
         provider: ProviderKind,
         byDay: [String: Double],
-        perModelByDay: [String: [String: Double]]? = nil
+        perModelByDay: [String: [String: Double]]? = nil,
+        accountID: String = "default"
     ) async {
         let result = await writer.recordDailyCosts(
             provider: provider,
             dailyCostsByDay: byDay,
-            perModelByDay: perModelByDay
+            perModelByDay: perModelByDay,
+            accountID: accountID
         )
         lastWriteIssue = result.issue
         guard !result.applied.isEmpty else {

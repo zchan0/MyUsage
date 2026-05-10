@@ -187,6 +187,11 @@ final class ClaudeProvider: UsageProvider {
     /// calculation writes per-day totals into the ledger (spec 12).
     private weak var ledger: LedgerSync?
 
+    /// Optional account registry (spec 15). When present, each successful
+    /// refresh records an observation so the popover can render the
+    /// account switcher and Settings can offer Forget per-account.
+    private weak var accountStore: AccountStore?
+
     /// After a 429, skip API calls until this time. `refresh()` becomes a no-op
     /// and we keep showing the last good snapshot and error message.
     private var nextAllowedRefreshAt: Date?
@@ -207,8 +212,9 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Init
 
-    init(ledger: LedgerSync? = nil) {
+    init(ledger: LedgerSync? = nil, accountStore: AccountStore? = nil) {
         self.ledger = ledger
+        self.accountStore = accountStore
         detectAvailability()
     }
 
@@ -296,10 +302,22 @@ final class ClaudeProvider: UsageProvider {
             nextAllowedRefreshAt = nil
             consecutiveFailures = 0
 
+            // Tag this refresh with the now-known account identity (spec 15).
+            // Used both to record an observation in the AccountStore and to
+            // tag ledger writes so cross-device aggregates split per account.
+            let identity = currentAccount()
+            if let identity, let snapshot {
+                accountStore?.recordObservation(
+                    provider: .claude,
+                    identity: identity,
+                    snapshot: snapshot
+                )
+            }
+
             // Write per-day totals into the multi-device ledger (spec 12).
             // Off the hot path of the user-visible snapshot so a slow scan
             // never blocks the card update.
-            await recordDailyCostsToLedger()
+            await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
 
             // Overlay per-model breakdown computed from the ledger
             // (cross-device, current-month). The API per-bucket fields
@@ -462,7 +480,7 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Ledger
 
-    private func recordDailyCostsToLedger() async {
+    private func recordDailyCostsToLedger(accountID: String) async {
         guard let ledger else { return }
         let breakdown = await Task.detached(priority: .utility) {
             ClaudeLogParser.scanDailyBreakdown(
@@ -474,7 +492,8 @@ final class ClaudeProvider: UsageProvider {
         await ledger.recordDailyCosts(
             provider: .claude,
             byDay: breakdown.total,
-            perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel
+            perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel,
+            accountID: accountID
         )
     }
 
