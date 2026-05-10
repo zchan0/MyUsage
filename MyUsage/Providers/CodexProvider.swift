@@ -313,6 +313,24 @@ final class CodexProvider: UsageProvider {
         return nil
     }
 
+    // MARK: - Account identity
+
+    /// Identity of the currently signed-in Codex account. Email is decoded
+    /// from the OIDC `id_token` (`email` claim); falls back to the opaque
+    /// `account_id` when the token is missing the claim or absent.
+    func currentAccount() -> AccountIdentity? {
+        guard let auth = loadAuth(), let tokens = auth.tokens else { return nil }
+        if let idToken = tokens.idToken,
+           let email = JWTDecoder.stringClaim("email", from: idToken),
+           !email.isEmpty {
+            return .email(email)
+        }
+        if let accountID = tokens.accountId, !accountID.isEmpty {
+            return .opaque(accountID)
+        }
+        return nil
+    }
+
     /// Atomically write the supplied auth back to `path`. We hand-encode
     /// instead of using JSONEncoder because OpenAI's auth.json uses an
     /// uppercase `OPENAI_API_KEY` key while the rest of the file is

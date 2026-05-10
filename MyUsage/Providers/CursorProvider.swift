@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 // MARK: - Cursor Data Models
 
@@ -160,6 +161,23 @@ final class CursorProvider: UsageProvider {
             email: values[Self.emailKey],
             membership: values[Self.membershipKey]
         )
+    }
+
+    // MARK: - Account identity
+
+    /// Identity of the currently signed-in Cursor account. Cursor's
+    /// SQLite already caches the email on every successful auth, so the
+    /// fallback path is exceedingly rare; when it triggers we hash the
+    /// access token rather than burning a SQLite roundtrip on
+    /// `stripeCustomerId`.
+    func currentAccount() -> AccountIdentity? {
+        guard let tokens = loadTokens() else { return nil }
+        if let email = tokens.email, !email.isEmpty {
+            return .email(email)
+        }
+        let digest = SHA256.hash(data: Data(tokens.accessToken.utf8))
+        let short = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        return .opaque(short)
     }
 
     // MARK: - JWT Expiry Check

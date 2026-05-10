@@ -1,5 +1,6 @@
 import Foundation
 import os
+import CryptoKit
 
 /// Claude Code credential file structure.
 /// Located at `~/.claude/.credentials.json` or Keychain `Claude Code-credentials`.
@@ -559,6 +560,26 @@ final class ClaudeProvider: UsageProvider {
     /// credentials file no longer carries `subscriptionType`.
     private func planLabel(creds: ClaudeCredentials) -> String? {
         cachedProfile?.planName ?? creds.planName
+    }
+
+    // MARK: - Account identity
+
+    /// Identity of the currently signed-in Claude account. `nil` when we
+    /// haven't fetched the profile yet AND can't derive a fallback (e.g.
+    /// no credentials at all). Once profile is cached, returns the email
+    /// path; on the rare path where profile lookup failed but we still
+    /// have credentials, returns an opaque hash so ledger writes don't
+    /// silently merge into the legacy `"default"` bucket.
+    func currentAccount() -> AccountIdentity? {
+        if let email = cachedProfile?.account?.email, !email.isEmpty {
+            return .email(email)
+        }
+        guard let creds = loadCredentials(), let oauth = creds.claudeAiOauth else {
+            return nil
+        }
+        let digest = SHA256.hash(data: Data(oauth.refreshToken.utf8))
+        let short = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
+        return .opaque(short)
     }
 
     // MARK: - Profile Fetch
