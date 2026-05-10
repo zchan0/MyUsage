@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UserNotifications
 @testable import MyUsage
 
 /// LimitNotifier tests — focus on the pure tier calculation + the
@@ -113,11 +114,13 @@ struct LimitNotifierTests {
 
     private func makeObs(
         id: String = "claude.session",
+        accountLabel: String? = nil,
         percent: Double
     ) -> LimitNotifier.LimitObservation {
         .init(
             id: id,
             providerName: "Claude Code",
+            accountLabel: accountLabel,
             limitName: "5-hour window",
             percent: percent,
             resetCountdown: "2h 14m"
@@ -140,7 +143,77 @@ struct LimitNotifierTests {
         return (notifier, defaults, suite)
     }
 
+    @MainActor
+    private func makeNotifierRecording() -> (LimitNotifier, RecordingNotificationDispatcher, UserDefaults) {
+        let suite = "LimitNotifierTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let dispatcher = RecordingNotificationDispatcher()
+        let notifier = LimitNotifier(center: dispatcher, defaults: defaults)
+        return (notifier, dispatcher, defaults)
+    }
+
+    // MARK: - Notification text (spec 15)
+
+    @Test("Notification title without accountLabel matches today's wording")
+    @MainActor
+    func titleWithoutAccount() async {
+        let (notifier, dispatcher, _) = makeNotifierRecording()
+        await notifier.evaluate(
+            observations: [makeObs(percent: 82)],
+            warnThreshold: 80, critThreshold: 95, enabled: true
+        )
+        let title = await dispatcher.firstTitle()
+        #expect(title == "Claude Code · 5-hour window at 82%")
+    }
+
+    @Test("Notification title with accountLabel folds in the email parenthetically")
+    @MainActor
+    func titleWithAccount() async {
+        let (notifier, dispatcher, _) = makeNotifierRecording()
+        await notifier.evaluate(
+            observations: [makeObs(accountLabel: "user@company.com", percent: 82)],
+            warnThreshold: 80, critThreshold: 95, enabled: true
+        )
+        let title = await dispatcher.firstTitle()
+        #expect(title == "Claude Code (user@company.com) · 5-hour window at 82%")
+    }
+
+    @Test("Critical-tier title is prefixed with the warning glyph")
+    @MainActor
+    func critPrefix() async {
+        let (notifier, dispatcher, _) = makeNotifierRecording()
+        await notifier.evaluate(
+            observations: [makeObs(accountLabel: "user@company.com", percent: 96)],
+            warnThreshold: 80, critThreshold: 95, enabled: true
+        )
+        let title = await dispatcher.firstTitle()
+        #expect(title == "⚠︎ Claude Code (user@company.com) · 5-hour window at 96%")
+    }
+
     private func state(_ defaults: UserDefaults) -> [String: String] {
         (defaults.dictionary(forKey: "MyUsage.notifierState") as? [String: String]) ?? [:]
+    }
+}
+
+/// Dispatcher that captures every UNNotificationRequest for assertion
+/// in tests. Backed by an actor for thread-safe access.
+final class RecordingNotificationDispatcher: NotificationDispatcher, @unchecked Sendable {
+    private let store = TitleStore()
+
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool { true }
+
+    func add(_ request: UNNotificationRequest) async throws {
+        await store.append(request.content.title)
+    }
+
+    func firstTitle() async -> String? {
+        await store.first()
+    }
+
+    private actor TitleStore {
+        var titles: [String] = []
+        func append(_ s: String) { titles.append(s) }
+        func first() -> String? { titles.first }
     }
 }

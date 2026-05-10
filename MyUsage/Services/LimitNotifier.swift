@@ -77,9 +77,30 @@ final class LimitNotifier {
     struct LimitObservation: Sendable, Equatable {
         let id: String                  // e.g. "claude.session"
         let providerName: String        // "Claude Code"
+        /// Pre-formatted account label folded into notification copy when
+        /// non-nil. nil = single-account case (today's wording preserved).
+        /// Spec 15: include the email for disambiguation when ≥ 2 accounts
+        /// have been observed for the same provider.
+        let accountLabel: String?
         let limitName: String           // "5-hour window"
         let percent: Double
         let resetCountdown: String?     // "2h 14m" or nil
+
+        init(
+            id: String,
+            providerName: String,
+            accountLabel: String? = nil,
+            limitName: String,
+            percent: Double,
+            resetCountdown: String?
+        ) {
+            self.id = id
+            self.providerName = providerName
+            self.accountLabel = accountLabel
+            self.limitName = limitName
+            self.percent = percent
+            self.resetCountdown = resetCountdown
+        }
     }
 
     // MARK: - Dependencies
@@ -127,24 +148,33 @@ final class LimitNotifier {
     /// MainActor-isolated because UsageProvider properties (kind, isEnabled,
     /// snapshot) are themselves MainActor-only. Tests should construct
     /// observations by hand rather than calling this overload.
+    ///
+    /// `accountStore` (when present) is consulted per-provider to fold
+    /// the active account's display name into notifications when ≥ 2
+    /// accounts have been observed. Single-account providers see no
+    /// change to their notification copy.
     static func observations(
-        from providers: [any UsageProvider]
+        from providers: [any UsageProvider],
+        accountStore: AccountStore? = nil
     ) -> [LimitObservation] {
-        providers.flatMap { observations(from: $0) }
+        providers.flatMap { observations(from: $0, accountStore: accountStore) }
     }
 
     static func observations(
-        from provider: any UsageProvider
+        from provider: any UsageProvider,
+        accountStore: AccountStore? = nil
     ) -> [LimitObservation] {
         guard provider.isEnabled, let snap = provider.snapshot else { return [] }
         let display = provider.kind.displayName
         let kindRaw = provider.kind.rawValue
+        let accountLabel = activeAccountLabel(provider: provider, store: accountStore)
         var rows: [LimitObservation] = []
 
         if let session = snap.sessionUsage {
             rows.append(.init(
                 id: "\(kindRaw).session",
                 providerName: display,
+                accountLabel: accountLabel,
                 limitName: "5-hour window",
                 percent: session.percentUsed,
                 resetCountdown: session.resetCountdown
@@ -154,6 +184,7 @@ final class LimitNotifier {
             rows.append(.init(
                 id: "\(kindRaw).weekly",
                 providerName: display,
+                accountLabel: accountLabel,
                 limitName: "Weekly limit",
                 percent: weekly.percentUsed,
                 resetCountdown: weekly.resetCountdown
@@ -163,6 +194,7 @@ final class LimitNotifier {
             rows.append(.init(
                 id: "\(kindRaw).included",
                 providerName: display,
+                accountLabel: accountLabel,
                 limitName: "Included quota",
                 percent: pct,
                 resetCountdown: nil
@@ -172,6 +204,7 @@ final class LimitNotifier {
             rows.append(.init(
                 id: "\(kindRaw).on-demand",
                 providerName: display,
+                accountLabel: accountLabel,
                 limitName: "On-demand budget",
                 percent: odPct,
                 resetCountdown: nil
@@ -181,12 +214,27 @@ final class LimitNotifier {
             rows.append(.init(
                 id: "\(kindRaw).model.\(quota.label)",
                 providerName: display,
+                accountLabel: accountLabel,
                 limitName: quota.label,
                 percent: quota.percentUsed,
                 resetCountdown: nil
             ))
         }
         return rows
+    }
+
+    /// Returns the active account's display name for this provider when
+    /// ≥ 2 accounts have been observed. Single-account providers return
+    /// nil so the notification text reads as it does today.
+    private static func activeAccountLabel(
+        provider: any UsageProvider,
+        store: AccountStore?
+    ) -> String? {
+        guard let store, store.count(for: provider.kind) >= 2 else { return nil }
+        guard let activeID = store.activeAccountID(for: provider.kind),
+              let record = store.record(for: provider.kind, accountID: activeID)
+        else { return nil }
+        return record.displayName
     }
 
     // MARK: - Evaluation
@@ -240,7 +288,12 @@ final class LimitNotifier {
     private func dispatch(observation obs: LimitObservation, tier: Tier) async {
         let content = UNMutableNotificationContent()
         let prefix = tier == .crit ? "⚠︎ " : ""
-        content.title = "\(prefix)\(obs.providerName) · \(obs.limitName) at \(Int(obs.percent.rounded()))%"
+        // Spec 15: when the provider has ≥ 2 observed accounts, fold the
+        // active account's display name into the title so notifications
+        // are still useful when the user runs work + personal Claude
+        // accounts on the same Mac.
+        let accountSuffix = obs.accountLabel.map { " (\($0))" } ?? ""
+        content.title = "\(prefix)\(obs.providerName)\(accountSuffix) · \(obs.limitName) at \(Int(obs.percent.rounded()))%"
         if let reset = obs.resetCountdown {
             content.body = "Resets in \(reset)"
         }

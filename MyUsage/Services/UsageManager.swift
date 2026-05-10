@@ -116,7 +116,7 @@ final class UsageManager {
         // Evaluate limit pressure and dispatch notifications for any
         // tier upgrades observed since the previous refresh. Idempotent
         // by ID, so no duplicates within the same window.
-        let observations = LimitNotifier.observations(from: providers)
+        let observations = LimitNotifier.observations(from: providers, accountStore: accountStore)
         await LimitNotifier.shared.evaluate(
             observations: observations,
             warnThreshold: notifyWarnThreshold,
