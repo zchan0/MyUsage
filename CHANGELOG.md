@@ -6,6 +6,72 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.0 — 2026-05-11
+
+### Added
+- **Multi-account per provider (spec 15).** When you sign into more than
+  one Claude / Codex / Cursor account on the same Mac (work + personal,
+  multiple client orgs, etc.), MyUsage now keeps each one's usage
+  separated instead of pouring everything into a single bucket.
+  - **Identity per provider**: Claude email from `/api/oauth/profile`,
+    Codex email from the OIDC `id_token`, Cursor email from the local
+    SQLite cache. Falls back to an opaque `Account id:xxxx` only when
+    the provider genuinely doesn't expose an email.
+  - **Popover account switcher**: when 2+ accounts have been observed
+    for a provider, its card becomes swipeable — arrow buttons + dot
+    strip below. Inactive accounts render their last-known state under a
+    `Snapshot from May 8` banner with a `saturate(0.65)` wash so they
+    don't look like live data. Single-account UX is unchanged.
+  - **Settings → Providers inline accounts**: per-account month-to-date
+    cost + Forget. Forget wipes this Mac's recorded usage for that
+    account (both local SQLite and the synced JSONL); other Macs keep
+    their own slice.
+  - **Notifications include the account**: `Claude Code (user@company.com)
+    · 5-hour window at 82%` when 2+ accounts. Single-account wording is
+    byte-identical to today's.
+- **Per-account ledger queries.** `monthlyTotalsByAccount` (group-by
+  account_id, cross-device) and `monthlyTotal(...accountID:)` (single
+  account scope) feed the new UI. Legacy `account_id = "default"` rows
+  are silently rewritten to your first observed account on first refresh.
+
+### Changed
+- **New file `accounts.json`** at
+  `~/Library/Application Support/MyUsage/accounts.json` — single atomic
+  JSON file holding the per-account snapshot cache + registry. No
+  schema-migration concerns: the file is rebuilt from observations on
+  every refresh.
+
+### 中文
+
+- **多账号支持（spec 15）**：同一台 Mac 上登过两个或更多
+  Claude / Codex / Cursor 账号（工作 + 个人，多客户 org 等）时，MyUsage
+  会按账号分开记录用量，不再把全部费用倒进一个桶里。
+  - **身份识别**：Claude 取 `/api/oauth/profile` 的 email；Codex
+    解 `id_token` 的 email claim；Cursor 读本地 SQLite 缓存的
+    `cachedEmail`。只有在提供方真的没给 email 的极少数情况下才
+    退化成 `Account id:xxxx`。
+  - **Popover 账号切换器**：某个 provider 观测到 ≥2 账号时，那张卡
+    变成可切换的 —— 下方左右箭头 + 圆点条。非当前活跃账号显示上次
+    登录时缓存的快照，加 `Snapshot from May 8` banner +
+    `saturate(0.65)` 弱化处理，跟实时数据区分开。单账号情况下 UI
+    完全不变。
+  - **Settings → Providers 内联账号管理**：每个账号显示当月花费 +
+    Forget 按钮。Forget 会清除本机针对该账号的所有用量记录
+    （SQLite + 同步文件夹的 JSONL）；其他 Mac 上的记录不动。
+  - **通知文案带账号**：`Claude Code (user@company.com) · 5-hour
+    window at 82%`（≥2 账号时）。单账号时文案跟今天完全一致。
+- **账号粒度的 ledger 查询**：新增 `monthlyTotalsByAccount`
+  （按 account_id 分组，跨设备）和 `monthlyTotal(...accountID:)`
+  （单账号范围）。历史 `account_id = "default"` 的行会在第一次
+  刷新时静默改写到你的第一个观测账号。
+
+### 改动
+
+- **新文件 `accounts.json`**，位于
+  `~/Library/Application Support/MyUsage/accounts.json`，单个原子
+  JSON 文件，存账号注册表 + 各账号最近一次的快照缓存。无需 schema
+  迁移 —— 每次刷新都会从观测中重建。
+
 ## v0.9.1 — 2026-05-04
 
 ### Changed
