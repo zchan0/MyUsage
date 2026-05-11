@@ -627,6 +627,48 @@ final class LedgerStore: @unchecked Sendable {
         return entries
     }
 
+    /// Delete this device's rows for one (provider, accountID). Used by
+    /// the per-account Forget action in Settings → Providers — wipes the
+    /// caller's *own* slice of the ledger so a forgotten account stops
+    /// inflating the provider-wide cost row. Other devices' rows under
+    /// the same accountID are untouched (they live under different
+    /// `device_id` keys and remain the truth of those devices' history).
+    /// Returns the number of rows deleted.
+    @discardableResult
+    func deleteRows(
+        forDevice deviceId: String,
+        provider: ProviderKind,
+        accountID: String
+    ) throws -> Int {
+        let sql = """
+            DELETE FROM ledger_entries
+            WHERE device_id = ?1 AND provider = ?2 AND account_id = ?3;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, deviceId, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 3, accountID, -1, SQLITE_TRANSIENT_DEST)
+
+        let rc = sqlite3_step(stmt)
+        guard rc == SQLITE_DONE else {
+            throw StoreError.step(
+                sql: sql,
+                code: rc,
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        return Int(sqlite3_changes(db))
+    }
+
     /// Delete all rows authored by a given device. Used by the "Remove"
     /// action in Settings → Devices — removes the peer *locally* only.
     func deleteRows(forDevice deviceId: String) throws {

@@ -362,11 +362,11 @@ struct SettingsView: View {
             presenting: pendingForget
         ) { item in
             Button("Forget", role: .destructive) {
-                manager.accountStore.forget(provider: item.providerKind, accountID: item.account.accountID)
+                manager.forgetAccount(provider: item.providerKind, accountID: item.account.accountID)
             }
             Button("Cancel", role: .cancel) {}
         } message: { _ in
-            Text("Removes this account from the popover. Past usage rows in your sync ledger remain — drop the row by signing back into Claude / Codex / Cursor as that account, then run Forget.")
+            Text("Removes this account from the popover and wipes this Mac's recorded usage for it. Other Macs that signed in as this account keep their own history — Forget on each Mac to clear globally.")
         }
     }
 

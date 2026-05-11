@@ -264,6 +264,45 @@ final class LedgerSync {
         monthlyByDevice[monthKey]?[provider] ?? []
     }
 
+    /// Wipe this device's ledger rows for one (provider, account). Mirrors
+    /// `forgetPeer`'s spirit at a finer granularity — the user said
+    /// "I'm done with this account on this Mac" and we honor that across
+    /// both local SQLite *and* this device's published JSONL in the sync
+    /// folder. Other peers' rows under the same accountID stay (they
+    /// belong to those Macs and remain the truth of those Macs' history).
+    ///
+    /// Returns the number of rows deleted. Refreshes published aggregates
+    /// + republishes the local snapshot so the sync folder JSONL no longer
+    /// contains the wiped rows (otherwise our own snapshot would still
+    /// surface them on the next ingest by other Macs).
+    @discardableResult
+    func forgetAccountRows(
+        provider: ProviderKind,
+        accountID: String
+    ) async -> Int {
+        let n: Int
+        do {
+            n = try store.deleteRows(
+                forDevice: selfDeviceID,
+                provider: provider,
+                accountID: accountID
+            )
+        } catch {
+            Logger.ledger.error(
+                "forgetAccountRows failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return 0
+        }
+        if n > 0 {
+            Logger.ledger.info(
+                "Wiped \(n, privacy: .public) self rows for provider=\(provider.rawValue, privacy: .public) account=\(accountID, privacy: .private)"
+            )
+            reloadAggregates()
+            await publishLocalSnapshot()
+        }
+        return n
+    }
+
     /// Forget a peer device: drop its rows from SQLite and delete its
     /// folder under `<sync-root>/devices/<id>/` so it stops reappearing
     /// on every poll. If the peer is still running and publishes again,

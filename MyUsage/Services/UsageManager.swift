@@ -148,6 +148,24 @@ final class UsageManager {
         providerOrder.move(fromOffsets: source, toOffset: destination)
     }
 
+    /// Forget one account: drop the registry entry AND wipe this device's
+    /// ledger rows for it. Spec 15 behavior — the alternative ("registry
+    /// only") leaves orphaned cost rows that inflate the provider-wide
+    /// total once the account count drops back to 1, with no other UI
+    /// path to remove them.
+    ///
+    /// Cross-device intent: this Mac's spending under that account is
+    /// gone; peer Macs keep their own slice (they're the source of truth
+    /// for their own usage, and the user might still want it visible).
+    /// Forgetting on every Mac wipes globally — same pattern as
+    /// `forgetPeer`.
+    func forgetAccount(provider: ProviderKind, accountID: String) {
+        Task {
+            await ledger.forgetAccountRows(provider: provider, accountID: accountID)
+            accountStore.forget(provider: provider, accountID: accountID)
+        }
+    }
+
     /// The worst usage percent across all enabled providers.
     var worstUsagePercent: Double {
         providers
