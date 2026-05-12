@@ -19,7 +19,7 @@ struct AggregateMonthlyCostRow: View {
 
             Spacer(minLength: 6)
 
-            Text(ProviderCard.formatCost(displayed))
+            Text(ProviderCardCostRow.formatCost(displayed))
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(.primary.opacity(0.95))
@@ -89,7 +89,7 @@ struct DeviceBreakdownPopover: View {
                             Text(row.isSelf ? "\(row.displayName) (this Mac)" : row.displayName)
                                 .font(.caption)
                             Spacer()
-                            Text(ProviderCard.formatCost(row.costUSD))
+                            Text(ProviderCardCostRow.formatCost(row.costUSD))
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.secondary)
                         }
@@ -103,7 +103,7 @@ struct DeviceBreakdownPopover: View {
                 Text("Total")
                     .font(.caption.weight(.medium))
                 Spacer()
-                Text(ProviderCard.formatCost(total))
+                Text(ProviderCardCostRow.formatCost(total))
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
             }
 

@@ -222,7 +222,7 @@ struct DevicesTab: View {
     }
 
     private func costCell(_ amount: Double, width: CGFloat, emphasised: Bool = false) -> some View {
-        Text(amount > 0 ? ProviderCard.formatCost(amount) : "—")
+        Text(amount > 0 ? ProviderCardCostRow.formatCost(amount) : "—")
             .font(.system(
                 size: 11,
                 weight: emphasised ? .semibold : .regular,
