@@ -118,6 +118,18 @@ final class AccountStore {
         save()
     }
 
+    /// Flip the active pointer for a provider without recording a fresh
+    /// observation. Useful when the active credentials haven't changed
+    /// but extra accounts were injected (e.g. demo / mock multi-account
+    /// mode) — we want them visible in the registry but the real account
+    /// to remain the live one.
+    func activate(provider: ProviderKind, accountID: String?) {
+        var entry = disk.providers[provider.rawValue] ?? ProviderEntry()
+        entry.active = accountID
+        disk.providers[provider.rawValue] = entry
+        save()
+    }
+
     /// Drop one account from the registry — the user has clicked Forget
     /// in Settings → Providers. Leaves ledger entries alone; those still
     /// surface under the account's email in cross-device aggregates and

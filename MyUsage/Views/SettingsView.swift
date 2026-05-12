@@ -103,10 +103,31 @@ struct SettingsView: View {
                             }
                     }
                 }
+
+                debugCard
             }
             .padding(16)
         }
         .scrollContentBackground(.hidden)
+    }
+
+    /// Debug-mode toggles. The mock-multi-account switch lets early
+    /// users see the multi-account UI without actually setting up two
+    /// real Claude / Codex / Cursor accounts. Demo data uses the
+    /// reserved `*@myusage-demo.local` domain — easy to spot and
+    /// guaranteed to never collide with a real email.
+    private var debugCard: some View {
+        @Bindable var mgr = manager
+        return SettingsCard("Debug") {
+            SettingsRow(
+                "Mock multi-account",
+                caption: "Inject two demo accounts per provider so the popover shows the swipeable account switcher. Disable wipes the demo data."
+            ) {
+                Toggle("", isOn: $mgr.mockMultiAccountEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+        }
     }
 
     // MARK: - Notifications card
