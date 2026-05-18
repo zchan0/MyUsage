@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// Debug helper: inject two demo accounts per multi-account-capable
@@ -89,12 +90,16 @@ enum MockMultiAccount {
                 )
                 // Sprinkle a few daily ledger rows across this month so
                 // the per-account cost row + cross-device math have
-                // something to render. Days are seeded deterministically
-                // off the demo ID so reruns produce the same numbers.
-                await manager.ledger.recordDailyCosts(
+                // something to render. Goes through the debug-only
+                // `injectLocalRowsForDebug` so demo data NEVER hits the
+                // user's iCloud / Dropbox sync folder (where it would
+                // propagate to every peer Mac and contaminate real
+                // aggregates). Days are seeded deterministically off
+                // the demo ID so reruns produce the same numbers.
+                manager.ledger.injectLocalRowsForDebug(
                     provider: kind,
-                    byDay: makeMonthlyByDay(monthlyCost: demo.monthlyCost, monthKey: monthKey),
-                    accountID: demo.id
+                    accountID: demo.id,
+                    byDay: makeMonthlyByDay(monthlyCost: demo.monthlyCost, monthKey: monthKey)
                 )
             }
 
@@ -191,3 +196,4 @@ enum MockMultiAccount {
         }
     }
 }
+#endif

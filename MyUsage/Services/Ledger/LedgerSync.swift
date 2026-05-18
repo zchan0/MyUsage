@@ -264,6 +264,43 @@ final class LedgerSync {
         monthlyByDevice[monthKey]?[provider] ?? []
     }
 
+    #if DEBUG
+    /// Insert ledger rows directly into local SQLite, bypassing the
+    /// sync-folder JSONL export. Used **only** by the Settings → Debug →
+    /// Mock multi-account toggle so demo data never escapes to the
+    /// user's iCloud / Dropbox sync folder (where it would propagate to
+    /// every peer Mac).
+    ///
+    /// Refreshes published aggregates so the UI sees the rows on the
+    /// next render, but never touches the writer's export path.
+    func injectLocalRowsForDebug(
+        provider: ProviderKind,
+        accountID: String,
+        byDay: [String: Double],
+        now: Date = .now
+    ) {
+        let entries = byDay.map { (day, cost) in
+            LedgerEntry(
+                deviceId: selfDeviceID,
+                accountId: accountID,
+                provider: provider,
+                day: day,
+                costUSD: cost,
+                recordedAt: now
+            )
+        }
+        do {
+            _ = try store.upsert(entries)
+        } catch {
+            Logger.ledger.error(
+                "injectLocalRowsForDebug failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return
+        }
+        reloadAggregates()
+    }
+    #endif
+
     /// Wipe this device's ledger rows for one (provider, account). Mirrors
     /// `forgetPeer`'s spirit at a finer granularity — the user said
     /// "I'm done with this account on this Mac" and we honor that across

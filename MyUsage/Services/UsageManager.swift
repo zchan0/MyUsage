@@ -65,11 +65,12 @@ final class UsageManager {
         didSet { UserDefaults.standard.set(notifyCritThreshold, forKey: "notifyCritThreshold") }
     }
 
+    #if DEBUG
     /// Debug-only: inject demo accounts so the popover renders the
     /// multi-account switcher without the user actually setting up
     /// multiple Claude / Codex / Cursor accounts. See
     /// `MockMultiAccount` for the reserved-domain conventions used to
-    /// detect demo data on disable.
+    /// detect demo data on disable. Compiled out of release builds.
     var mockMultiAccountEnabled: Bool {
         didSet {
             guard mockMultiAccountEnabled != oldValue else { return }
@@ -83,6 +84,7 @@ final class UsageManager {
             }
         }
     }
+    #endif
 
     // MARK: - Private
 
@@ -106,7 +108,9 @@ final class UsageManager {
         self.notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
         self.notifyWarnThreshold = (UserDefaults.standard.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
         self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
+        #if DEBUG
         self.mockMultiAccountEnabled = UserDefaults.standard.bool(forKey: "mockMultiAccountEnabled")
+        #endif
         self.ledger = ledger
         self.accountStore = accountStore
 

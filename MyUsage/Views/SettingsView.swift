@@ -104,24 +104,30 @@ struct SettingsView: View {
                     }
                 }
 
+                #if DEBUG
                 debugCard
+                #endif
             }
             .padding(16)
         }
         .scrollContentBackground(.hidden)
     }
 
-    /// Debug-mode toggles. The mock-multi-account switch lets early
-    /// users see the multi-account UI without actually setting up two
-    /// real Claude / Codex / Cursor accounts. Demo data uses the
-    /// reserved `*@myusage-demo.local` domain — easy to spot and
-    /// guaranteed to never collide with a real email.
+    #if DEBUG
+    /// Debug-mode toggles, only compiled into debug builds. The
+    /// mock-multi-account switch lets the maintainer / early testers
+    /// see the multi-account UI without setting up two real Claude /
+    /// Codex / Cursor accounts. Demo data uses the reserved
+    /// `*@myusage-demo.local` domain — easy to spot, guaranteed to
+    /// never collide with a real email — and writes only to local
+    /// SQLite (not the sync folder) so it can't propagate to other
+    /// Macs.
     private var debugCard: some View {
         @Bindable var mgr = manager
         return SettingsCard("Debug") {
             SettingsRow(
                 "Mock multi-account",
-                caption: "Inject two demo accounts per provider so the popover shows the swipeable account switcher. Disable wipes the demo data."
+                caption: "Local-only demo: 2 accounts per provider, writes to SQLite only (not the sync folder). Disable wipes."
             ) {
                 Toggle("", isOn: $mgr.mockMultiAccountEnabled)
                     .toggleStyle(.switch)
@@ -129,6 +135,7 @@ struct SettingsView: View {
             }
         }
     }
+    #endif
 
     // MARK: - Notifications card
 
