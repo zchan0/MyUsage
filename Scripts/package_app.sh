@@ -1,12 +1,33 @@
 #!/bin/bash
 set -euo pipefail
 
+# Usage:
+#   ./Scripts/package_app.sh            # release build → MyUsage.app
+#   ./Scripts/package_app.sh --debug    # debug build  → MyUsage-debug.app
+#
+# Debug mode keeps DEBUG-gated code (Settings → Debug → Mock multi-account)
+# alive and writes to a separate bundle so the release artifact isn't
+# overwritten. `swift run` on its own doesn't work for this app — menu-
+# bar apps need a real .app bundle with Info.plist for NSStatusItem +
+# LSUIElement to initialise.
+
+BUILD_CONFIG="release"
+BUNDLE_SUFFIX=""
+for arg in "$@"; do
+    case "$arg" in
+        --debug)
+            BUILD_CONFIG="debug"
+            BUNDLE_SUFFIX="-debug"
+            ;;
+    esac
+done
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_NAME="MyUsage"
 BUNDLE_ID="com.zchan0.MyUsage"
-BUILD_DIR="${PROJECT_DIR}/.build/release"
-APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}.app"
+BUILD_DIR="${PROJECT_DIR}/.build/${BUILD_CONFIG}"
+APP_BUNDLE="${PROJECT_DIR}/${APP_NAME}${BUNDLE_SUFFIX}.app"
 SOURCE_PLIST="${PROJECT_DIR}/MyUsage/Resources/Info.plist"
 
 if [ -f "$SOURCE_PLIST" ]; then
@@ -22,10 +43,10 @@ BUILD_NUMBER="${MYUSAGE_BUILD:-$DEFAULT_BUILD}"
 
 cd "$PROJECT_DIR"
 
-echo "==> Building release…"
-swift build -c release
+echo "==> Building ${BUILD_CONFIG}…"
+swift build -c "${BUILD_CONFIG}"
 
-echo "==> Assembling ${APP_NAME}.app…"
+echo "==> Assembling ${APP_NAME}${BUNDLE_SUFFIX}.app…"
 rm -rf "$APP_BUNDLE"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
