@@ -6,6 +6,26 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.1 — 2026-05-21
+
+### Fixed
+- **Claude per-model rows under the Weekly bar now show each cap's real
+  utilization, not cost share.** v0.9.x + v0.10.0 displayed rounded
+  cost-share percentages — `Opus 100% / Haiku 0%` for a month with
+  99.99% Opus + 0.01% Haiku spending — which read like a quota state
+  but wasn't. Reverted to the API's `seven_day_opus.utilization` (etc.)
+  path, matching the original design (and CodexBar's convention): each
+  row is one model's cap, independently meaningful. Plans that bundle
+  everything into a unified weekly cap (Max 5x and most Pro tiers) now
+  correctly show no per-model rows — there's no separate per-bucket
+  quota to surface. Cost-by-model is still recorded in the ledger for a
+  future cost-history view; it just no longer impersonates a quota row.
+
+### Internal
+- `ProviderCard.swift` split into four focused files (`ProviderCard` shell
+  + `ProviderCardLimits` / `ProviderCardCostRow` / `ProviderCardBadges`).
+  Behavior identical; the parent dropped from 477 → 255 lines.
+
 ## v0.10.0 — 2026-05-11
 
 ### Added
