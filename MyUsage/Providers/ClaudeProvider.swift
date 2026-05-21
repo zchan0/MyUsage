@@ -328,28 +328,20 @@ final class ClaudeProvider: UsageProvider {
             // never blocks the card update.
             await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
 
-            // Overlay per-model breakdown computed from the ledger
-            // (cross-device, current-month). The API per-bucket fields
-            // populated mapped.weeklyByModel for plans that expose them;
-            // for everyone else (Max 5x and most others) the API returns
-            // nothing useful, and the ledger is the only source. When
-            // both have data, ledger wins — it reflects what the user
-            // actually ran across every Mac.
-            if let ledger, var s = snapshot {
-                let modelCosts = ledger.monthlyByModel(
-                    provider: .claude,
-                    monthKey: LedgerCalendar.monthKey(for: .now)
-                )
-                if !modelCosts.isEmpty {
-                    let total = modelCosts.values.reduce(0, +)
-                    if total > 0 {
-                        s.weeklyByModel = modelCosts
-                            .map { WeeklyModelUsage(label: $0.key, percent: $0.value / total * 100) }
-                            .sorted { $0.percent > $1.percent }
-                        snapshot = s
-                    }
-                }
-            }
+            // NOTE: A previous build (commit 6ce6fba) overlaid `weeklyByModel`
+            // with cost-share percentages derived from the ledger so Max 5x
+            // users (where the API bundles everything into the unified
+            // `sevenDay` and never populates per-bucket fields) would see
+            // *something* under the Weekly bar. That conflated two different
+            // semantics: per-bucket utilization (% of THIS cap used) vs.
+            // share of total cost (% of THIS month's spend on this model).
+            // Side-by-side they read like a quota table, so 99.99% Opus +
+            // 0.01% Haiku displayed as "Opus 100% / Haiku 0%" looked like
+            // a cap state — but it was just rounded cost share. Removed.
+            // `weeklyByModel` is now the API path only: per-cap utilization
+            // when the plan exposes sub-buckets, empty otherwise. Cost-by-
+            // model data is still in the ledger for a future cost history
+            // view; it just doesn't masquerade as a quota row here.
 
         } catch ProviderError.rateLimited(let retryAfter) {
             let delay = retryAfter ?? Self.defaultRateLimitCooldown
