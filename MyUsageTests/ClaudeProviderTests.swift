@@ -131,8 +131,12 @@ struct ClaudeProviderTests {
         #expect(snapshot.sessionUsage?.resetsAt != nil)
     }
 
-    @Test("Per-model breakdown sorted by percent desc, zeros dropped")
+    @Test("Per-model breakdown sorted by percent desc, returned 0% buckets kept")
     func mapSnapshotWeeklyByModel() {
+        // Buckets the API *returns* are kept even at 0% — that means the
+        // cap exists on this plan but is unused this week, which is real
+        // information for the user. Only nil windows (cap doesn't exist
+        // on this plan) are filtered.
         let response = ClaudeUsageResponse(
             fiveHour: nil,
             sevenDay: .init(utilization: 62, resetsAt: nil),
@@ -144,18 +148,21 @@ struct ClaudeProviderTests {
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
 
-        #expect(snapshot.weeklyByModel.count == 2)
+        #expect(snapshot.weeklyByModel.count == 3)
         #expect(snapshot.weeklyByModel[0].label == "Sonnet")
         #expect(snapshot.weeklyByModel[0].percent == 38)
         #expect(snapshot.weeklyByModel[1].label == "Opus")
         #expect(snapshot.weeklyByModel[1].percent == 24)
+        #expect(snapshot.weeklyByModel[2].label == "Haiku")
+        #expect(snapshot.weeklyByModel[2].percent == 0)
     }
 
     @Test("Per-bucket breakdown also surfaces product caps (Design/Cowork/OAuth apps)")
     func mapSnapshotWeeklyBucketsProducts() {
         // Some Enterprise/Team plans expose product-line sub-caps in
-        // addition to (or instead of) model-family caps. Make sure the
-        // adaptive parser surfaces all of them, sorted by share.
+        // addition to (or instead of) model-family caps. Surface every
+        // returned bucket — including the 0% OAuth apps cap, which
+        // exists on this plan but is unused this week.
         let response = ClaudeUsageResponse(
             fiveHour: nil,
             sevenDay: .init(utilization: 50, resetsAt: nil),
@@ -164,18 +171,20 @@ struct ClaudeProviderTests {
             sevenDayHaiku: nil,
             sevenDayOmelette: .init(utilization: 22, resetsAt: nil),  // Claude Design
             sevenDayCowork: .init(utilization: 8, resetsAt: nil),     // Claude Cowork
-            sevenDayOauthApps: .init(utilization: 0, resetsAt: nil),  // 0 → dropped
+            sevenDayOauthApps: .init(utilization: 0, resetsAt: nil),  // exists @ 0% — kept
             extraUsage: nil
         )
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
 
-        #expect(snapshot.weeklyByModel.count == 3)
+        #expect(snapshot.weeklyByModel.count == 4)
         #expect(snapshot.weeklyByModel[0].label == "Design")
         #expect(snapshot.weeklyByModel[0].percent == 22)
         #expect(snapshot.weeklyByModel[1].label == "Sonnet")
         #expect(snapshot.weeklyByModel[1].percent == 12)
         #expect(snapshot.weeklyByModel[2].label == "Cowork")
         #expect(snapshot.weeklyByModel[2].percent == 8)
+        #expect(snapshot.weeklyByModel[3].label == "OAuth apps")
+        #expect(snapshot.weeklyByModel[3].percent == 0)
     }
 
     @Test("Per-model breakdown is empty when API returns no model fields")

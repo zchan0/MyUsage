@@ -32,8 +32,9 @@ build/
 Packages/
 Package.resolved
 
-# App bundle (built artifact)
+# App bundles (built artifacts — release + local debug)
 MyUsage.app/
+MyUsage-debug.app/
 
 # IDE
 .vscode/

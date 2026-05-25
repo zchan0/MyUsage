@@ -681,10 +681,16 @@ final class ClaudeProvider: UsageProvider {
         // Weekly per-bucket breakdown. The API exposes a *variable* set of
         // sub-caps — model families (Opus/Sonnet/Haiku) AND product lines
         // (Design/Cowork/OAuth-apps) — each plan-dependent and optional.
-        // Surface every bucket the API returns with utilization > 0, sorted
-        // by share descending. Plans without any sub-caps (e.g. Max 5x,
-        // where everything pools into the unified `sevenDay`) yield an
-        // empty array — caller hides the breakdown rows entirely.
+        // Surface every bucket the API *returns* (i.e. the window object
+        // exists in the response, even with utilization == 0). 0% means
+        // "this cap exists on your plan but you haven't used it this
+        // week" — that's information the user wants. Missing/nil window
+        // means "this cap doesn't exist on your plan" — those we drop.
+        // Plans where everything pools into the unified `sevenDay`
+        // (Max 5x, most Pro) return no sub-cap windows at all → empty
+        // array → ProviderCardLimits renders no per-model bars.
+        // Sort by utilization desc so heaviest cap reads first; equal-
+        // utilization caps fall back to the declared order.
         snapshot.weeklyByModel = [
             ("Opus",       response.sevenDayOpus),
             ("Sonnet",     response.sevenDaySonnet),
@@ -693,8 +699,8 @@ final class ClaudeProvider: UsageProvider {
             ("Cowork",     response.sevenDayCowork),
             ("OAuth apps", response.sevenDayOauthApps)
         ].compactMap { (label, window) -> WeeklyModelUsage? in
-            guard let pct = window?.utilization, pct > 0 else { return nil }
-            return WeeklyModelUsage(label: label, percent: Double(pct))
+            guard let window else { return nil }
+            return WeeklyModelUsage(label: label, percent: Double(window.utilization))
         }
         .sorted { $0.percent > $1.percent }
 

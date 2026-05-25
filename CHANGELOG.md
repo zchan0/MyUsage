@@ -6,6 +6,37 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.2 — 2026-05-26
+
+### Changed
+- **Claude per-model bars now render as peers of the 5h / Weekly bars,
+  not sub-rows under Weekly.** Each row is one model's *independent*
+  weekly cap (Anthropic tracks Opus / Sonnet / Design / etc. separately
+  from the unified weekly cap), so the visual treatment should reflect
+  that. Same `LimitBar` shape, same font, same height as the rolling
+  windows above. Matches CodexBar's convention.
+- **0% per-model bars are now kept**, not filtered. A 0% bar means
+  "this cap exists on your plan but you haven't used it this week" —
+  useful information. Buckets the API doesn't return at all (cap
+  doesn't exist on your plan) are still dropped.
+
+### Added
+- **Settings → General → Display → "Show Claude per-model bars"** toggle
+  (on by default). Hides the per-model bars for users who want a more
+  compact popover.
+
+### 中文
+
+- **Claude per-model 行改为跟 5h / Weekly 同级的独立 bar**，不再缩进
+  当 Weekly 的子项。每行是该模型独立的周配额（Anthropic 对
+  Opus / Sonnet / Design 这些 cap 是独立计的），视觉上不该让人误以为
+  它们是 Weekly 的拆分。跟 CodexBar 一致。
+- **0% 也保留显示**，意思是"这个 cap 在你的 plan 里存在但这周没用"——
+  这是有用信息。API 完全没返回字段的 bucket（plan 没这个 cap）依然
+  过滤掉。
+- **Settings → General → Display → "Show Claude per-model bars" 开关**
+  （默认开），不想看的可以关掉让 popover 更紧凑。
+
 ## v0.10.1 — 2026-05-21
 
 ### Fixed

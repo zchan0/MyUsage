@@ -68,13 +68,26 @@ struct SettingsView: View {
                 }
 
                 SettingsCard("Display") {
-                    SettingsRow(
-                        "Show estimated monthly cost",
-                        caption: "Cost row at the bottom of each provider card."
-                    ) {
-                        Toggle("", isOn: $mgr.showEstimatedCost)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsRow(
+                            "Show estimated monthly cost",
+                            caption: "Cost row at the bottom of each provider card."
+                        ) {
+                            Toggle("", isOn: $mgr.showEstimatedCost)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+
+                        CardDivider()
+
+                        SettingsRow(
+                            "Show Claude per-model bars",
+                            caption: "Independent weekly caps for Opus / Sonnet / Design when your plan exposes them. 0% means the cap exists but is unused this week."
+                        ) {
+                            Toggle("", isOn: $mgr.showPerModelBars)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
                     }
                 }
 

@@ -9,6 +9,8 @@ struct ProviderCardLimits: View {
     let kind: ProviderKind
     let snapshot: UsageSnapshot
 
+    @Environment(UsageManager.self) private var manager
+
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             switch kind {
@@ -28,7 +30,20 @@ struct ProviderCardLimits: View {
                         reset: weekly.resetCountdown.map { "resets \($0)" },
                         projectedPercent: weekly.projectedFinalPercent()
                     )
-                    WeeklyByModelRows(rows: snapshot.weeklyByModel)
+                    if manager.showPerModelBars {
+                        // Per-bucket caps render as peers of the Weekly
+                        // bar, not as sub-rows under it. Each row is one
+                        // model's separate weekly cap — Anthropic tracks
+                        // them independently, so the visual treatment
+                        // matches 5h / Weekly exactly (same font, same
+                        // weight, same height). monoName is for the
+                        // Antigravity case where the label is a model
+                        // identifier like "flash 47/200" — words like
+                        // Opus / Sonnet / Design stay sans-serif.
+                        ForEach(snapshot.weeklyByModel) { row in
+                            LimitBar(name: row.label, percent: row.percent)
+                        }
+                    }
                 }
             case .cursor:
                 CursorLimits(snapshot: snapshot)
@@ -41,35 +56,6 @@ struct ProviderCardLimits: View {
                     )
                 }
             }
-        }
-    }
-}
-
-/// Per-model breakdown rows shown directly under Claude's weekly bar.
-/// Indented mono name + right-aligned mono percent, column-aligned with
-/// the parent LimitBar's name + percent slots so the eye reads straight
-/// down. No bar — the weekly bar above already shows the total.
-struct WeeklyByModelRows: View {
-    let rows: [WeeklyModelUsage]
-
-    var body: some View {
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(rows) { row in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(row.label)
-                            .font(.system(size: 10.5, weight: .regular, design: .monospaced))
-                            .foregroundStyle(.secondary.opacity(0.75))
-                        Spacer(minLength: 8)
-                        Text("\(Int(row.percent.rounded()))%")
-                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary.opacity(0.85))
-                    }
-                }
-            }
-            .padding(.leading, 12) // indent so child relationship reads
-            .padding(.top, 2)
         }
     }
 }
