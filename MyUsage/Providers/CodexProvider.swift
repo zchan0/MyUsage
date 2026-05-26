@@ -182,6 +182,11 @@ final class CodexProvider: UsageProvider {
     // MARK: - UsageProvider
 
     func refresh() async {
+        // Re-detect once per refresh so a user who ran `codex login`
+        // after MyUsage launched (or restored credentials after a
+        // logout) doesn't need to relaunch the app. Mirrors the
+        // pattern in ClaudeProvider.
+        if !isAvailable { detectAvailability() }
         guard isAvailable else { return }
         isLoading = true
         error = nil

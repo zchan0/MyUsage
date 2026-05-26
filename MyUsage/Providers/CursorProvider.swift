@@ -104,6 +104,11 @@ final class CursorProvider: UsageProvider {
     // MARK: - UsageProvider
 
     func refresh() async {
+        // Re-detect once per refresh so a sign-in after MyUsage launched
+        // (or a Cursor install completed after launch) doesn't strand
+        // the card on "Not configured" until the next relaunch.
+        // Mirrors the pattern in ClaudeProvider + CodexProvider.
+        if !isAvailable { detectAvailability() }
         guard isAvailable else { return }
         isLoading = true
         error = nil

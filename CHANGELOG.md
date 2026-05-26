@@ -6,6 +6,26 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.3 — 2026-05-26
+
+### Fixed
+- **Codex / Cursor cards no longer stuck on "Not configured" after
+  a sign-in.** If MyUsage launched while the provider was signed out,
+  `isAvailable` was cached as `false` and `refresh()` early-returned
+  forever — running `codex login` (or installing Cursor) later didn't
+  recover until the app was relaunched. Both providers now re-check
+  for credentials on every refresh when not yet available, matching
+  the defensive pattern that ClaudeProvider already had.
+
+### 中文
+
+- **修复 Codex / Cursor 卡片登录后仍显示 "Not configured" 的问题。**
+  如果 MyUsage 启动时这两个 provider 是退出状态，`isAvailable` 会被
+  缓存成 false，之后即使你 `codex login` / 装上 Cursor，refresh
+  也直接早退不会重新检测，必须重启 app 才能恢复。两个 provider
+  现在每次 refresh 时如果还没 available 就重新检测一次（跟
+  ClaudeProvider 早就有的防御代码一致）。
+
 ## v0.10.2 — 2026-05-26
 
 ### Changed
