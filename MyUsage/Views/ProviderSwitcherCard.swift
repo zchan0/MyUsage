@@ -55,9 +55,10 @@ struct ProviderSwitcherCard: View {
     }
 
     /// Clamp a selection index into `0..<count`, or nil when `count == 0`.
-    /// Extracted + static so the "shrinking accounts array shouldn't trap"
-    /// invariant is unit-testable without a live SwiftUI view.
-    static func safeIndex(selected: Int, count: Int) -> Int? {
+    /// Extracted + `nonisolated static` so the "shrinking accounts array
+    /// shouldn't trap" invariant is unit-testable from a plain synchronous
+    /// (non-MainActor) test context — it's pure math with no view state.
+    nonisolated static func safeIndex(selected: Int, count: Int) -> Int? {
         guard count > 0 else { return nil }
         return min(max(selected, 0), count - 1)
     }
