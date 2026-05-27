@@ -471,9 +471,10 @@ struct SettingsView: View {
                     VStack(spacing: 2) {
                         Text("MyUsage")
                             .font(.system(size: 17, weight: .semibold))
-                        Text("Version \(AppInfo.version)")
+                        Text("Version \(AppInfo.versionWithBuild)")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                     }
 
                     Text("Monitor AI coding tool usage from your menu bar.")
@@ -569,7 +570,7 @@ struct SettingsView: View {
     private func updateBannerSubtitle(_ release: UpdateChecker.ReleaseInfo) -> String {
         switch installer.state {
         case .idle:
-            return "Currently running v\(AppInfo.version)"
+            return "Currently running v\(AppInfo.versionWithBuild)"
         case .downloading(let progress):
             return "Downloading… \(Int(progress * 100))%"
         case .extracting:
@@ -694,7 +695,7 @@ private enum SupportActions {
         **Expected vs actual**
 
         ---
-        - MyUsage version: \(AppInfo.version)
+        - MyUsage version: \(AppInfo.versionWithBuild)
         - macOS: \(macOS)
         """
     }

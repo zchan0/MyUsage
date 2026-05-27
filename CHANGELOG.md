@@ -6,6 +6,21 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.8 — 2026-05-27
+
+### Changed
+- **Settings → About now shows the build number** next to the version
+  (`Version 0.10.8 (20)`), and the string is selectable. Two builds can
+  share a version string during development; the build number lets you
+  confirm exactly which one is running. The bug-report template and the
+  "currently running" line in the update banner include it too.
+
+### 中文
+
+- **Settings → About 的版本号后面加上 build no**(`Version 0.10.8 (20)`),
+  且可选中复制。开发期两个不同编译可能共用同一版本号,build no 能让你
+  确认当前跑的到底是哪个。bug 反馈模板和更新横幅的"当前运行版本"也带上了。
+
 ## v0.10.7 — 2026-05-27
 
 ### Fixed
