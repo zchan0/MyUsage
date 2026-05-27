@@ -6,6 +6,27 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.9 — 2026-05-27
+
+### Fixed
+- **Account switcher indicator floated far below shorter cards.** v0.10.6
+  stacked all account cards at the tallest card's height to avoid resize
+  flicker, but that left the switcher dots stranded below a short card
+  (e.g. an expired-snapshot card) and miscomputed the popover height when
+  an Antigravity card stacked beneath a multi-account provider. Reverted
+  to rendering only the selected card with the switcher directly below it,
+  so the indicator always hugs the current card and stacked cards lay out
+  correctly. Account switches are non-animated so the window resizes in a
+  single step instead of flashing its background at the bottom.
+
+### 中文
+
+- **账号切换器 indicator 悬在矮卡下方很远**:v0.10.6 为了消除切换闪条,
+  把所有账号卡叠在最高卡的高度上,结果看矮卡时切换点悬在下方很远,且
+  多账号卡下面再叠 Antigravity 卡时弹窗高度算错。改回只渲染当前选中的
+  卡、切换器紧跟其下,indicator 永远贴着当前卡,叠加卡片也排版正常。
+  切换不带动画,窗口一步 resize,不再在底部闪背景。
+
 ## v0.10.8 — 2026-05-27
 
 ### Changed

@@ -27,28 +27,19 @@ struct ProviderSwitcherCard: View {
         // the parent re-resolves the slot.
         if let activeIdx = Self.safeIndex(selected: selectedIndex, count: accounts.count) {
             VStack(spacing: 7) {
-                // Render EVERY account card in a ZStack and reveal the
-                // selected one via opacity. The ZStack is always as tall
-                // as the tallest card, so switching accounts changes only
-                // which card is visible — never the layout height. That
-                // keeps the popover (and the MenuBarExtra window) at a
-                // stable height across switches; otherwise each switch
-                // resizes the window and the bottom flickers transparent/
-                // white during the resize. The card heights within one
-                // provider are close (same bars), so the reserved height
-                // is barely larger than any single card.
-                ZStack(alignment: .top) {
-                    ForEach(Array(accounts.enumerated()), id: \.element.accountID) { index, account in
-                        ProviderCard(
-                            provider: provider,
-                            account: account,
-                            isActive: account.accountID == manager.accountStore.activeAccountID(for: provider.kind)
-                        )
-                        .opacity(index == activeIdx ? 1 : 0)
-                        .allowsHitTesting(index == activeIdx)
-                        .accessibilityHidden(index != activeIdx)
-                    }
-                }
+                // Render ONLY the selected card, with the switcher directly
+                // below it, so the indicator always hugs the current card.
+                // (An earlier ZStack-all-cards approach kept a stable height
+                // to avoid resize flicker, but it reserved the TALLEST
+                // card's height — leaving the switcher floating far below a
+                // shorter card, and miscomputing the popover height when
+                // other provider cards stacked beneath. Dynamic height with
+                // a non-animated switch is the better trade.)
+                ProviderCard(
+                    provider: provider,
+                    account: accounts[activeIdx],
+                    isActive: accounts[activeIdx].accountID == manager.accountStore.activeAccountID(for: provider.kind)
+                )
                 if accounts.count >= 2 {
                     switcher
                 }
@@ -59,6 +50,19 @@ struct ProviderSwitcherCard: View {
             .onChange(of: accounts.map(\.accountID).joined(separator: "|")) { _, _ in
                 selectedIndex = min(max(selectedIndex, 0), max(accounts.count - 1, 0))
             }
+        }
+    }
+
+    /// Switch to `index` without animating the height change. The card
+    /// swap changes the popover's height; animating it makes the
+    /// MenuBarExtra window chase a moving target and flash its background
+    /// at the bottom mid-resize. An instant swap resizes the window in one
+    /// step.
+    private func select(_ index: Int) {
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) {
+            selectedIndex = min(max(index, 0), max(accounts.count - 1, 0))
         }
     }
 
@@ -77,11 +81,11 @@ struct ProviderSwitcherCard: View {
     private var switcher: some View {
         HStack(spacing: 14) {
             switcherArrow(systemName: "chevron.left", enabled: selectedIndex > 0) {
-                selectedIndex = max(0, selectedIndex - 1)
+                select(selectedIndex - 1)
             }
             dotStrip
             switcherArrow(systemName: "chevron.right", enabled: selectedIndex < accounts.count - 1) {
-                selectedIndex = min(accounts.count - 1, selectedIndex + 1)
+                select(selectedIndex + 1)
             }
         }
         .padding(.top, 1)
@@ -106,8 +110,7 @@ struct ProviderSwitcherCard: View {
                 Capsule()
                     .fill(Color.primary.opacity(index == selectedIndex ? 0.55 : 0.22))
                     .frame(width: index == selectedIndex ? 14 : 5, height: 5)
-                    .animation(.easeInOut(duration: 0.18), value: selectedIndex)
-                    .onTapGesture { selectedIndex = index }
+                    .onTapGesture { select(index) }
             }
         }
     }
