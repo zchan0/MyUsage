@@ -6,6 +6,38 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.6 — 2026-05-27
+
+### Fixed
+- **Claude multi-account showed the wrong plan + wrong active account.**
+  The profile (email + plan) was fetched once per process and reused for
+  the app's whole lifetime, so after the Claude Code CLI switched
+  accounts MyUsage kept serving the first account's email and plan — e.g.
+  both accounts labelled "Max", and the wrong one marked active. The
+  profile is now keyed by the credential fingerprint and re-fetched when
+  the CLI's account (token) changes, so email, plan, and active-account
+  detection track the account that's actually signed in. Note: existing
+  mis-recorded accounts may need a one-time Forget (Settings → Providers);
+  signing into each account once on this build records it correctly.
+- **Flicker when switching accounts.** Stepping through the account
+  switcher changed the card height, which resized the popover window and
+  flashed a transparent/white strip at the bottom mid-resize. The
+  switcher now stacks all account cards at a stable (tallest) height and
+  reveals the selected one, so switching never resizes the window.
+
+### 中文
+
+- **Claude 多账号显示错误的 plan + 错误的活跃账号**:profile(email +
+  plan)每个进程只 fetch 一次并复用整个生命周期,所以 Claude Code CLI
+  切换账号后,MyUsage 还在用第一个账号的 email 和 plan —— 比如两个账号
+  都标 "Max"、活跃账号判断也反了。现在 profile 按凭证指纹做 key,CLI
+  账号(token)变了就重新 fetch,email / plan / 活跃判断都跟着真正登录
+  的账号走。注意:之前错记的账号可能需要在 Settings → Providers 里
+  Forget 一次;用这个版本各账号登录刷新一次后会正确记录。
+- **切换账号时闪条**:在切换器里翻账号会改变卡片高度 → popover 窗口
+  resize → resize 过程底部闪过透明/白条。现在切换器把所有账号卡叠在
+  恒定(最高)高度上、只切换显示哪张,切换不再 resize 窗口。
+
 ## v0.10.5 — 2026-05-27
 
 ### Fixed

@@ -178,10 +178,15 @@ final class ClaudeProvider: UsageProvider {
 
     private var credentials: ClaudeCredentials?
 
-    /// Cached profile; fetched lazily on the first successful refresh and
-    /// reused for the rest of the process lifetime. Plan upgrades / downgrades
-    /// are rare enough that "relaunch to pick up the new tier" is acceptable.
+    /// Cached profile (email + plan). Keyed by the credential fingerprint
+    /// (`cachedProfileFingerprint`) so that when the Claude Code CLI
+    /// switches accounts — a different OAuth token, hence a different
+    /// fingerprint — we re-fetch instead of serving the previous account's
+    /// email + plan. Without this the popover mislabels the active account
+    /// (wrong email) and shows the first account's plan ("Max") for every
+    /// account (spec 15 multi-account bug).
     private var cachedProfile: ClaudeProfile?
+    private var cachedProfileFingerprint: String?
 
     /// Optional multi-device ledger. When present, each successful cost
     /// calculation writes per-day totals into the ledger (spec 12).
@@ -266,15 +271,17 @@ final class ClaudeProvider: UsageProvider {
                 return
             }
 
-            // Lazy-load the profile once per process so we have an
-            // authoritative plan label even when the credentials file
-            // ships nulls (current Claude CLI behavior). Failures are
-            // logged but never stop the usage refresh — without the
-            // profile we just fall back to creds.planName, which is
-            // strictly worse but not broken.
-            if cachedProfile == nil {
+            // Fetch the profile (email + plan) when we don't have one yet,
+            // OR when the credential fingerprint changed since we last
+            // fetched — i.e. the CLI switched accounts. Re-fetching on the
+            // switch is what keeps the popover's email + plan attributed to
+            // the account that's actually signed in. Failures are logged
+            // but never stop the usage refresh — without the profile we
+            // fall back to creds.planName, strictly worse but not broken.
+            if cachedProfile == nil || cachedProfileFingerprint != fingerprint {
                 do {
                     cachedProfile = try await fetchProfile(accessToken: oauth.accessToken)
+                    cachedProfileFingerprint = fingerprint
                 } catch {
                     Logger.claude.error(
                         "Profile fetch failed; falling back to credentials.planName: \(error.localizedDescription, privacy: .public)"

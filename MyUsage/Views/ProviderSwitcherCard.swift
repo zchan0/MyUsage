@@ -25,13 +25,30 @@ struct ProviderSwitcherCard: View {
         // an empty array would trap and take the whole app down (this was
         // the "all providers disappeared" crash). Render nothing until
         // the parent re-resolves the slot.
-        if let current = currentAccount {
+        if let activeIdx = Self.safeIndex(selected: selectedIndex, count: accounts.count) {
             VStack(spacing: 7) {
-                ProviderCard(
-                    provider: provider,
-                    account: current,
-                    isActive: current.accountID == manager.accountStore.activeAccountID(for: provider.kind)
-                )
+                // Render EVERY account card in a ZStack and reveal the
+                // selected one via opacity. The ZStack is always as tall
+                // as the tallest card, so switching accounts changes only
+                // which card is visible — never the layout height. That
+                // keeps the popover (and the MenuBarExtra window) at a
+                // stable height across switches; otherwise each switch
+                // resizes the window and the bottom flickers transparent/
+                // white during the resize. The card heights within one
+                // provider are close (same bars), so the reserved height
+                // is barely larger than any single card.
+                ZStack(alignment: .top) {
+                    ForEach(Array(accounts.enumerated()), id: \.element.accountID) { index, account in
+                        ProviderCard(
+                            provider: provider,
+                            account: account,
+                            isActive: account.accountID == manager.accountStore.activeAccountID(for: provider.kind)
+                        )
+                        .opacity(index == activeIdx ? 1 : 0)
+                        .allowsHitTesting(index == activeIdx)
+                        .accessibilityHidden(index != activeIdx)
+                    }
+                }
                 if accounts.count >= 2 {
                     switcher
                 }
@@ -43,15 +60,6 @@ struct ProviderSwitcherCard: View {
                 selectedIndex = min(max(selectedIndex, 0), max(accounts.count - 1, 0))
             }
         }
-    }
-
-    /// Safe accessor — clamps `selectedIndex` into the current bounds and
-    /// returns nil when there are no accounts at all.
-    private var currentAccount: AccountStore.AccountRecord? {
-        guard let idx = Self.safeIndex(selected: selectedIndex, count: accounts.count) else {
-            return nil
-        }
-        return accounts[idx]
     }
 
     /// Clamp a selection index into `0..<count`, or nil when `count == 0`.
