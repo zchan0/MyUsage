@@ -6,6 +6,36 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.5 — 2026-05-27
+
+### Fixed
+- **Transparent strip below the popover footer.** When the popover grew
+  tall (e.g. an account-switcher card), a `MenuBarExtra(.window)` grows
+  to fit the tallest layout it has shown but is reluctant to shrink,
+  leaving a see-through gap under the footer. Pinned the popover to its
+  content's exact height (`fixedSize`) so the window tracks the real
+  height with no leftover gap.
+- **Stale per-window numbers on inactive account cards.** An inactive
+  account's card shows a cached snapshot; once a window's reset time
+  passed, it still displayed the old percentage (e.g. "Weekly 62%") even
+  though that window had reset. We can't fetch the live value — a
+  non-active account's token isn't on disk — so expired windows now
+  render an empty muted rail with "—" and a "Sign in to this account to
+  refresh" hint instead of a misleading number. The per-model breakdown
+  hides alongside an expired weekly window.
+
+### 中文
+
+- **弹窗底部透明条修复**:弹窗变高后(如账号切换卡),`MenuBarExtra(.window)`
+  会长到显示过的最高布局却不肯缩回,底部露出一截透明。用 `fixedSize`
+  把弹窗钉死在内容真实高度,不再有多余空隙。
+- **非活跃账号卡的过期数字修复**:非活跃账号显示的是缓存快照,一旦窗口
+  过了 reset 时间,还在显示旧百分比(如"Weekly 62%"),而那个窗口其实
+  早重置了。我们拿不到该账号的实时值(非活跃账号的 token 不在本机),
+  所以过期窗口改为显示空灰轨 + "—" + "Sign in to this account to
+  refresh" 提示,而不是一个误导性的数字。per-model 分项也随过期的
+  weekly 窗口一起隐藏。
+
 ## v0.10.4 — 2026-05-27
 
 ### Fixed

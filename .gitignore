@@ -36,6 +36,10 @@ Package.resolved
 MyUsage.app/
 MyUsage-debug.app/
 
+# Release archives produced by prepare_release.sh
+MyUsage-*.zip
+MyUsage-*.zip.sha256
+
 # IDE
 .vscode/
 

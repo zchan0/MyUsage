@@ -42,6 +42,14 @@ struct UsagePopover: View {
             footer
         }
         .frame(width: 340)
+        // Pin the popover to its content's exact height. Inside a
+        // MenuBarExtra(.window) the window grows to fit the tallest layout
+        // it has shown (e.g. an account-switcher card) but is reluctant to
+        // shrink again — leaving a transparent strip below the footer when
+        // a shorter layout is shown. fixedSize tells SwiftUI to take the
+        // content's ideal height and refuse a taller proposal, so the
+        // window tracks the real content height with no leftover gap.
+        .fixedSize(horizontal: false, vertical: true)
         .task(id: "init") {
             manager.startTimer()
         }

@@ -34,6 +34,12 @@ struct LimitBar: View {
     /// When true, the name is rendered in monospaced 10.5pt — used by
     /// Antigravity per-model rows ("flash 47/200").
     var monoName: Bool = false
+    /// When true, this row's cached value is from a window that has since
+    /// reset (an inactive multi-account snapshot viewed past its
+    /// `resetsAt`). The percentage is no longer meaningful and we can't
+    /// fetch the live one, so render an empty muted rail with "—" instead
+    /// of a stale number. See `ProviderCardLimits`.
+    var expired: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -46,10 +52,12 @@ struct LimitBar: View {
 
             // Row 2 — the bar (4pt sage rail with optional projection
             // marker overlay; marker only renders for projected > 100%).
+            // Expired rows force an empty rail — the cached fill would
+            // misrepresent a window that has already reset.
             ProgressTrack(
-                percent: percent,
+                percent: expired ? 0 : percent,
                 projectedPercent: alarmingProjection,
-                level: level
+                level: expired ? .healthy : level
             )
 
             // Row 3 — reset (left, with absolute time appended) +
@@ -102,13 +110,13 @@ struct LimitBar: View {
     /// Capsule for healthy) so row height doesn't jitter when usage
     /// crosses the warn threshold.
     private var pctView: some View {
-        Text("\(Int(percent.rounded()))%")
+        Text(expired ? "—" : "\(Int(percent.rounded()))%")
             .font(.system(size: 11, weight: .bold, design: .monospaced))
             .monospacedDigit()
-            .foregroundStyle(.primary)
+            .foregroundStyle(expired ? AnyShapeStyle(.secondary.opacity(0.5)) : AnyShapeStyle(.primary))
             .padding(.horizontal, 6)
             .padding(.vertical, 1.5)
-            .background(pctBackground, in: Capsule())
+            .background(expired ? .clear : pctBackground, in: Capsule())
     }
 
     private var pctBackground: Color {
@@ -128,7 +136,7 @@ struct LimitBar: View {
     /// signal becomes valuable only when it changes their understanding
     /// of risk, which means: only when overshoot is actually predicted.
     private var alarmingProjection: Double? {
-        guard let p = projectedPercent, p > 100 else { return nil }
+        guard !expired, let p = projectedPercent, p > 100 else { return nil }
         return p
     }
 

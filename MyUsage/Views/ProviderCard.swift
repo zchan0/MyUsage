@@ -140,13 +140,13 @@ struct ProviderCard: View {
             // cached snapshot view already explains its own staleness via
             // the StaleSnapshotBanner above.
             VStack(alignment: .leading, spacing: 9) {
-                ProviderCardLimits(kind: provider.kind, snapshot: snapshot)
+                ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: showStaleBanner)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot, account: account)
                 staleWarningRow(staleMessage)
             }
         } else {
             VStack(alignment: .leading, spacing: 9) {
-                ProviderCardLimits(kind: provider.kind, snapshot: snapshot)
+                ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: showStaleBanner)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot, account: account)
             }
         }
