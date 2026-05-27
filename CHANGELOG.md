@@ -6,6 +6,25 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.7 — 2026-05-27
+
+### Fixed
+- **Codex account info missing for several refreshes (esp. free plans).**
+  The account identity (email) was recorded only after a successful
+  usage-API fetch — but identity comes from the local `auth.json`, not
+  the API. A free account whose first refreshes hit a token-timing usage
+  failure showed a card with no account info until the usage call
+  happened to succeed. Account recording is now decoupled from the usage
+  fetch: the account surfaces as soon as `auth.json` is readable.
+
+### 中文
+
+- **Codex 账号信息要刷几次才出现(尤其免费账号)**:账号身份(email)
+  之前要等 usage API 拉取成功后才记录 —— 但身份来自本地 `auth.json`,
+  跟 API 无关。免费账号头几次刷新若遇到 token 时序导致 usage 失败,卡
+  就一直没有账号信息,直到某次 usage 恰好成功。现在账号记录与 usage
+  拉取解耦:只要 `auth.json` 可读,账号立刻出现。
+
 ## v0.10.6 — 2026-05-27
 
 ### Fixed

@@ -249,12 +249,25 @@ final class CodexProvider: UsageProvider {
                 usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
             }
 
-            guard let usage else { return }
-            var mapped = Self.mapToSnapshot(usage)
-            mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
-            snapshot = mapped
-
+            // Derive the account identity from auth.json — it does NOT
+            // depend on the usage API, so we resolve + record it even when
+            // the usage fetch failed. Previously this lived after the
+            // `guard let usage else { return }` early-return below, so a
+            // free account whose first refreshes hit a token-timing usage
+            // failure showed a card with no account info until usage
+            // happened to succeed several refreshes later.
             let identity = currentAccount()
+
+            if let usage {
+                var mapped = Self.mapToSnapshot(usage)
+                mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
+                snapshot = mapped
+            }
+
+            // Record the account as soon as we have both an identity and a
+            // snapshot to cache (the just-mapped one, or a prior cached
+            // one). Independent of whether THIS refresh's usage fetch
+            // succeeded, so the account surfaces in the switcher promptly.
             if let identity, let snapshot {
                 let isFirstObservation = (accountStore?.count(for: .codex) ?? 0) == 0
                 accountStore?.recordObservation(
@@ -267,6 +280,10 @@ final class CodexProvider: UsageProvider {
                 }
             }
             await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
+
+            // If usage never came back this cycle, keep showing whatever we
+            // had — but don't pretend success.
+            guard usage != nil else { return }
 
         } catch {
             self.error = error.localizedDescription
