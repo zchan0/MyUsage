@@ -6,6 +6,42 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.4 — 2026-05-27
+
+### Fixed
+- **Empty popover on macOS 26 (Tahoe).** After the macOS 26 update, the
+  popover showed only its header + footer with no provider cards between
+  them — on every machine, regardless of healthy provider state. Cause:
+  the card list was wrapped in a `ScrollView`, and inside a
+  `MenuBarExtra(.window)` — which sizes the window to its content's
+  intrinsic height — a `ScrollView` has no height to fill, so macOS 26's
+  changed content measurement collapsed it to zero. Replaced with a plain
+  `VStack` (there are only ever a handful of cards, so scrolling bought
+  nothing). This affected all prior versions; updating fixes it.
+
+### Removed
+- **Mock multi-account debug toggle.** Removed entirely — it was a
+  development-only aid that added a crash path (an empty account list
+  could trap the popover) without shipping user value.
+
+### Internal
+- `ProviderSwitcherCard` now guards against an empty / shrinking accounts
+  array instead of force-indexing (regression-tested), so a transient
+  empty state can never trap.
+
+### 中文
+
+- **macOS 26 下弹窗空白修复**：升级 macOS 26 后，弹窗只剩顶部和底部、
+  中间 provider 卡片整片消失（所有机器都中招，与数据是否健康无关）。
+  原因：卡片列表外面套了 `ScrollView`，而在 `MenuBarExtra(.window)`
+  这种"按内容自适应高度"的窗口里，`ScrollView` 没有可填充的高度，
+  macOS 26 改了内容测量方式后它塌成了 0 高度。改用普通 `VStack`
+  （本来就只有几张卡，不需要滚动）。此前所有版本都受影响，更新即修复。
+- **移除 Mock 多账号调试开关**：纯开发辅助，还引入了一个崩溃路径
+  （空账号列表会让弹窗越界崩溃），无用户价值，整个删掉。
+- `ProviderSwitcherCard` 现在对空/缩水的账号数组做了防护（加了回归
+  测试），不再裸下标访问。
+
 ## v0.10.3 — 2026-05-26
 
 ### Fixed

@@ -19,16 +19,23 @@ struct UsagePopover: View {
             if enabledProviders.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 7) {
-                        ForEach(enabledProviders, id: \.kind) { provider in
-                            providerSlot(for: provider)
-                        }
+                // Plain VStack — NO ScrollView. Inside a MenuBarExtra(.window),
+                // which sizes the window to its content's intrinsic height, a
+                // ScrollView has no height to fill so it collapses to zero and
+                // the cards vanish (header + footer still show because they
+                // live outside it). This regressed with the macOS 26 update,
+                // which changed how MenuBarExtra measures its content. A plain
+                // VStack sizes to its cards and renders reliably; there are
+                // only ever a handful of provider cards, so scrolling buys
+                // nothing.
+                VStack(spacing: 7) {
+                    ForEach(enabledProviders, id: \.kind) { provider in
+                        providerSlot(for: provider)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 2)
-                    .padding(.bottom, 12)
                 }
+                .padding(.horizontal, 12)
+                .padding(.top, 2)
+                .padding(.bottom, 12)
             }
 
             footerDivider

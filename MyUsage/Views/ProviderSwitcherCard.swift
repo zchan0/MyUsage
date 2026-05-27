@@ -18,30 +18,48 @@ struct ProviderSwitcherCard: View {
     @State private var selectedIndex: Int = 0
 
     var body: some View {
-        VStack(spacing: 7) {
-            ProviderCard(
-                provider: provider,
-                account: currentAccount,
-                isActive: isCurrentActive
-            )
-            switcher
-        }
-        // Re-anchor on the active account whenever the active pointer
-        // moves (e.g. user signed in as a different account, refresh
-        // updated the registry). Without this, a user mid-browse of the
-        // inactive cards would jump back unexpectedly — but on first
-        // appearance after a sign-in we *do* want to land on the live one.
-        .onChange(of: accounts.map(\.accountID).joined(separator: "|")) { _, _ in
-            selectedIndex = min(selectedIndex, max(accounts.count - 1, 0))
+        // Defensive: `accounts` can transiently shrink to empty during a
+        // SwiftUI update — e.g. when Mock multi-account is disabled and a
+        // provider's demo-only account set drops to zero before the
+        // parent swaps this view back to a plain ProviderCard. Indexing
+        // an empty array would trap and take the whole app down (this was
+        // the "all providers disappeared" crash). Render nothing until
+        // the parent re-resolves the slot.
+        if let current = currentAccount {
+            VStack(spacing: 7) {
+                ProviderCard(
+                    provider: provider,
+                    account: current,
+                    isActive: current.accountID == manager.accountStore.activeAccountID(for: provider.kind)
+                )
+                if accounts.count >= 2 {
+                    switcher
+                }
+            }
+            // Re-anchor whenever the account set changes (sign-in, refresh,
+            // forget) — clamp the selection into range so we never point
+            // past the end after the array shrinks.
+            .onChange(of: accounts.map(\.accountID).joined(separator: "|")) { _, _ in
+                selectedIndex = min(max(selectedIndex, 0), max(accounts.count - 1, 0))
+            }
         }
     }
 
-    private var currentAccount: AccountStore.AccountRecord {
-        accounts[min(selectedIndex, accounts.count - 1)]
+    /// Safe accessor — clamps `selectedIndex` into the current bounds and
+    /// returns nil when there are no accounts at all.
+    private var currentAccount: AccountStore.AccountRecord? {
+        guard let idx = Self.safeIndex(selected: selectedIndex, count: accounts.count) else {
+            return nil
+        }
+        return accounts[idx]
     }
 
-    private var isCurrentActive: Bool {
-        currentAccount.accountID == manager.accountStore.activeAccountID(for: provider.kind)
+    /// Clamp a selection index into `0..<count`, or nil when `count == 0`.
+    /// Extracted + static so the "shrinking accounts array shouldn't trap"
+    /// invariant is unit-testable without a live SwiftUI view.
+    static func safeIndex(selected: Int, count: Int) -> Int? {
+        guard count > 0 else { return nil }
+        return min(max(selected, 0), count - 1)
     }
 
     /// Arrow / dot strip below the card. Tap arrows to step through;
