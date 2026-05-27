@@ -81,9 +81,9 @@ struct ProviderCardLimits: View {
 
     private var anyWindowExpired: Bool {
         guard cached else { return false }
-        return [snapshot.sessionUsage, snapshot.weeklyUsage]
-            .compactMap { $0 }
-            .contains(where: isExpired)
+        if let s = snapshot.sessionUsage, isExpired(s) { return true }
+        if let w = snapshot.weeklyUsage, isExpired(w) { return true }
+        return false
     }
 
     private var refreshHint: some View {
