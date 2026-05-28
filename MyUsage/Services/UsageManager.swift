@@ -122,8 +122,27 @@ final class UsageManager {
             lastRefreshed = .now
         }
 
-        for provider in providers where provider.isEnabled {
-            await provider.refresh()
+        // Refresh providers concurrently so a slow one (e.g. Claude
+        // waiting on the network) doesn't hold up the others. Each
+        // provider is @MainActor-isolated, but its `refresh()` suspends at
+        // every network `await`, freeing the main actor for the others —
+        // so the HTTP round-trips genuinely overlap. Previously this was a
+        // serial `for await` loop, which made later providers (Codex,
+        // Cursor) visibly lag behind the first to finish.
+        // Kick each provider's refresh off as its own MainActor Task, then
+        // await them all. The providers are @MainActor-isolated, but each
+        // refresh() suspends at every network `await`, freeing the main
+        // actor for the others — so the HTTP round-trips overlap instead of
+        // running strictly one-after-another (which made Codex/Cursor
+        // visibly lag behind the first provider). Capturing `self`
+        // (a @MainActor class is Sendable) + an index keeps the closures
+        // free of non-Sendable captures.
+        let enabledIndices = providers.indices.filter { providers[$0].isEnabled }
+        let tasks: [Task<Void, Never>] = enabledIndices.map { index in
+            Task { @MainActor in await self.providers[index].refresh() }
+        }
+        for task in tasks {
+            await task.value
         }
 
         // Evaluate limit pressure and dispatch notifications for any
@@ -203,7 +222,15 @@ final class UsageManager {
             }
             return nil
         case .claude, .codex, .antigravity:
-            return "\(Int(snapshot.worstUsagePercent))%"
+            // Prefix the worst window (5h·90% / wk·62%) so the number
+            // isn't ambiguous when it jumps between windows. Antigravity's
+            // quotas have no window label → bare percentage.
+            let worst = snapshot.worstUsage
+            let pct = "\(Int(worst.percent))%"
+            // Space-dot-space matches the app's separator convention
+            // (e.g. the reset countdown "2h 14m · 16:30") and gives the
+            // menu-bar label breathing room — "7d·62%" read as cramped.
+            return worst.label.map { "\($0) · \(pct)" } ?? pct
         }
     }
 

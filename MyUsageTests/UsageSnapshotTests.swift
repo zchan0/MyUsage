@@ -44,6 +44,34 @@ struct UsageSnapshotTests {
         #expect(snapshot.worstUsagePercent == 55)
     }
 
+    @Test("worstUsage labels the session window as 5h when it wins")
+    func worstUsageLabelsSession() {
+        var snapshot = UsageSnapshot()
+        snapshot.sessionUsage = UsageWindow(percentUsed: 90, resetsAt: nil)
+        snapshot.weeklyUsage = UsageWindow(percentUsed: 30, resetsAt: nil)
+        #expect(snapshot.worstUsage.percent == 90)
+        #expect(snapshot.worstUsage.label == "5h")
+    }
+
+    @Test("worstUsage labels the weekly window as 7d when it wins")
+    func worstUsageLabelsWeekly() {
+        var snapshot = UsageSnapshot()
+        snapshot.sessionUsage = UsageWindow(percentUsed: 20, resetsAt: nil)
+        snapshot.weeklyUsage = UsageWindow(percentUsed: 62, resetsAt: nil)
+        #expect(snapshot.worstUsage.percent == 62)
+        #expect(snapshot.worstUsage.label == "7d")
+    }
+
+    @Test("worstUsage has no label for unlabeled windows (Antigravity quotas)")
+    func worstUsageNoLabelForQuotas() {
+        var snapshot = UsageSnapshot()
+        snapshot.modelQuotas = [
+            ModelQuota(label: "Model A", remainingFraction: 0.1, resetsAt: nil) // 90%
+        ]
+        #expect(snapshot.worstUsage.percent == 90)
+        #expect(snapshot.worstUsage.label == nil)
+    }
+
     @Test("UsageWindow reset countdown formatting")
     func resetCountdown() {
         let future2h = Date.now.addingTimeInterval(2 * 3600 + 15 * 60)

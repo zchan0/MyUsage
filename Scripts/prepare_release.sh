@@ -45,7 +45,17 @@ if [ ! -f "$SOURCE_PLIST" ]; then
 fi
 
 if [ -z "$BUILD_NUMBER" ]; then
-    BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$SOURCE_PLIST")"
+    # Auto-increment: CFBundleVersion is a monotonic build counter,
+    # independent of the marketing version. No --build flag needed for a
+    # normal release — bump the version, the build number takes care of
+    # itself. Pass --build only to pin a specific value.
+    CURRENT_BUILD="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$SOURCE_PLIST")"
+    if [[ "$CURRENT_BUILD" =~ ^[0-9]+$ ]]; then
+        BUILD_NUMBER=$((CURRENT_BUILD + 1))
+    else
+        BUILD_NUMBER="$CURRENT_BUILD"
+    fi
+    echo "==> Auto-incremented build: ${CURRENT_BUILD} -> ${BUILD_NUMBER}"
 fi
 
 if [ "$UPDATE_PLIST" -eq 1 ]; then

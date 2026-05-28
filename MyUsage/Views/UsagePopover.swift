@@ -50,6 +50,14 @@ struct UsagePopover: View {
         // content's ideal height and refuse a taller proposal, so the
         // window tracks the real content height with no leftover gap.
         .fixedSize(horizontal: false, vertical: true)
+        // Own the popover chrome (rounded material background + clear
+        // window) so the corners stay rounded at any height. The system
+        // panel's corner mask doesn't follow a tall fixedSize resize on
+        // macOS 26, exposing a white corner notch in dark mode; drawing
+        // our own rounded material that tracks the content size fixes it.
+        .background(PopoverMaterialBackground(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(PopoverWindowConfigurator())
         .task(id: "init") {
             manager.startTimer()
         }
@@ -84,8 +92,19 @@ struct UsagePopover: View {
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13))
-                        .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0))
+                        // `.resizable().scaledToFit()` makes the symbol a
+                        // pure shape that fills its frame, geometrically
+                        // centered — so rotating around .center spins it in
+                        // place. A font-sized symbol sits on a text baseline
+                        // offset from the frame's geometric center, so
+                        // rotating it orbits / wobbles (the "displacement"
+                        // motion, worse since the macOS 26 symbol-rendering
+                        // change). resizable removes the baseline entirely.
+                        .resizable()
+                        .scaledToFit()
+                        .fontWeight(.regular)
+                        .frame(width: 13, height: 13)
+                        .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0), anchor: .center)
                         .animation(
                             manager.isRefreshing
                                 ? .linear(duration: 1).repeatForever(autoreverses: false)

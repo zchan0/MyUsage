@@ -6,6 +6,45 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.10 — 2026-05-28
+
+### Fixed
+- **Menu-bar refresh icon spun off-center.** The SF Symbol sat on a text
+  baseline offset from its frame's geometric center, so rotating it
+  orbited/wobbled (more visible after the macOS 26 symbol-rendering
+  change). Drawing it as a resizable shape centers it geometrically — it
+  now spins in place.
+- **Popover lost its rounded corners when tall.** `MenuBarExtra(.window)`'s
+  corner mask stopped following a tall `fixedSize` resize on macOS 26,
+  exposing a white corner notch in dark mode. The popover now owns its
+  chrome — a transparent host window plus a rounded material background
+  that tracks the content size — so corners stay rounded at any height.
+
+### Changed
+- **Menu-bar percentage now labels its window:** `5h · 90%` / `7d · 62%`.
+  It still surfaces whichever window is closest to its limit (the binding
+  constraint), but the prefix removes the ambiguity when the number jumps
+  between the 5-hour and weekly windows.
+- **Providers refresh concurrently.** They were refreshed one after
+  another, so Codex/Cursor visibly lagged behind whichever provider went
+  first. Each provider's network round-trip now overlaps; the popover
+  fills in together.
+
+### 中文
+
+- **菜单栏刷新图标转起来偏心**:SF Symbol 坐在文字基线上、偏离 frame
+  几何中心,绕中心转就甩出去(macOS 26 符号渲染改动后更明显)。改成按
+  可缩放形状绘制、几何居中,现在原地转。
+- **弹窗变高后丢圆角**:`MenuBarExtra(.window)` 的圆角遮罩在 macOS 26
+  上不跟随 `fixedSize` 的变高,dark 模式下露出白色角。弹窗现在自己接管
+  chrome —— 透明宿主窗口 + 跟随内容尺寸的圆角材质背景 —— 任意高度都
+  保持圆角。
+- **菜单栏百分比标注窗口**:`5h · 90%` / `7d · 62%`。仍然显示离上限最近
+  的那个窗口(binding constraint),但前缀消除了数字在 5 小时 / 周窗口
+  间跳变时的歧义。
+- **provider 并发刷新**:原先一个接一个刷,Codex/Cursor 明显滞后于第一个
+  provider。现在各 provider 的网络请求重叠,弹窗一起填充。
+
 ## v0.10.9 — 2026-05-27
 
 ### Fixed

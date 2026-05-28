@@ -204,15 +204,34 @@ struct UsageSnapshot: Sendable {
         return od.amount / limit * 100
     }
 
-    /// The worst-case (highest) usage percentage across all windows.
-    var worstUsagePercent: Double {
-        let candidates: [Double?] = [
-            sessionUsage?.percentUsed,
-            weeklyUsage?.percentUsed,
-            totalUsagePercent,
-            onDemandUsagePercent,
-            modelQuotas.isEmpty ? nil : modelQuotas.map(\.percentUsed).max()
-        ]
-        return candidates.compactMap { $0 }.max() ?? 0
+    /// The worst-case (highest) usage across all windows, with a short
+    /// label identifying which window it came from. Drives the menu-bar
+    /// number: surfacing the binding constraint (whatever's closest to its
+    /// limit) is the menu bar's job, and the label disambiguates which
+    /// window — otherwise the number jumps between 5h and weekly with no
+    /// explanation. `label` is nil for windows that don't need one
+    /// (Cursor budgets, Antigravity quotas — those providers render their
+    /// own menu-bar text).
+    struct WorstUsage: Sendable, Equatable {
+        let percent: Double
+        let label: String?
     }
+
+    var worstUsage: WorstUsage {
+        let candidates: [(label: String?, percent: Double)] = [
+            ("5h", sessionUsage?.percentUsed),
+            ("7d", weeklyUsage?.percentUsed),
+            (nil, totalUsagePercent),
+            (nil, onDemandUsagePercent),
+            (nil, modelQuotas.isEmpty ? nil : modelQuotas.map(\.percentUsed).max())
+        ].compactMap { entry in entry.1.map { (entry.0, $0) } }
+
+        guard let best = candidates.max(by: { $0.percent < $1.percent }) else {
+            return WorstUsage(percent: 0, label: nil)
+        }
+        return WorstUsage(percent: best.percent, label: best.label)
+    }
+
+    /// The worst-case (highest) usage percentage across all windows.
+    var worstUsagePercent: Double { worstUsage.percent }
 }
