@@ -55,8 +55,14 @@ struct UsagePopover: View {
         // panel's corner mask doesn't follow a tall fixedSize resize on
         // macOS 26, exposing a white corner notch in dark mode; drawing
         // our own rounded material that tracks the content size fixes it.
+        // Single rounding source: the material layer rounds itself and
+        // snaps to live resizes (RoundedMaterialView disables implicit
+        // animation). A SwiftUI .clipShape on top would be a second,
+        // separately-timed mask that can lag the resize and re-expose the
+        // transparent corner — so we deliberately don't add one. Content
+        // is inset from the edges (header/footer/card padding), so it
+        // never pokes into the rounded corners.
         .background(PopoverMaterialBackground(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .background(PopoverWindowConfigurator())
         .task(id: "init") {
             manager.startTimer()

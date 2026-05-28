@@ -5,30 +5,69 @@ import AppKit
 ///
 /// `MenuBarExtra(.window)` hosts the popover in a system panel that draws
 /// its own rounded corners + material. After the macOS 26 update, when the
-/// SwiftUI content resizes taller (via `fixedSize`), the panel's
-/// corner-rounding mask doesn't keep up — the new top/bottom corners stop
-/// being masked and the panel's opaque backing shows through (a white
-/// notch in dark mode). We take over the chrome: make the panel itself
+/// SwiftUI content resizes (taller via `fixedSize`, or when switching
+/// accounts), the panel's corner-rounding mask doesn't keep up — the new
+/// corners stop being masked. We take over the chrome: make the panel
 /// transparent (`PopoverWindowConfigurator`) and draw our own rounded
-/// `NSVisualEffectView` that always tracks the content's real size, so the
-/// corners are correct at any height.
+/// `NSVisualEffectView` that tracks the content's real size.
+///
+/// The subtlety: a layer's `bounds` change animates implicitly via
+/// CoreAnimation (~0.25s). During that animation the rounded mask is still
+/// at the OLD (smaller) size, so the bottom corners briefly expose the
+/// now-transparent window — the "corner goes transparent after switching
+/// accounts" bug. `RoundedMaterialView` kills the implicit animations so
+/// the mask snaps to the new bounds in the same frame as the resize.
 struct PopoverMaterialBackground: NSViewRepresentable {
     var cornerRadius: CGFloat = 12
 
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
+    func makeNSView(context: Context) -> RoundedMaterialView {
+        let view = RoundedMaterialView()
         view.material = .menu
         view.blendingMode = .behindWindow
         view.state = .active
-        view.wantsLayer = true
-        view.layer?.cornerRadius = cornerRadius
-        view.layer?.cornerCurve = .continuous
-        view.layer?.masksToBounds = true
+        view.cornerRadius = cornerRadius
         return view
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.layer?.cornerRadius = cornerRadius
+    func updateNSView(_ view: RoundedMaterialView, context: Context) {
+        view.cornerRadius = cornerRadius
+    }
+}
+
+/// `NSVisualEffectView` that rounds its own corners with no implicit layer
+/// animation, so the mask tracks live resizes exactly instead of lagging.
+final class RoundedMaterialView: NSVisualEffectView {
+    var cornerRadius: CGFloat = 12 {
+        didSet { applyMask() }
+    }
+
+    override func makeBackingLayer() -> CALayer {
+        let layer = super.makeBackingLayer()
+        // Never implicitly animate geometry/mask changes — they must
+        // resolve in the same frame as the window resize, otherwise the
+        // rounded mask lags and exposes the clear window at the corners.
+        layer.actions = [
+            "bounds": NSNull(),
+            "position": NSNull(),
+            "cornerRadius": NSNull(),
+        ]
+        return layer
+    }
+
+    override func layout() {
+        super.layout()
+        applyMask()
+    }
+
+    private func applyMask() {
+        wantsLayer = true
+        guard let layer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.cornerRadius = cornerRadius
+        layer.cornerCurve = .continuous
+        layer.masksToBounds = true
+        CATransaction.commit()
     }
 }
 
