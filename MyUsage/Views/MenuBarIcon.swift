@@ -35,7 +35,7 @@ struct MenuBarIcon: View {
 /// appearance, and accept SwiftUI `.foregroundStyle()` tinting. We cache one
 /// instance per kind because `NSImage` loading from SVG isn't free.
 @MainActor
-private enum ProviderTemplateIcon {
+enum ProviderTemplateIcon {
     private static let size = NSSize(width: 18, height: 18)
     private static var cache: [ProviderKind: NSImage] = [:]
 

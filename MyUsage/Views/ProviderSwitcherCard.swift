@@ -54,10 +54,9 @@ struct ProviderSwitcherCard: View {
     }
 
     /// Switch to `index` without animating the height change. The card
-    /// swap changes the popover's height; animating it makes the
-    /// MenuBarExtra window chase a moving target and flash its background
-    /// at the bottom mid-resize. An instant swap resizes the window in one
-    /// step.
+    /// swap changes the popover's height; animating it makes the panel
+    /// chase a moving target and flash its background at the bottom
+    /// mid-resize. An instant swap resizes the window in one step.
     private func select(_ index: Int) {
         var tx = Transaction()
         tx.disablesAnimations = true
