@@ -6,6 +6,34 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.10.11 — 2026-06-02
+
+### Fixed
+- **Popover grew a transparent strip below the footer that kept getting taller.**
+  `MenuBarExtra(.window)`'s system panel ratchets up to the tallest content
+  it has shown and doesn't reliably shrink — `.fixedSize` only controls
+  SwiftUI layout, it can't command the panel to shrink. Replaced
+  `MenuBarExtra` with a custom `NSStatusItem` + `NSPanel` that owns its own
+  size: a `GeometryReader` measures the SwiftUI content and the panel
+  `setFrame`'s to match exactly (growing AND shrinking). The strip is gone
+  and the panel can't ratchet up anymore.
+- **Account-switch sometimes briefly exposed a clear corner.** Small
+  remnant of the previous architecture: implicit `CALayer` animations made
+  the rounded corner mask lag the resize. Now the panel owns its size
+  end-to-end and the chrome is OS-provided (utility-window rounded
+  corners + shadow), so the race is gone.
+
+### 中文
+
+- **弹窗底部长出越来越高的透明带**:`MenuBarExtra(.window)` 的系统面板只
+  涨到显示过的最高内容、不可靠地缩回——`.fixedSize` 只管 SwiftUI 排版,
+  命令不动面板缩小。把 `MenuBarExtra` 换成自己管的 `NSStatusItem` +
+  `NSPanel`,自己测量 SwiftUI 内容高度并 `setFrame`(含变矮),透明带消失,
+  也不再棘轮向上。
+- **切账号时圆角偶发透明**:原架构的小遗留——隐式 `CALayer` 动画让圆角
+  遮罩跟不上 resize。现在面板自己端到端控制尺寸、chrome 由系统提供
+  (utility 窗口的圆角 + 阴影),竞态消失。
+
 ## v0.10.10 — 2026-05-28
 
 ### Fixed
