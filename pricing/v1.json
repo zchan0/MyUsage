@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updated": "2026-04-17",
+  "notes": "Prices in USD per 1,000,000 tokens. Longest-prefix match on model name.",
+  "models": {
+    "claude-sonnet-4-5":  { "input": 3.00,  "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30 },
+    "claude-opus-4-5":    { "input": 15.00, "output": 75.00, "cache_write": 18.75, "cache_read": 1.50 },
+    "claude-opus-4":      { "input": 15.00, "output": 75.00, "cache_write": 18.75, "cache_read": 1.50 },
+    "claude-haiku-4-5":   { "input": 1.00,  "output": 5.00,  "cache_write": 1.25,  "cache_read": 0.10 },
+    "claude-sonnet-4":    { "input": 3.00,  "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30 },
+    "claude-3-7-sonnet":  { "input": 3.00,  "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30 },
+    "claude-3-5-sonnet":  { "input": 3.00,  "output": 15.00, "cache_write": 3.75,  "cache_read": 0.30 },
+    "claude-3-5-haiku":   { "input": 0.80,  "output": 4.00,  "cache_write": 1.00,  "cache_read": 0.08 },
+
+    "gpt-5-codex":        { "input": 1.25,  "output": 10.00, "cached_input": 0.125 },
+    "gpt-5":              { "input": 1.25,  "output": 10.00, "cached_input": 0.125 },
+    "gpt-5-mini":         { "input": 0.25,  "output": 2.00,  "cached_input": 0.025 },
+    "gpt-4o":             { "input": 2.50,  "output": 10.00, "cached_input": 1.25 },
+    "gpt-4.1":            { "input": 2.00,  "output": 8.00,  "cached_input": 0.50 }
+  }
+}

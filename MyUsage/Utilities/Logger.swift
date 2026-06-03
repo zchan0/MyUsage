@@ -8,6 +8,7 @@ extension Logger {
     static let claude = Logger(subsystem: subsystem, category: "Claude")
     static let codex = Logger(subsystem: subsystem, category: "Codex")
     static let general = Logger(subsystem: subsystem, category: "General")
+    static let pricing = Logger(subsystem: subsystem, category: "Pricing")
 }
 
 /// Temporary debug logger that uses NSLog for visibility in bare binaries.

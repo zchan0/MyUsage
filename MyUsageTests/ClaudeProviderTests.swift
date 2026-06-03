@@ -348,12 +348,13 @@ struct ClaudeProviderTests {
         let roots = [fm.temporaryDirectory.appendingPathComponent("__absent_\(UUID())__")]
         let cacheURL = tempCacheURL()
 
-        let total = ClaudeProvider.computeMonthlyCostSync(
+        let result = ClaudeProvider.computeMonthlyCostSync(
             roots: roots,
             now: .now,
             cacheURL: cacheURL
         )
-        #expect(total == 0)
+        #expect(result.total == 0)
+        #expect(result.breakdown.isEmpty)
         #expect(fm.fileExists(atPath: cacheURL.path) == false)
     }
 
@@ -362,12 +363,15 @@ struct ClaudeProviderTests {
         let fixture = try makeCostFixture(costUSD: 0.05)
         defer { fixture.cleanup() }
 
-        let total = ClaudeProvider.computeMonthlyCostSync(
+        let result = ClaudeProvider.computeMonthlyCostSync(
             roots: [fixture.root],
             now: .now,
             cacheURL: fixture.cacheURL
         )
-        #expect(abs(total - 0.05) < 1e-9)
+        #expect(abs(result.total - 0.05) < 1e-9)
+        // preComputedCost rides on the breakdown so the Cost tab can
+        // surface it as the "Pre-priced by Claude Code" line.
+        #expect(abs(result.breakdown.preComputedCost - 0.05) < 1e-9)
 
         let cached = try #require(ClaudeCostCache.read(from: fixture.cacheURL))
         #expect(abs(cached.totalUSD - 0.05) < 1e-9)
@@ -395,12 +399,12 @@ struct ClaudeProviderTests {
         )
         try ClaudeCostCache.write(bogus, to: fixture.cacheURL)
 
-        let total = ClaudeProvider.computeMonthlyCostSync(
+        let result = ClaudeProvider.computeMonthlyCostSync(
             roots: [fixture.root],
             now: .now,
             cacheURL: fixture.cacheURL
         )
-        #expect(total == 99.99)
+        #expect(result.total == 99.99)
     }
 
     @Test("computeMonthlyCostSync invalidates cache on month rollover")
@@ -422,13 +426,13 @@ struct ClaudeProviderTests {
         )
         try ClaudeCostCache.write(staleMonth, to: fixture.cacheURL)
 
-        let total = ClaudeProvider.computeMonthlyCostSync(
+        let result = ClaudeProvider.computeMonthlyCostSync(
             roots: [fixture.root],
             now: .now,
             cacheURL: fixture.cacheURL
         )
         // Month mismatch → cache ignored → real scan wins.
-        #expect(abs(total - 0.05) < 1e-9)
+        #expect(abs(result.total - 0.05) < 1e-9)
 
         let overwritten = try #require(ClaudeCostCache.read(from: fixture.cacheURL))
         #expect(overwritten.month == ClaudeCostCache.monthKey(for: .now))
@@ -461,18 +465,89 @@ struct ClaudeProviderTests {
             ofItemAtPath: fixture.jsonl.path
         )
 
-        let total = ClaudeProvider.computeMonthlyCostSync(
+        let result = ClaudeProvider.computeMonthlyCostSync(
             roots: [fixture.root],
             now: .now,
             cacheURL: fixture.cacheURL
         )
-        #expect(abs(total - 0.25) < 1e-9)
+        #expect(abs(result.total - 0.25) < 1e-9)
 
         let second = try #require(ClaudeCostCache.read(from: fixture.cacheURL))
         #expect(second.maxSourceMtime > first.maxSourceMtime)
     }
 
+    @Test("computeMonthlyCostSync emits a TokenBreakdown that matches the JSONL tokens")
+    func costSyncBreakdownFromTokens() throws {
+        let fixture = try makeTokenFixture(
+            input: 1_000, output: 500,
+            cacheCreation: 200, cacheRead: 800
+        )
+        defer { fixture.cleanup() }
+
+        let result = ClaudeProvider.computeMonthlyCostSync(
+            roots: [fixture.root],
+            now: .now,
+            cacheURL: fixture.cacheURL
+        )
+        #expect(result.breakdown.freshInput    == 1_000)
+        #expect(result.breakdown.output        == 500)
+        #expect(result.breakdown.cacheCreation == 200)
+        #expect(result.breakdown.cacheRead     == 800)
+        #expect(result.breakdown.preComputedCost == 0)
+        // cache_read / (input + cache_creation + cache_read) = 800 / 2000
+        #expect(abs(result.breakdown.cacheHitRate - 0.4) < 1e-9)
+    }
+
+    @Test("computeMonthlyCostSync cache-hit path returns the same breakdown as miss")
+    func costSyncBreakdownStableAcrossCache() throws {
+        let fixture = try makeTokenFixture(
+            input: 333, output: 222,
+            cacheCreation: 111, cacheRead: 444
+        )
+        defer { fixture.cleanup() }
+
+        // First call: cache miss, writes cache.
+        let miss = ClaudeProvider.computeMonthlyCostSync(
+            roots: [fixture.root],
+            now: .now,
+            cacheURL: fixture.cacheURL
+        )
+        // Second call: cache hit, reconstructs breakdown from cached tokens.
+        let hit = ClaudeProvider.computeMonthlyCostSync(
+            roots: [fixture.root],
+            now: .now,
+            cacheURL: fixture.cacheURL
+        )
+        #expect(miss.breakdown == hit.breakdown)
+        #expect(miss.total == hit.total)
+    }
+
     // MARK: - Helpers
+
+    /// Variant of `makeCostFixture` that emits a JSONL row with raw
+    /// token counts (no server `costUSD`) so we can assert the
+    /// per-bucket breakdown end-to-end.
+    private func makeTokenFixture(
+        input: Int, output: Int, cacheCreation: Int, cacheRead: Int
+    ) throws -> CostFixture {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory
+            .appendingPathComponent("claude-tokens-fixture-\(UUID())", isDirectory: true)
+        let nested = root.appendingPathComponent("-Users-me/proj", isDirectory: true)
+        try fm.createDirectory(at: nested, withIntermediateDirectories: true)
+
+        let jsonl = nested.appendingPathComponent("session.jsonl")
+        let row = """
+        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":\(input),"output_tokens":\(output),"cache_creation_input_tokens":\(cacheCreation),"cache_read_input_tokens":\(cacheRead)}}}
+        """
+        try row.write(to: jsonl, atomically: true, encoding: .utf8)
+
+        let cacheURL = tempCacheURL()
+        return CostFixture(root: root, jsonl: jsonl, cacheURL: cacheURL) {
+            try? fm.removeItem(at: root)
+            try? fm.removeItem(at: cacheURL)
+        }
+    }
 
     private func tempCacheURL() -> URL {
         FileManager.default.temporaryDirectory

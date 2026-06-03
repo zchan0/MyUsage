@@ -196,6 +196,12 @@ struct UsageSnapshot: Sendable {
     /// - nil when the provider doesn't compute one.
     var monthlyEstimatedCost: Double?
 
+    /// Per-bucket token counters behind `monthlyEstimatedCost`. Lets
+    /// Settings → Cost surface the cache hit rate and per-bucket
+    /// dollar split without a second scan of the JSONL files. v1 is
+    /// Claude-only; other providers leave this nil.
+    var monthlyTokenBreakdown: TokenBreakdown?
+
     // MARK: - Computed
 
     /// On-demand usage percentage (0–100), nil if no limit set.

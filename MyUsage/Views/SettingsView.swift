@@ -3,9 +3,11 @@ import SwiftUI
 import ServiceManagement
 
 /// App settings window — restyled to match the popover's visual system.
-/// Keeps the existing 4-tab layout (General, Providers, Devices, About);
-/// inside each tab the stock `Form` is replaced by `SettingsCard`-based
-/// glass sections so the chrome reads consistently with the popover.
+/// 5-tab layout (General, Providers, Cost, Devices, About) — Cost was
+/// added in spec 16 for cache-stats visibility + pricing-source
+/// configuration. Inside each tab the stock `Form` is replaced by
+/// `SettingsCard`-based glass sections so the chrome reads
+/// consistently with the popover.
 struct SettingsView: View {
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
@@ -22,6 +24,9 @@ struct SettingsView: View {
 
             providersTab
                 .tabItem { Label("Providers", systemImage: "square.stack.3d.up") }
+
+            CostTab()
+                .tabItem { Label("Cost", systemImage: "dollarsign.circle") }
 
             DevicesTab()
                 .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }

@@ -12,8 +12,13 @@ enum ClaudeCostCache {
 
     // MARK: - Schema
 
-    /// Bump when `Payload` changes shape. Older caches are silently discarded.
-    static let currentVersion = 1
+    /// Bump when `Payload` changes shape. Older caches are silently
+    /// discarded. v2 (spec 16): the early-return cache-hit path now
+    /// reconstructs a `TokenBreakdown` from `tokensByModel`, so a v1
+    /// payload from a different code path could in principle have a
+    /// stale total vs. its token counts. Force a single full rescan
+    /// on upgrade to guarantee they're consistent.
+    static let currentVersion = 2
 
     struct Payload: Codable, Sendable, Equatable {
         let v: Int
