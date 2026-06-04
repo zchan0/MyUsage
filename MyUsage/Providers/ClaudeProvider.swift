@@ -184,7 +184,7 @@ final class ClaudeProvider: UsageProvider {
     /// fingerprint — we re-fetch instead of serving the previous account's
     /// email + plan. Without this the popover mislabels the active account
     /// (wrong email) and shows the first account's plan ("Max") for every
-    /// account (spec 15 multi-account bug).
+    /// account — the original account-switch mislabeling bug.
     private var cachedProfile: ClaudeProfile?
     private var cachedProfileFingerprint: String?
 

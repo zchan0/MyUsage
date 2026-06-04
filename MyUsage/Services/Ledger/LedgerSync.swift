@@ -214,47 +214,6 @@ final class LedgerSync {
         (try? store.monthlyByModel(provider: provider, monthKey: monthKey)) ?? [:]
     }
 
-    /// Cross-device per-account totals for a provider in the given
-    /// `YYYY-MM` month. Returns `[accountID: USD]`. Drives the popover
-    /// account switcher's per-account cost numbers.
-    func monthlyTotalsByAccount(
-        provider: ProviderKind,
-        monthKey: String
-    ) -> [String: Double] {
-        (try? store.monthlyTotalsByAccount(provider: provider, monthKey: monthKey)) ?? [:]
-    }
-
-    /// Single-account scoped monthly total. Used when the popover renders
-    /// the cost row inside one account's card and needs that account's
-    /// cross-device sum.
-    func monthlyTotal(
-        provider: ProviderKind,
-        monthKey: String,
-        accountID: String
-    ) -> Double {
-        (try? store.monthlyTotal(provider: provider, monthKey: monthKey, accountID: accountID)) ?? 0
-    }
-
-    /// One-shot legacy `default` → email migration (spec 15). Refreshes
-    /// published aggregates if any rows were updated so the popover/cost
-    /// numbers reflect the new bucket immediately. Caller must gate on
-    /// "first observation for this provider" — see ClaudeProvider /
-    /// CodexProvider / CursorProvider refresh paths.
-    @discardableResult
-    func rewriteDefaultAccountID(
-        provider: ProviderKind,
-        to accountID: String
-    ) -> Int {
-        let n = (try? store.rewriteDefaultAccountID(provider: provider, to: accountID)) ?? 0
-        if n > 0 {
-            Logger.ledger.info(
-                "Migrated \(n, privacy: .public) default rows to account for provider \(provider.rawValue, privacy: .public)"
-            )
-            reloadAggregates()
-        }
-        return n
-    }
-
     /// Fetch aggregated contributions for a provider in the given month —
     /// used by the popover when the user clicks the ⊕ badge.
     func contributions(
@@ -262,45 +221,6 @@ final class LedgerSync {
         monthKey: String
     ) -> [DeviceContribution] {
         monthlyByDevice[monthKey]?[provider] ?? []
-    }
-
-    /// Wipe this device's ledger rows for one (provider, account). Mirrors
-    /// `forgetPeer`'s spirit at a finer granularity — the user said
-    /// "I'm done with this account on this Mac" and we honor that across
-    /// both local SQLite *and* this device's published JSONL in the sync
-    /// folder. Other peers' rows under the same accountID stay (they
-    /// belong to those Macs and remain the truth of those Macs' history).
-    ///
-    /// Returns the number of rows deleted. Refreshes published aggregates
-    /// + republishes the local snapshot so the sync folder JSONL no longer
-    /// contains the wiped rows (otherwise our own snapshot would still
-    /// surface them on the next ingest by other Macs).
-    @discardableResult
-    func forgetAccountRows(
-        provider: ProviderKind,
-        accountID: String
-    ) async -> Int {
-        let n: Int
-        do {
-            n = try store.deleteRows(
-                forDevice: selfDeviceID,
-                provider: provider,
-                accountID: accountID
-            )
-        } catch {
-            Logger.ledger.error(
-                "forgetAccountRows failed: \(error.localizedDescription, privacy: .public)"
-            )
-            return 0
-        }
-        if n > 0 {
-            Logger.ledger.info(
-                "Wiped \(n, privacy: .public) self rows for provider=\(provider.rawValue, privacy: .public) account=\(accountID, privacy: .private)"
-            )
-            reloadAggregates()
-            await publishLocalSnapshot()
-        }
-        return n
     }
 
     /// Forget a peer device: drop its rows from SQLite and delete its

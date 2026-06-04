@@ -100,7 +100,7 @@ final class UsageManager {
         register(CursorProvider())
         register(AntigravityProvider())
 
-        // One-time cleanup: spec 15's multi-account registry was removed.
+        // One-time cleanup: the multi-account registry was removed.
         // Its persisted `accounts.json` is now orphaned — delete it
         // best-effort so we don't leave dead state behind. Harmless if
         // already gone. The ledger (which still carries account_id rows
@@ -111,7 +111,7 @@ final class UsageManager {
     }
 
     /// Deletes the orphaned `~/Library/Application Support/MyUsage/accounts.json`
-    /// left behind by the removed multi-account feature (spec 15).
+    /// left behind by the removed multi-account feature.
     private static func removeOrphanedAccountStore() {
         guard let support = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask

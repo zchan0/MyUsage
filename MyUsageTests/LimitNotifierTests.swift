@@ -153,7 +153,7 @@ struct LimitNotifierTests {
         return (notifier, dispatcher, defaults)
     }
 
-    // MARK: - Notification text (spec 15)
+    // MARK: - Notification text
 
     @Test("Notification title without accountLabel matches today's wording")
     @MainActor
