@@ -6,6 +6,49 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.11.0 — 2026-06-04
+
+### Removed
+- **Multi-account per provider.** Removed the swipeable account switcher,
+  the per-account snapshot cache, and the Settings → Providers account
+  rows. The feature could never deliver its core promise — live usage for
+  an account you're *not* currently signed into — because Claude and Codex
+  both rotate the OAuth refresh token on every refresh, so polling a
+  backgrounded account in the background would revoke the real CLI's
+  credentials and log you out. It only ever showed stale snapshots while
+  carrying the bulk of the popover's layout complexity. The popover now
+  shows the currently signed-in account per provider, full stop.
+
+### Changed
+- **Reverted the popover to SwiftUI `MenuBarExtra` rendering.** The
+  hand-rolled `NSStatusItem` + `NSPanel` approach computed popover height
+  manually and was prone to height jitter and corner artifacts. With the
+  multi-account switcher gone, each provider shows a single uniform card,
+  so `MenuBarExtra(.window)`'s native content-sizing is both sufficient
+  and more stable. The hand-rolled panel/height machinery is deleted.
+
+### Internal
+- Pruned now-dead ledger code left behind by the multi-account removal
+  (account-scoped queries + the legacy `default → email` migration). The
+  ledger's `account_id` column is retained — it's part of cross-device
+  sync (see `specs/13-devices-sync-ui.md`) and invisible to the UI.
+
+### 中文
+
+- **移除按 provider 的多账号支持**:删掉可滑动的账号切换卡片、非活跃账号的
+  快照缓存,以及 Settings → Providers 里的账号行。这个功能始终无法兑现它的
+  核心承诺——查看*当前未登录*账号的实时额度——因为 Claude 和 Codex 每次刷新
+  都会轮转 OAuth refresh token,后台刷新一个非活跃账号会使真实 CLI 的凭证失效、
+  把你登出。它只能显示陈旧快照,却背了 popover 大部分布局复杂度。现在每个
+  provider 只显示当前登录的账号。
+- **popover 渲染回退到 SwiftUI `MenuBarExtra`**:手搓的 `NSStatusItem` +
+  `NSPanel` 方案手动计算弹窗高度,容易出现高度抖动和圆角残留。多账号切换器
+  移除后,每个 provider 只剩一张等高卡片,`MenuBarExtra(.window)` 原生的
+  内容自适应既够用又更稳定。手搓的面板/高度逻辑已删除。
+- 清理多账号移除后遗留的 ledger 死代码(账号范围查询 + 旧的 `default → email`
+  迁移)。ledger 的 `account_id` 列保留——它属于跨设备同步
+  (见 `specs/13-devices-sync-ui.md`),对 UI 不可见。
+
 ## v0.10.11 — 2026-06-02
 
 ### Fixed
