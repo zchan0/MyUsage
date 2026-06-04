@@ -273,125 +273,30 @@ struct SettingsView: View {
     }
 
     private func providerRow(_ provider: any UsageProvider, at index: Int, total: Int) -> some View {
-        let accounts = manager.accountStore.accounts(for: provider.kind)
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
+        HStack(spacing: 12) {
+            ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(provider.kind.displayName)
-                        .font(.system(size: 12.5, weight: .semibold))
-                    detectionLabel(provider)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(provider.kind.displayName)
+                    .font(.system(size: 12.5, weight: .semibold))
+                detectionLabel(provider)
+            }
+
+            Spacer(minLength: 12)
+
+            reorderButtons(at: index, total: total)
+
+            Toggle("", isOn: Binding(
+                get: { provider.isEnabled },
+                set: { newValue in
+                    provider.isEnabled = newValue
+                    UserDefaults.standard.set(newValue, forKey: "provider.\(provider.kind.rawValue).enabled")
                 }
-
-                Spacer(minLength: 12)
-
-                reorderButtons(at: index, total: total)
-
-                Toggle("", isOn: Binding(
-                    get: { provider.isEnabled },
-                    set: { newValue in
-                        provider.isEnabled = newValue
-                        UserDefaults.standard.set(newValue, forKey: "provider.\(provider.kind.rawValue).enabled")
-                    }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
-            }
-
-            // Inline account sub-rows — only when ≥ 2 accounts have been
-            // observed for this provider. Single-account users see the
-            // tab exactly as before.
-            if accounts.count >= 2 {
-                accountSubRows(provider: provider, accounts: accounts)
-            }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
         }
         .padding(.vertical, 8)
-    }
-
-    /// Sub-rows shown beneath the provider header in the multi-account
-    /// case: indented, smaller text, with a Forget action per account.
-    /// "Forget" drops the registry entry; ledger rows already tagged with
-    /// that account stay (so cross-device aggregates remain truthful).
-    @ViewBuilder
-    private func accountSubRows(provider: any UsageProvider, accounts: [AccountStore.AccountRecord]) -> some View {
-        let activeID = manager.accountStore.activeAccountID(for: provider.kind)
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(accounts) { account in
-                accountSubRow(
-                    provider: provider,
-                    account: account,
-                    isActive: account.accountID == activeID
-                )
-            }
-        }
-        .padding(.leading, 36) // indents under the icon column
-    }
-
-    @State private var pendingForget: PendingForget?
-    private struct PendingForget: Identifiable {
-        let providerKind: ProviderKind
-        let account: AccountStore.AccountRecord
-        var id: String { "\(providerKind.rawValue)/\(account.accountID)" }
-    }
-
-    private func accountSubRow(
-        provider: any UsageProvider,
-        account: AccountStore.AccountRecord,
-        isActive: Bool
-    ) -> some View {
-        HStack(spacing: 8) {
-            AccountEmailPill(
-                displayName: account.displayName,
-                isActive: isActive,
-                isOpaque: account.isOpaque
-            )
-
-            Spacer(minLength: 8)
-
-            // Per-account month-to-date cost — same source as the popover
-            // cost row, so the two views agree.
-            Text(formatAccountCost(provider: provider, accountID: account.accountID))
-                .font(.system(size: 10.5, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-
-            Button("Forget") {
-                pendingForget = PendingForget(providerKind: provider.kind, account: account)
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 10.5, weight: .medium))
-            .foregroundStyle(.secondary.opacity(0.7))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-        }
-        .padding(.vertical, 3)
-        .confirmationDialog(
-            "Forget \(account.displayName)?",
-            isPresented: Binding(
-                get: { pendingForget?.id == "\(provider.kind.rawValue)/\(account.accountID)" },
-                set: { if !$0 { pendingForget = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: pendingForget
-        ) { item in
-            Button("Forget", role: .destructive) {
-                manager.forgetAccount(provider: item.providerKind, accountID: item.account.accountID)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("Removes this account from the popover and wipes this Mac's recorded usage for it. Other Macs that signed in as this account keep their own history — Forget on each Mac to clear globally.")
-        }
-    }
-
-    private func formatAccountCost(provider: any UsageProvider, accountID: String) -> String {
-        let monthKey = LedgerCalendar.monthKey(for: .now)
-        let total = manager.ledger.monthlyTotal(
-            provider: provider.kind,
-            monthKey: monthKey,
-            accountID: accountID
-        )
-        return total > 0 ? String(format: "~$%.2f", total) : "—"
     }
 
     /// Up / down arrow pair for moving a provider in the popover order.

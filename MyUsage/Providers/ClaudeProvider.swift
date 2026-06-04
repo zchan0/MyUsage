@@ -192,11 +192,6 @@ final class ClaudeProvider: UsageProvider {
     /// calculation writes per-day totals into the ledger (spec 12).
     private weak var ledger: LedgerSync?
 
-    /// Optional account registry (spec 15). When present, each successful
-    /// refresh records an observation so the popover can render the
-    /// account switcher and Settings can offer Forget per-account.
-    private weak var accountStore: AccountStore?
-
     /// After a 429, skip API calls until this time. `refresh()` becomes a no-op
     /// and we keep showing the last good snapshot and error message.
     private var nextAllowedRefreshAt: Date?
@@ -217,9 +212,8 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - Init
 
-    init(ledger: LedgerSync? = nil, accountStore: AccountStore? = nil) {
+    init(ledger: LedgerSync? = nil) {
         self.ledger = ledger
-        self.accountStore = accountStore
         detectAvailability()
     }
 
@@ -309,26 +303,11 @@ final class ClaudeProvider: UsageProvider {
             nextAllowedRefreshAt = nil
             consecutiveFailures = 0
 
-            // Tag this refresh with the now-known account identity (spec 15).
-            // Used both to record an observation in the AccountStore and to
-            // tag ledger writes so cross-device aggregates split per account.
+            // Tag ledger writes with the current account identity so
+            // cross-device aggregates stay attributable (spec 13). The
+            // account_id is invisible in the UI — the cost row sums across
+            // all of them — but it keeps each device's rows distinct.
             let identity = currentAccount()
-            if let identity, let snapshot {
-                // Spec 15 migration: if this is the first identity ever
-                // observed for this provider on this device, fold legacy
-                // `account_id = 'default'` rows into it. Email-typed only —
-                // we don't want to assign historical rows to an opaque
-                // `id:xxxx` placeholder (which can drift between sessions).
-                let isFirstObservation = (accountStore?.count(for: .claude) ?? 0) == 0
-                accountStore?.recordObservation(
-                    provider: .claude,
-                    identity: identity,
-                    snapshot: snapshot
-                )
-                if isFirstObservation, identity.email != nil {
-                    ledger?.rewriteDefaultAccountID(provider: .claude, to: identity.id)
-                }
-            }
 
             // Write per-day totals into the multi-device ledger (spec 12).
             // Off the hot path of the user-visible snapshot so a slow scan

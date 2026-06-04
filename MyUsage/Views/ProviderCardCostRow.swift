@@ -4,8 +4,7 @@ import SwiftUI
 /// distinct strategies:
 ///
 /// - Claude / Codex: aggregate (multi-device, current month) sum, with
-///   the ⊕ devices pill and per-account scoping when bound to an
-///   account.
+///   the ⊕ devices pill.
 /// - Cursor: this billing cycle's spend (Included + On-demand) plus the
 ///   "N days left" countdown.
 /// - Antigravity: nothing — there's no per-account billing.
@@ -15,9 +14,6 @@ import SwiftUI
 struct ProviderCardCostRow: View {
     let kind: ProviderKind
     let snapshot: UsageSnapshot
-    /// Non-nil when the parent card is bound to a specific account; the
-    /// aggregate row will be scoped to that account's cross-device sum.
-    let account: AccountStore.AccountRecord?
 
     @Environment(UsageManager.self) private var manager
 
@@ -61,7 +57,7 @@ struct ProviderCardCostRow: View {
     private var aggregateRow: some View {
         let monthKey = LedgerCalendar.monthKey(for: .now)
         let contributions = manager.ledger.contributions(provider: kind, monthKey: monthKey)
-        let aggregate = scopedMonthlyAggregate(monthKey: monthKey)
+        let aggregate = manager.ledger.monthlyTotals[monthKey]?[kind] ?? 0
         let hasPeers = contributions.contains { !$0.isSelf }
         let displayed: Double = aggregate > 0 ? aggregate : (snapshot.monthlyEstimatedCost ?? 0)
 
@@ -75,21 +71,6 @@ struct ProviderCardCostRow: View {
                 contributions: contributions
             )
         }
-    }
-
-    /// When this card is bound to a specific account, scope the displayed
-    /// total to that account's cross-device sum so the cost row reflects
-    /// what *this* account spent — not the provider's grand total across
-    /// all accounts.
-    private func scopedMonthlyAggregate(monthKey: String) -> Double {
-        if let account {
-            return manager.ledger.monthlyTotal(
-                provider: kind,
-                monthKey: monthKey,
-                accountID: account.accountID
-            )
-        }
-        return manager.ledger.monthlyTotals[monthKey]?[kind] ?? 0
     }
 
     private var cursorCycleRow: some View {

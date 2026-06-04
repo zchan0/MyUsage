@@ -168,14 +168,10 @@ final class CodexProvider: UsageProvider {
     /// `computeMonthlyCost`.
     private weak var ledger: LedgerSync?
 
-    /// Optional account registry (spec 15) — see ClaudeProvider for shape.
-    private weak var accountStore: AccountStore?
-
     // MARK: - Init
 
-    init(ledger: LedgerSync? = nil, accountStore: AccountStore? = nil) {
+    init(ledger: LedgerSync? = nil) {
         self.ledger = ledger
-        self.accountStore = accountStore
         detectAvailability()
     }
 
@@ -264,21 +260,8 @@ final class CodexProvider: UsageProvider {
                 snapshot = mapped
             }
 
-            // Record the account as soon as we have both an identity and a
-            // snapshot to cache (the just-mapped one, or a prior cached
-            // one). Independent of whether THIS refresh's usage fetch
-            // succeeded, so the account surfaces in the switcher promptly.
-            if let identity, let snapshot {
-                let isFirstObservation = (accountStore?.count(for: .codex) ?? 0) == 0
-                accountStore?.recordObservation(
-                    provider: .codex,
-                    identity: identity,
-                    snapshot: snapshot
-                )
-                if isFirstObservation, identity.email != nil {
-                    ledger?.rewriteDefaultAccountID(provider: .codex, to: identity.id)
-                }
-            }
+            // Tag ledger writes with the current account identity so
+            // cross-device aggregates stay attributable (spec 13).
             await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
 
             // If usage never came back this cycle, keep showing whatever we

@@ -149,25 +149,19 @@ final class LimitNotifier {
     /// snapshot) are themselves MainActor-only. Tests should construct
     /// observations by hand rather than calling this overload.
     ///
-    /// `accountStore` (when present) is consulted per-provider to fold
-    /// the active account's display name into notifications when ≥ 2
-    /// accounts have been observed. Single-account providers see no
-    /// change to their notification copy.
     static func observations(
-        from providers: [any UsageProvider],
-        accountStore: AccountStore? = nil
+        from providers: [any UsageProvider]
     ) -> [LimitObservation] {
-        providers.flatMap { observations(from: $0, accountStore: accountStore) }
+        providers.flatMap { observations(from: $0) }
     }
 
     static func observations(
-        from provider: any UsageProvider,
-        accountStore: AccountStore? = nil
+        from provider: any UsageProvider
     ) -> [LimitObservation] {
         guard provider.isEnabled, let snap = provider.snapshot else { return [] }
         let display = provider.kind.displayName
         let kindRaw = provider.kind.rawValue
-        let accountLabel = activeAccountLabel(provider: provider, store: accountStore)
+        let accountLabel: String? = nil
         var rows: [LimitObservation] = []
 
         if let session = snap.sessionUsage {
@@ -221,20 +215,6 @@ final class LimitNotifier {
             ))
         }
         return rows
-    }
-
-    /// Returns the active account's display name for this provider when
-    /// ≥ 2 accounts have been observed. Single-account providers return
-    /// nil so the notification text reads as it does today.
-    private static func activeAccountLabel(
-        provider: any UsageProvider,
-        store: AccountStore?
-    ) -> String? {
-        guard let store, store.count(for: provider.kind) >= 2 else { return nil }
-        guard let activeID = store.activeAccountID(for: provider.kind),
-              let record = store.record(for: provider.kind, accountID: activeID)
-        else { return nil }
-        return record.displayName
     }
 
     // MARK: - Evaluation

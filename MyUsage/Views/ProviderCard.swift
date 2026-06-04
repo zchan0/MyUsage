@@ -16,23 +16,12 @@ import SwiftUI
 ///   └────────────────────────────────────────┘
 struct ProviderCard: View {
     let provider: any UsageProvider
-    /// When non-nil, render the email pill in the card head + (if !isActive)
-    /// surface the cached snapshot under a stale banner. nil = today's UX,
-    /// no account chrome — used for the single-account case.
-    var account: AccountStore.AccountRecord? = nil
-    /// Whether `account` is the one the credentials file currently points
-    /// at. `true` shows live data + filled sage dot; `false` shows the
-    /// cached snapshot + hollow ring + saturate(0.65) wash.
-    var isActive: Bool = true
 
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             cardHead
-            if showStaleBanner, let captured = account?.snapshot?.capturedAt {
-                StaleSnapshotBanner(capturedAt: captured)
-            }
             bodySection
         }
         .padding(.horizontal, 13)
@@ -48,22 +37,6 @@ struct ProviderCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 1.5, x: 0, y: 1)
         .opacity(isDimmed ? 0.7 : 1.0)
-        .saturation(showStaleBanner ? 0.65 : 1.0)
-    }
-
-    /// Snapshot driving every renderable bar / number in this card. For
-    /// the active account (or single-account default) this is the live
-    /// `provider.snapshot`; for an inactive account it's the cached
-    /// `AccountSnapshot` reconstituted as a `UsageSnapshot`.
-    private var effectiveSnapshot: UsageSnapshot? {
-        if !isActive, let cached = account?.snapshot {
-            return cached.asUsageSnapshot
-        }
-        return provider.snapshot
-    }
-
-    private var showStaleBanner: Bool {
-        !isActive && account?.snapshot != nil
     }
 
     // MARK: - Head
@@ -80,15 +53,6 @@ struct ProviderCard: View {
 
                 if let plan = planLabel {
                     PlanPill(text: plan)
-                }
-
-                if let account {
-                    AccountEmailPill(
-                        displayName: account.displayName,
-                        isActive: isActive,
-                        isOpaque: account.isOpaque
-                    )
-                    .layoutPriority(-1)
                 }
 
                 if isStale {
@@ -117,11 +81,11 @@ struct ProviderCard: View {
 
     @ViewBuilder
     private var bodySection: some View {
-        if provider.isLoading && effectiveSnapshot == nil {
+        if provider.isLoading && provider.snapshot == nil {
             loadingView
-        } else if let error = provider.error, effectiveSnapshot == nil, isActive {
+        } else if let error = provider.error, provider.snapshot == nil {
             errorView(error)
-        } else if let snapshot = effectiveSnapshot {
+        } else if let snapshot = provider.snapshot {
             snapshotBody(snapshot)
         } else {
             notConfiguredView
@@ -135,19 +99,16 @@ struct ProviderCard: View {
         // head says everything we need (no historical timestamp).
         if provider.kind == .antigravity, !isAntigravityLive {
             EmptyView()
-        } else if isActive, let staleMessage = provider.error {
-            // Live error rows belong to the active account only — the
-            // cached snapshot view already explains its own staleness via
-            // the StaleSnapshotBanner above.
+        } else if let staleMessage = provider.error {
             VStack(alignment: .leading, spacing: 9) {
-                ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: showStaleBanner)
-                ProviderCardCostRow(kind: provider.kind, snapshot: snapshot, account: account)
+                ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
+                ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
                 staleWarningRow(staleMessage)
             }
         } else {
             VStack(alignment: .leading, spacing: 9) {
-                ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: showStaleBanner)
-                ProviderCardCostRow(kind: provider.kind, snapshot: snapshot, account: account)
+                ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
+                ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
             }
         }
     }
@@ -157,9 +118,8 @@ struct ProviderCard: View {
 
     // MARK: - Cost row
 
-    // Cost row + per-account aggregate scoping live in
-    // ProviderCardCostRow.swift — accessed via
-    // `ProviderCardCostRow(kind:, snapshot:, account:)`.
+    // Cost row lives in ProviderCardCostRow.swift — accessed via
+    // `ProviderCardCostRow(kind:, snapshot:)`.
 
     // MARK: - Stale warning
 
@@ -230,7 +190,7 @@ struct ProviderCard: View {
         if provider.kind == .antigravity {
             return isAntigravityLive ? nil : "IDE off"
         }
-        return effectiveSnapshot?.planName
+        return provider.snapshot?.planName
     }
 
     private var isStale: Bool {

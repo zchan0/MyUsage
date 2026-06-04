@@ -17,12 +17,6 @@ final class UsageManager {
     /// instance and the UI can observe aggregate state.
     let ledger: LedgerSync
 
-    /// Per-(provider, account) registry + cached snapshots — see spec 15.
-    /// Owns `accounts.json`. Lives on the manager so every provider records
-    /// its observations through a single instance and the UI can observe
-    /// the active/inactive list.
-    let accountStore: AccountStore
-
     // MARK: - Settings
 
     var refreshInterval: RefreshInterval {
@@ -84,8 +78,7 @@ final class UsageManager {
     // MARK: - Init
 
     init(
-        ledger: LedgerSync = LedgerSync(),
-        accountStore: AccountStore = AccountStore()
+        ledger: LedgerSync = LedgerSync()
     ) {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
@@ -101,14 +94,32 @@ final class UsageManager {
         self.notifyWarnThreshold = (UserDefaults.standard.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
         self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
         self.ledger = ledger
-        self.accountStore = accountStore
 
-        register(ClaudeProvider(ledger: ledger, accountStore: accountStore))
-        register(CodexProvider(ledger: ledger, accountStore: accountStore))
-        register(CursorProvider(accountStore: accountStore))
+        register(ClaudeProvider(ledger: ledger))
+        register(CodexProvider(ledger: ledger))
+        register(CursorProvider())
         register(AntigravityProvider())
 
+        // One-time cleanup: spec 15's multi-account registry was removed.
+        // Its persisted `accounts.json` is now orphaned — delete it
+        // best-effort so we don't leave dead state behind. Harmless if
+        // already gone. The ledger (which still carries account_id rows
+        // for spec 13 cross-device sync) is untouched.
+        Self.removeOrphanedAccountStore()
+
         Task { await ledger.start() }
+    }
+
+    /// Deletes the orphaned `~/Library/Application Support/MyUsage/accounts.json`
+    /// left behind by the removed multi-account feature (spec 15).
+    private static func removeOrphanedAccountStore() {
+        guard let support = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first else { return }
+        let url = support
+            .appendingPathComponent("MyUsage", isDirectory: true)
+            .appendingPathComponent("accounts.json", isDirectory: false)
+        try? FileManager.default.removeItem(at: url)
     }
 
     // MARK: - Public API
@@ -148,7 +159,7 @@ final class UsageManager {
         // Evaluate limit pressure and dispatch notifications for any
         // tier upgrades observed since the previous refresh. Idempotent
         // by ID, so no duplicates within the same window.
-        let observations = LimitNotifier.observations(from: providers, accountStore: accountStore)
+        let observations = LimitNotifier.observations(from: providers)
         await LimitNotifier.shared.evaluate(
             observations: observations,
             warnThreshold: notifyWarnThreshold,
@@ -178,24 +189,6 @@ final class UsageManager {
     /// Move a provider from one position to another.
     func moveProvider(from source: IndexSet, to destination: Int) {
         providerOrder.move(fromOffsets: source, toOffset: destination)
-    }
-
-    /// Forget one account: drop the registry entry AND wipe this device's
-    /// ledger rows for it. Spec 15 behavior — the alternative ("registry
-    /// only") leaves orphaned cost rows that inflate the provider-wide
-    /// total once the account count drops back to 1, with no other UI
-    /// path to remove them.
-    ///
-    /// Cross-device intent: this Mac's spending under that account is
-    /// gone; peer Macs keep their own slice (they're the source of truth
-    /// for their own usage, and the user might still want it visible).
-    /// Forgetting on every Mac wipes globally — same pattern as
-    /// `forgetPeer`.
-    func forgetAccount(provider: ProviderKind, accountID: String) {
-        Task {
-            await ledger.forgetAccountRows(provider: provider, accountID: accountID)
-            accountStore.forget(provider: provider, accountID: accountID)
-        }
     }
 
     /// The worst usage percent across all enabled providers.
