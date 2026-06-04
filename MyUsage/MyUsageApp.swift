@@ -1,34 +1,28 @@
 import SwiftUI
-import AppKit
 
 @main
 struct MyUsageApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var usageManager = UsageManager()
+    @State private var updateChecker = UpdateChecker.shared
 
     var body: some Scene {
+        MenuBarExtra {
+            UsagePopover()
+                .environment(usageManager)
+                .environment(updateChecker)
+        } label: {
+            MenuBarIcon(usageManager: usageManager)
+        }
+        .menuBarExtraStyle(.window)
+
         Settings {
             SettingsView()
-                .environment(appDelegate.usageManager)
-                .environment(appDelegate.updateChecker)
+                .environment(usageManager)
+                .environment(updateChecker)
         }
     }
-}
 
-/// Owns the app-wide state and the menu-bar status item. We manage the status
-/// item ourselves (see `StatusItemController`) rather than using
-/// `MenuBarExtra`, so the popover panel can be sized to its content exactly.
-@MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    let usageManager = UsageManager()
-    let updateChecker = UpdateChecker.shared
-
-    private var statusItemController: StatusItemController?
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItemController = StatusItemController(manager: usageManager, updateChecker: updateChecker)
-        usageManager.startTimer()
-
-        Task { await usageManager.refreshAll() }
+    init() {
         // Fire-and-forget — debounced inside UpdateChecker so this is
         // safe even if the app launches multiple times in 24h.
         Task { await UpdateChecker.shared.checkIfNeeded() }

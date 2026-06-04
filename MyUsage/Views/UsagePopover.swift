@@ -19,12 +19,15 @@ struct UsagePopover: View {
             if enabledProviders.isEmpty {
                 emptyState
             } else {
-                // Plain VStack — NO ScrollView. The popover panel sizes itself
-                // to this content's intrinsic height, so a ScrollView would
-                // have no height to fill and collapse to zero (the cards would
-                // vanish). A plain VStack sizes to its cards and renders
-                // reliably; there are only ever a handful of provider cards,
-                // so scrolling buys nothing.
+                // Plain VStack — NO ScrollView. Inside a MenuBarExtra(.window),
+                // which sizes the window to its content's intrinsic height, a
+                // ScrollView has no height to fill so it collapses to zero and
+                // the cards vanish (header + footer still show because they
+                // live outside it). This regressed with the macOS 26 update,
+                // which changed how MenuBarExtra measures its content. A plain
+                // VStack sizes to its cards and renders reliably; there are
+                // only ever a handful of provider cards, so scrolling buys
+                // nothing.
                 VStack(spacing: 7) {
                     ForEach(enabledProviders, id: \.kind) { provider in
                         providerSlot(for: provider)
@@ -39,11 +42,34 @@ struct UsagePopover: View {
             footer
         }
         .frame(width: 340)
-        // Take the content's ideal height. The hosting panel measures this
-        // (via onSizeChange) and resizes its window to match exactly — both
-        // growing and shrinking — so there's never a leftover gap. Chrome
-        // (rounded material + clear window + shadow) is owned by PopoverPanel.
+        // Pin the popover to its content's exact height. Inside a
+        // MenuBarExtra(.window) the window grows to fit the tallest layout
+        // it has shown (e.g. an account-switcher card) but is reluctant to
+        // shrink again — leaving a transparent strip below the footer when
+        // a shorter layout is shown. fixedSize tells SwiftUI to take the
+        // content's ideal height and refuse a taller proposal, so the
+        // window tracks the real content height with no leftover gap.
         .fixedSize(horizontal: false, vertical: true)
+        // Own the popover chrome (rounded material background + clear
+        // window) so the corners stay rounded at any height. The system
+        // panel's corner mask doesn't follow a tall fixedSize resize on
+        // macOS 26, exposing a white corner notch in dark mode; drawing
+        // our own rounded material that tracks the content size fixes it.
+        // Single rounding source: the material layer rounds itself and
+        // snaps to live resizes (RoundedMaterialView disables implicit
+        // animation). A SwiftUI .clipShape on top would be a second,
+        // separately-timed mask that can lag the resize and re-expose the
+        // transparent corner — so we deliberately don't add one. Content
+        // is inset from the edges (header/footer/card padding), so it
+        // never pokes into the rounded corners.
+        .background(PopoverMaterialBackground(cornerRadius: 12))
+        .background(PopoverWindowConfigurator())
+        .task(id: "init") {
+            manager.startTimer()
+        }
+        .onAppear {
+            Task { await manager.refreshAll() }
+        }
     }
 
     // MARK: - Subviews
@@ -165,19 +191,9 @@ struct UsagePopover: View {
         manager.orderedProviders.filter { $0.isEnabled }
     }
 
-    /// Single-account providers render the original `ProviderCard`
-    /// directly (today's UX preserved verbatim). Multi-account providers
-    /// (≥ 2 observed) render the swipeable `ProviderSwitcherCard`. The
-    /// branch is per-provider so signing into a second Claude account
-    /// only affects Claude's card, not the others.
     @ViewBuilder
     private func providerSlot(for provider: any UsageProvider) -> some View {
-        let accounts = manager.accountStore.accounts(for: provider.kind)
-        if accounts.count >= 2 {
-            ProviderSwitcherCard(provider: provider, accounts: accounts)
-        } else {
-            ProviderCard(provider: provider)
-        }
+        ProviderCard(provider: provider)
     }
 }
 
