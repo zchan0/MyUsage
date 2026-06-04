@@ -122,12 +122,6 @@ final class UsageManager {
             lastRefreshed = .now
         }
 
-        // Opportunistic remote pricing fetch (spec 16). Fire-and-forget
-        // — the fetcher honors its own 7-day throttle and the user's
-        // auto-update toggle. Never `await` here: the spec is explicit
-        // that pricing fetch must never block UI.
-        Task { await PricingRemoteFetcher.shared.fetch(force: false) }
-
         // Refresh providers concurrently so a slow one (e.g. Claude
         // waiting on the network) doesn't hold up the others. Each
         // provider is @MainActor-isolated, but its `refresh()` suspends at

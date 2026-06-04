@@ -304,9 +304,7 @@ final class ClaudeProvider: UsageProvider {
             }
 
             var mapped = Self.mapToSnapshot(usage, plan: planLabel(creds: creds), fetchedAt: .now)
-            let cost = await Self.computeMonthlyCost()
-            mapped.monthlyEstimatedCost = cost.total
-            mapped.monthlyTokenBreakdown = cost.breakdown
+            mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
             nextAllowedRefreshAt = nil
             consecutiveFailures = 0
@@ -422,15 +420,7 @@ final class ClaudeProvider: UsageProvider {
     /// Cache-gated: the per-file mtime walk is cheap; a full parse only
     /// happens when a JSONL has been appended to since the last scan or the
     /// calendar month has rolled over. See `specs/11-claude-data-sources.md`.
-    /// Final dollar total + the per-bucket token breakdown that
-    /// produced it. Spec 16 exposes the breakdown in Settings →
-    /// Cost; the popover continues to read `.total` only.
-    struct MonthlyCost: Sendable {
-        let total: Double
-        let breakdown: TokenBreakdown
-    }
-
-    nonisolated static func computeMonthlyCost() async -> MonthlyCost {
+    nonisolated static func computeMonthlyCost() async -> Double {
         await Task.detached(priority: .utility) {
             Self.computeMonthlyCostSync(
                 roots: ClaudeLogParser.defaultRoots(),
@@ -447,7 +437,7 @@ final class ClaudeProvider: UsageProvider {
         roots: [URL],
         now: Date,
         cacheURL: URL
-    ) -> MonthlyCost {
+    ) -> Double {
         let since = Date.startOfCurrentMonth(now: now)
         let month = ClaudeCostCache.monthKey(for: now)
 
@@ -460,34 +450,26 @@ final class ClaudeProvider: UsageProvider {
            let mtime = maxMtime,
            abs(cached.maxSourceMtime.timeIntervalSinceReferenceDate
                - mtime.timeIntervalSinceReferenceDate) < 1e-6 {
-            let breakdown = Self.breakdown(
-                fromCached: cached.tokensByModel,
-                preComputedCost: cached.preComputedCost
-            )
-            return MonthlyCost(total: cached.totalUSD, breakdown: breakdown)
+            return cached.totalUSD
         }
 
         // 3) Miss — full scan.
-        let scan = ClaudeLogParser.scanBreakdown(roots: roots, since: since)
+        let breakdown = ClaudeLogParser.scanBreakdown(roots: roots, since: since)
         let tokenCost = CostCalculator.totalCost(
-            of: scan.tokensByModel,
+            of: breakdown.tokensByModel,
             catalog: PricingCatalog.shared
         )
-        let total = scan.preComputedCost + tokenCost
-        let tokenBreakdown = Self.breakdown(
-            fromScan: scan.tokensByModel,
-            preComputedCost: scan.preComputedCost
-        )
+        let total = breakdown.preComputedCost + tokenCost
 
         // 4) Persist (best-effort). Skip when no in-scope files, since we
         //    have nothing to pin the cache to for invalidation.
         if let mtime = maxMtime {
-            let counts = scan.tokensByModel.mapValues(ClaudeCostCache.CachedTokenCounts.init)
+            let counts = breakdown.tokensByModel.mapValues(ClaudeCostCache.CachedTokenCounts.init)
             let payload = ClaudeCostCache.Payload(
                 v: ClaudeCostCache.currentVersion,
                 month: month,
                 totalUSD: total,
-                preComputedCost: scan.preComputedCost,
+                preComputedCost: breakdown.preComputedCost,
                 tokensByModel: counts,
                 maxSourceMtime: mtime,
                 computedAt: now
@@ -501,46 +483,7 @@ final class ClaudeProvider: UsageProvider {
             }
         }
 
-        return MonthlyCost(total: total, breakdown: tokenBreakdown)
-    }
-
-    /// Roll a `UsageByModel` (post-scan) into the Anthropic four-bucket
-    /// `TokenBreakdown`. Codex/OpenAI's `cachedInput` is folded into
-    /// `freshInput` because v1 of the breakdown UI is Claude-only and
-    /// fresh-input is the closest semantic match — Codex breakdown
-    /// belongs in a future spec.
-    nonisolated private static func breakdown(
-        fromScan tokensByModel: UsageByModel,
-        preComputedCost: Double
-    ) -> TokenBreakdown {
-        var result = TokenBreakdown.empty
-        for usage in tokensByModel.values {
-            result.freshInput  += usage.input + usage.cachedInput
-            result.output      += usage.output
-            result.cacheCreation += usage.cacheWrite
-            result.cacheRead   += usage.cacheRead
-        }
-        result.preComputedCost = preComputedCost
-        return result
-    }
-
-    /// Same shape as `breakdown(fromScan:)`, but reading the cached
-    /// `CachedTokenCounts` mirror struct. Kept separate so future
-    /// schema drift between `TokenUsage` and the cache stays local
-    /// to this provider.
-    nonisolated private static func breakdown(
-        fromCached tokensByModel: [String: ClaudeCostCache.CachedTokenCounts],
-        preComputedCost: Double
-    ) -> TokenBreakdown {
-        var result = TokenBreakdown.empty
-        for usage in tokensByModel.values {
-            result.freshInput  += usage.input + usage.cachedInput
-            result.output      += usage.output
-            result.cacheCreation += usage.cacheWrite
-            result.cacheRead   += usage.cacheRead
-        }
-        result.preComputedCost = preComputedCost
-        return result
+        return total
     }
 
     // MARK: - Ledger

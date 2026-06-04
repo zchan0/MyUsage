@@ -1,5 +1,4 @@
 import Foundation
-import os
 
 /// Looks up `ModelPricing` by model name, using longest-prefix matching.
 ///
@@ -79,41 +78,8 @@ extension PricingCatalog {
     /// Process-wide shared catalog. Falls back to an empty catalog if the
     /// bundled JSON is missing or malformed — in that case `cost` returns 0
     /// everywhere rather than crashing.
-    ///
-    /// Mutable behind a lock so `PricingLoader` (spec 16) can swap in a
-    /// freshly-fetched remote catalog while `CostCalculator` keeps
-    /// reading from any thread without main-actor hops. Reads are O(1)
-    /// + one uncontended unfair-lock acquisition; pricing changes are
-    /// rare enough that contention is a non-issue.
-    static var shared: PricingCatalog {
-        get { sharedStore.value }
-        set { sharedStore.value = newValue }
-    }
-
-    /// Reset the shared catalog to the bundled snapshot. Used by
-    /// `PricingLoader` when the user turns auto-update off and we
-    /// need to discard any in-memory remote catalog.
-    static func resetSharedToBundled() {
-        sharedStore.value = bundledOrEmpty()
-    }
-
-    static func bundledOrEmpty() -> PricingCatalog {
+    static let shared: PricingCatalog = {
         if let catalog = try? PricingCatalog.loadBundled() { return catalog }
         return PricingCatalog(file: PricingFile(version: 0, updated: nil, models: [:]))
-    }
-
-    private static let sharedStore = SharedCatalogStore()
-
-    /// Tiny lock-guarded box. `PricingCatalog` is Sendable so its
-    /// stored value is safe to swap across threads as long as the
-    /// swap itself is atomic.
-    private final class SharedCatalogStore: @unchecked Sendable {
-        private let lock = OSAllocatedUnfairLock<PricingCatalog>(
-            initialState: PricingCatalog.bundledOrEmpty()
-        )
-        var value: PricingCatalog {
-            get { lock.withLock { $0 } }
-            set { lock.withLock { $0 = newValue } }
-        }
-    }
+    }()
 }
