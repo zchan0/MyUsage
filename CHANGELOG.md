@@ -6,6 +6,30 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.11.1 — 2026-06-05
+
+### Fixed
+- **Popover height now tracks its content exactly — no clipping, no
+  transparent band, no drift.** `MenuBarExtra(.window)` (shipped in
+  v0.11.0) hosts the popover in a system panel that grows to the tallest
+  content it has shown and won't shrink back, leaving a transparent strip
+  when a shorter layout appears. This replaces it with a self-managed
+  `NSStatusItem` + `NSPanel` whose layout follows FluidMenuBarExtra's
+  proven recipe: the SwiftUI content is measured at its ideal size but
+  always fills the window top-aligned, so it can neither be clipped
+  (header/footer cut off) nor expose a transparent gap on shrink. The
+  panel resizes downward from the menu bar, animating only while open and
+  snapping instantly on first appearance.
+
+### 中文
+
+- **弹窗高度精确贴合内容——不裁切、不透明、不漂移。** v0.11.0 用的
+  `MenuBarExtra(.window)` 把弹窗放在一个只涨不缩的系统面板里,内容变矮时
+  会留下透明带。现在改用自管的 `NSStatusItem` + `NSPanel`,布局借鉴
+  FluidMenuBarExtra 的成熟做法:SwiftUI 内容按真实 ideal 测量、但始终顶
+  对齐填满窗口,因此既不会裁掉 header/footer,也不会在收缩时露出透明缝。
+  面板从菜单栏向下收放,仅在打开状态下动画,首次出现时直接定位不漂入。
+
 ## v0.11.0 — 2026-06-04
 
 ### Removed
