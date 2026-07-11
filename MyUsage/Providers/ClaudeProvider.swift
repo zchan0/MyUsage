@@ -52,6 +52,16 @@ struct ClaudeCredentials: Codable, Sendable {
 /// Other codename fields appear in the response (`tangelo`, `iguana_necktie`,
 /// `omelette_promotional`, ...) but their semantics aren't documented and
 /// they're consistently null for end-user accounts; we don't decode them.
+///
+/// As of mid-2026 Anthropic added a structured `limits` array that reports
+/// every cap in one place — the 5-hour session, the unified weekly cap, and
+/// any *model-scoped* weekly caps — and stopped populating the flat
+/// `seven_day_<codename>` fields (they now arrive null for end-user
+/// accounts). New model caps, e.g. the **Fable** weekly cap, surface *only*
+/// through `limits` (as a `weekly_scoped` entry whose `scope.model.display_name`
+/// is the model name). `weeklyModelRows(from:)` prefers `limits` and falls
+/// back to the flat fields for responses that predate the array. See
+/// `ClaudeLimit`.
 struct ClaudeUsageResponse: Codable, Sendable {
     let fiveHour: ClaudeWindow?
     let sevenDay: ClaudeWindow?
@@ -65,6 +75,11 @@ struct ClaudeUsageResponse: Codable, Sendable {
 
     let extraUsage: ClaudeExtraUsage?
 
+    /// Structured per-cap array (current API shape). Supersedes the flat
+    /// `seven_day_<codename>` fields for model-scoped weekly caps. See
+    /// `ClaudeLimit`. Optional so responses that predate it decode fine.
+    let limits: [ClaudeLimit]?
+
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
@@ -75,6 +90,35 @@ struct ClaudeUsageResponse: Codable, Sendable {
         case sevenDayCowork = "seven_day_cowork"
         case sevenDayOauthApps = "seven_day_oauth_apps"
         case extraUsage = "extra_usage"
+        case limits
+    }
+
+    /// Explicit memberwise init so the new `limits` field can default to
+    /// `nil` — keeps existing call sites (tests, cache fixtures) compiling
+    /// unchanged while the JSON decoder still populates it via the
+    /// synthesized `init(from:)`. `fiveHour` / `sevenDay` stay required.
+    init(
+        fiveHour: ClaudeWindow?,
+        sevenDay: ClaudeWindow?,
+        sevenDayOpus: ClaudeWindow? = nil,
+        sevenDaySonnet: ClaudeWindow? = nil,
+        sevenDayHaiku: ClaudeWindow? = nil,
+        sevenDayOmelette: ClaudeWindow? = nil,
+        sevenDayCowork: ClaudeWindow? = nil,
+        sevenDayOauthApps: ClaudeWindow? = nil,
+        extraUsage: ClaudeExtraUsage? = nil,
+        limits: [ClaudeLimit]? = nil
+    ) {
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+        self.sevenDayOpus = sevenDayOpus
+        self.sevenDaySonnet = sevenDaySonnet
+        self.sevenDayHaiku = sevenDayHaiku
+        self.sevenDayOmelette = sevenDayOmelette
+        self.sevenDayCowork = sevenDayCowork
+        self.sevenDayOauthApps = sevenDayOauthApps
+        self.extraUsage = extraUsage
+        self.limits = limits
     }
 
     struct ClaudeWindow: Codable, Sendable {
@@ -98,6 +142,49 @@ struct ClaudeUsageResponse: Codable, Sendable {
             case usedCredits = "used_credits"
             case monthlyLimit = "monthly_limit"
             case currency
+        }
+    }
+
+    /// One entry in the structured `limits` array.
+    ///
+    /// `kind` classifies the cap:
+    ///   - `session`       — the 5-hour rolling window (mirrors `five_hour`)
+    ///   - `weekly_all`    — the unified weekly cap (mirrors `seven_day`)
+    ///   - `weekly_scoped` — a *per-model* weekly cap. The model's
+    ///     user-facing name is in `scope.model.display_name` (e.g. "Fable").
+    ///     This is the only place new model caps now surface.
+    ///
+    /// `percent` is decoded as `Double` because the API is inconsistent
+    /// about integer vs. fractional utilization across fields. `severity`
+    /// (`normal` / `warning` / …) is decoded for future colour-driving but
+    /// not yet consumed — the bars still derive their band from `percent`.
+    struct ClaudeLimit: Codable, Sendable {
+        let kind: String?
+        let group: String?
+        let percent: Double?
+        let severity: String?
+        let resetsAt: String?
+        let scope: Scope?
+        let isActive: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case kind, group, percent, severity, scope
+            case resetsAt = "resets_at"
+            case isActive = "is_active"
+        }
+
+        struct Scope: Codable, Sendable {
+            let model: Model?
+
+            struct Model: Codable, Sendable {
+                let id: String?
+                let displayName: String?
+
+                enum CodingKeys: String, CodingKey {
+                    case id
+                    case displayName = "display_name"
+                }
+            }
         }
     }
 }
@@ -664,31 +751,7 @@ final class ClaudeProvider: UsageProvider {
             )
         }
 
-        // Weekly per-bucket breakdown. The API exposes a *variable* set of
-        // sub-caps — model families (Opus/Sonnet/Haiku) AND product lines
-        // (Design/Cowork/OAuth-apps) — each plan-dependent and optional.
-        // Surface every bucket the API *returns* (i.e. the window object
-        // exists in the response, even with utilization == 0). 0% means
-        // "this cap exists on your plan but you haven't used it this
-        // week" — that's information the user wants. Missing/nil window
-        // means "this cap doesn't exist on your plan" — those we drop.
-        // Plans where everything pools into the unified `sevenDay`
-        // (Max 5x, most Pro) return no sub-cap windows at all → empty
-        // array → ProviderCardLimits renders no per-model bars.
-        // Sort by utilization desc so heaviest cap reads first; equal-
-        // utilization caps fall back to the declared order.
-        snapshot.weeklyByModel = [
-            ("Opus",       response.sevenDayOpus),
-            ("Sonnet",     response.sevenDaySonnet),
-            ("Haiku",      response.sevenDayHaiku),
-            ("Design",     response.sevenDayOmelette),
-            ("Cowork",     response.sevenDayCowork),
-            ("OAuth apps", response.sevenDayOauthApps)
-        ].compactMap { (label, window) -> WeeklyModelUsage? in
-            guard let window else { return nil }
-            return WeeklyModelUsage(label: label, percent: Double(window.utilization))
-        }
-        .sorted { $0.percent > $1.percent }
+        snapshot.weeklyByModel = weeklyModelRows(from: response)
 
         if let extra = response.extraUsage, extra.isEnabled == true {
             let spent = Double(extra.usedCredits ?? 0) / 100.0
@@ -701,6 +764,54 @@ final class ClaudeProvider: UsageProvider {
         }
 
         return snapshot
+    }
+
+    /// Per-model weekly caps for the popover's breakdown rows, sorted by
+    /// utilization desc so the heaviest cap reads first.
+    ///
+    /// Source precedence:
+    ///  1. The structured `limits` array (current API). Every
+    ///     `weekly_scoped` entry is one model's separate weekly cap; the
+    ///     label is `scope.model.display_name`. This is how new model caps
+    ///     (e.g. **Fable**) arrive — the flat `seven_day_*` fields stopped
+    ///     carrying them. When `limits` is present we trust it exclusively:
+    ///     no scoped entries means "no per-model caps on this plan", which
+    ///     is a real (empty) answer, not a reason to fall back.
+    ///  2. Legacy flat `seven_day_<codename>` fields — used only when the
+    ///     response predates the `limits` array (`limits == nil`).
+    ///
+    /// 0% rows are kept on purpose: a returned cap at 0% means "this cap
+    /// exists on your plan but is unused this week" — information the user
+    /// wants (and exactly the current Fable state). Only absent caps drop.
+    nonisolated static func weeklyModelRows(
+        from response: ClaudeUsageResponse
+    ) -> [WeeklyModelUsage] {
+        if let limits = response.limits {
+            return limits.compactMap { limit -> WeeklyModelUsage? in
+                guard limit.kind == "weekly_scoped",
+                      let name = limit.scope?.model?.displayName,
+                      !name.isEmpty else { return nil }
+                return WeeklyModelUsage(label: name, percent: limit.percent ?? 0)
+            }
+            .sorted { $0.percent > $1.percent }
+        }
+
+        // Legacy fallback — flat codename fields. Model families
+        // (Opus/Sonnet/Haiku) plus product lines (Design/Cowork/OAuth apps),
+        // each plan-dependent and optional. Missing/nil window means the cap
+        // doesn't exist on this plan and is dropped.
+        return [
+            ("Opus",       response.sevenDayOpus),
+            ("Sonnet",     response.sevenDaySonnet),
+            ("Haiku",      response.sevenDayHaiku),
+            ("Design",     response.sevenDayOmelette),
+            ("Cowork",     response.sevenDayCowork),
+            ("OAuth apps", response.sevenDayOauthApps)
+        ].compactMap { (label, window) -> WeeklyModelUsage? in
+            guard let window else { return nil }
+            return WeeklyModelUsage(label: label, percent: Double(window.utilization))
+        }
+        .sorted { $0.percent > $1.percent }
     }
 }
 

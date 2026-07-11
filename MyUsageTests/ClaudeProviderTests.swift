@@ -200,6 +200,128 @@ struct ClaudeProviderTests {
         #expect(snapshot.weeklyByModel.isEmpty)
     }
 
+    // MARK: - Structured `limits` array (current API shape)
+
+    /// Helper: build a `weekly_scoped` limit for a model display name.
+    private func scopedLimit(_ name: String, percent: Double) -> ClaudeUsageResponse.ClaudeLimit {
+        .init(
+            kind: "weekly_scoped",
+            group: "weekly",
+            percent: percent,
+            severity: "normal",
+            resetsAt: nil,
+            scope: .init(model: .init(id: nil, displayName: name)),
+            isActive: false
+        )
+    }
+
+    @Test("Fable weekly-scoped cap in `limits` surfaces as a per-model row at 0%")
+    func mapSnapshotLimitsFable() {
+        // Mirrors the live response: a `weekly_scoped` entry for Fable at
+        // 0% alongside session + weekly_all entries. The scoped cap exists
+        // on the plan but is unused this week, so it's kept at 0%.
+        let response = ClaudeUsageResponse(
+            fiveHour: .init(utilization: 3, resetsAt: nil),
+            sevenDay: .init(utilization: 6, resetsAt: nil),
+            limits: [
+                .init(kind: "session", group: "session", percent: 3,
+                      severity: "normal", resetsAt: nil, scope: nil, isActive: false),
+                .init(kind: "weekly_all", group: "weekly", percent: 6,
+                      severity: "normal", resetsAt: nil, scope: nil, isActive: true),
+                scopedLimit("Fable", percent: 0)
+            ]
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+
+        #expect(snapshot.weeklyByModel.count == 1)
+        #expect(snapshot.weeklyByModel[0].label == "Fable")
+        #expect(snapshot.weeklyByModel[0].percent == 0)
+        // Top-level session/weekly still drive the primary bars.
+        #expect(snapshot.sessionUsage?.percentUsed == 3)
+        #expect(snapshot.weeklyUsage?.percentUsed == 6)
+    }
+
+    @Test("`limits` scoped rows sort by percent desc; non-scoped kinds ignored")
+    func mapSnapshotLimitsSorted() {
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 40, resetsAt: nil),
+            limits: [
+                .init(kind: "weekly_all", group: "weekly", percent: 40,
+                      severity: "normal", resetsAt: nil, scope: nil, isActive: true),
+                scopedLimit("Fable", percent: 12),
+                scopedLimit("Opus", percent: 55)
+            ]
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+
+        #expect(snapshot.weeklyByModel.count == 2)
+        #expect(snapshot.weeklyByModel[0].label == "Opus")
+        #expect(snapshot.weeklyByModel[0].percent == 55)
+        #expect(snapshot.weeklyByModel[1].label == "Fable")
+        #expect(snapshot.weeklyByModel[1].percent == 12)
+    }
+
+    @Test("Present `limits` is authoritative — legacy codename fields ignored")
+    func mapSnapshotLimitsTrumpLegacy() {
+        // When the API returns the new array, we trust it exclusively. A
+        // response carrying both a populated `limits` array (no scoped
+        // rows) AND stale legacy fields must yield an empty breakdown, not
+        // fall back to the legacy path.
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 50, resetsAt: nil),
+            sevenDayOpus: .init(utilization: 99, resetsAt: nil),
+            limits: [
+                .init(kind: "weekly_all", group: "weekly", percent: 50,
+                      severity: "normal", resetsAt: nil, scope: nil, isActive: true)
+            ]
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+        #expect(snapshot.weeklyByModel.isEmpty)
+    }
+
+    @Test("Absent `limits` falls back to legacy codename fields")
+    func mapSnapshotLimitsLegacyFallback() {
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 50, resetsAt: nil),
+            sevenDaySonnet: .init(utilization: 20, resetsAt: nil)
+            // limits omitted → nil → legacy path
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+        #expect(snapshot.weeklyByModel.count == 1)
+        #expect(snapshot.weeklyByModel[0].label == "Sonnet")
+        #expect(snapshot.weeklyByModel[0].percent == 20)
+    }
+
+    @Test("Decodes the live `limits` wire shape (Fable weekly-scoped)")
+    func decodeLiveLimitsJSON() throws {
+        // Trimmed from an actual /api/oauth/usage response.
+        let json = """
+        {
+          "five_hour": {"utilization": 3.0, "resets_at": "2026-07-11T08:10:00.394920+00:00"},
+          "seven_day": {"utilization": 6.0, "resets_at": "2026-07-13T10:00:00.394943+00:00"},
+          "seven_day_opus": null,
+          "limits": [
+            {"kind":"session","group":"session","percent":3,"severity":"normal","resets_at":"2026-07-11T08:10:00.394920+00:00","scope":null,"is_active":false},
+            {"kind":"weekly_all","group":"weekly","percent":6,"severity":"normal","resets_at":"2026-07-13T10:00:00.394943+00:00","scope":null,"is_active":true},
+            {"kind":"weekly_scoped","group":"weekly","percent":0,"severity":"normal","resets_at":null,"scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false}
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(
+            ClaudeUsageResponse.self,
+            from: Data(json.utf8)
+        )
+        let scoped = response.limits?.first { $0.kind == "weekly_scoped" }
+        #expect(scoped?.scope?.model?.displayName == "Fable")
+        #expect(scoped?.percent == 0)
+
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+        #expect(snapshot.weeklyByModel.map(\.label) == ["Fable"])
+    }
+
     @Test("Map usage response with extra usage")
     func mapSnapshotWithExtra() {
         let response = ClaudeUsageResponse(
