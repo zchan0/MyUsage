@@ -6,6 +6,28 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.12.0 — 2026-07-11
+
+### Added
+- **Per-model weekly caps are back — including the new Fable cap.**
+  Anthropic's usage API stopped populating the flat `seven_day_<model>`
+  fields (they now return null) and moved every limit into a structured
+  `limits` array, where model-scoped weekly caps arrive as `weekly_scoped`
+  entries carrying the model's display name. MyUsage now reads that array,
+  so the popover's Claude card surfaces each model's separate weekly cap
+  again as a peer bar under Weekly — e.g. **Fable** — and will pick up any
+  future model-scoped caps automatically. The legacy flat fields remain a
+  fallback for older API responses.
+
+### 中文
+
+- **按模型的周额度回来了——包括新的 Fable 额度。** Anthropic 的用量接口不
+  再返回扁平的 `seven_day_<模型>` 字段(现在都是 null),改为把所有限额放进
+  一个结构化的 `limits` 数组,按模型划分的周额度以 `weekly_scoped` 条目出现,
+  并带上模型显示名。MyUsage 现在解析这个数组,于是弹窗里 Claude 卡片的 Weekly
+  下方重新显示每个模型独立的周额度条(例如 **Fable**),日后新增的模型额度也
+  会自动出现。旧的扁平字段作为老接口响应的回退保留。
+
 ## v0.11.1 — 2026-06-05
 
 ### Fixed
