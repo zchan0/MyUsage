@@ -2,37 +2,34 @@ import SwiftUI
 
 /// Main popover content shown when clicking the menu bar icon.
 ///
-/// Visual structure follows `docs/ui-mockups/popover-glassy-v7.html`:
-///   · Header: wordmark · "X ago" (mono) · refresh
-///   · Card stack: one ProviderCard per enabled provider, 7pt gap,
-///     no global divider (each card carries its own border)
-///   · Footer: Quit (left) · settings (right), with a single
-///     hairline above
+/// Two-level navigation:
+///   · Overview (root): one compact `OverviewRow` per enabled provider —
+///     name, plan, and a terse metric summary. Tapping a row pushes the
+///     provider's detail page.
+///   · Detail: the full `ProviderCard` for one provider (limit bars,
+///     cost row, per-model breakdown). The header's wordmark becomes a
+///     back button.
+///
+/// Shared chrome (follows `docs/ui-mockups/popover-glassy-v7.html`):
+///   · Header: wordmark / back · "X ago" (mono) · refresh
+///   · Footer: settings, with a single hairline above
 struct UsagePopover: View {
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
+
+    /// Which provider's detail page is showing; nil = Overview root.
+    @State private var selectedKind: ProviderKind?
 
     var body: some View {
         VStack(spacing: 0) {
             header
 
-            if enabledProviders.isEmpty {
+            if let provider = selectedProvider {
+                detailPage(for: provider)
+            } else if enabledProviders.isEmpty {
                 emptyState
             } else {
-                // Plain VStack — NO ScrollView. The popover panel sizes itself
-                // to this content's intrinsic height, so a ScrollView would
-                // have no height to fill and collapse to zero (the cards would
-                // vanish). A plain VStack sizes to its cards and renders
-                // reliably; there are only ever a handful of provider cards,
-                // so scrolling buys nothing.
-                VStack(spacing: 7) {
-                    ForEach(enabledProviders, id: \.kind) { provider in
-                        providerSlot(for: provider)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 2)
-                .padding(.bottom, 12)
+                overviewList
             }
 
             footerDivider
@@ -50,9 +47,25 @@ struct UsagePopover: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("MyUsage")
-                .font(.system(size: 13.5, weight: .semibold))
-                .tracking(-0.2)
+            if selectedKind != nil {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selectedKind = nil }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Overview")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .tracking(-0.2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            } else {
+                Text("MyUsage")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .tracking(-0.2)
+            }
 
             Spacer()
 
@@ -159,15 +172,52 @@ struct UsagePopover: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - Pages
+
+    /// Root page: compact rows, one per enabled provider.
+    ///
+    /// Plain VStack — NO ScrollView. The popover panel sizes itself to
+    /// this content's intrinsic height, so a ScrollView would have no
+    /// height to fill and collapse to zero. There are only ever a
+    /// handful of providers, so scrolling buys nothing.
+    private var overviewList: some View {
+        VStack(spacing: 6) {
+            ForEach(enabledProviders, id: \.kind) { provider in
+                OverviewRow(provider: provider) {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        selectedKind = provider.kind
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 2)
+        .padding(.bottom, 12)
+    }
+
+    /// Detail page: the full card for one provider. The card keeps its
+    /// own head (icon + name + plan) so the page needs no extra title.
+    private func detailPage(for provider: any UsageProvider) -> some View {
+        VStack(spacing: 7) {
+            ProviderCard(provider: provider)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 2)
+        .padding(.bottom, 12)
+    }
+
     // MARK: - Helpers
 
     private var enabledProviders: [any UsageProvider] {
         manager.orderedProviders.filter { $0.isEnabled }
     }
 
-    @ViewBuilder
-    private func providerSlot(for provider: any UsageProvider) -> some View {
-        ProviderCard(provider: provider)
+    /// Resolves the pushed detail page's provider. Returns nil — sending
+    /// the UI back to the Overview — when the provider was disabled while
+    /// its detail page was showing (e.g. toggled off in Settings).
+    private var selectedProvider: (any UsageProvider)? {
+        guard let selectedKind else { return nil }
+        return enabledProviders.first { $0.kind == selectedKind }
     }
 }
 
