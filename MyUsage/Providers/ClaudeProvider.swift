@@ -334,8 +334,8 @@ final class ClaudeProvider: UsageProvider {
             // the CLI's Keychain item is ACL-blocked and we hold no usable
             // copy, this is the one place the "Always Allow" dialog may
             // appear — rate-limited by the store so it can't storm.
-            guard let creds = loadCredentials(interactive: true),
-                  let oauth = creds.claudeAiOauth else {
+            guard var creds = loadCredentials(interactive: true),
+                  var oauth = creds.claudeAiOauth else {
                 error = "No credentials found"
                 return
             }
@@ -343,7 +343,7 @@ final class ClaudeProvider: UsageProvider {
             // Cache-first: seed the snapshot from disk before any slow path runs
             // so a cold start (or a run that will fail below) never shows a
             // blank card. See `specs/11-claude-data-sources.md`.
-            let fingerprint = ClaudeUsageCache.fingerprint(refreshToken: oauth.refreshToken)
+            var fingerprint = ClaudeUsageCache.fingerprint(refreshToken: oauth.refreshToken)
             if snapshot == nil,
                let cached = ClaudeUsageCache.read(matching: fingerprint) {
                 snapshot = Self.mapToSnapshot(
@@ -354,15 +354,27 @@ final class ClaudeProvider: UsageProvider {
                 Logger.claude.info("Seeded Claude snapshot from disk cache")
             }
 
-            // MyUsage is a passive reader: we never call Anthropic's OAuth refresh
-            // endpoint ourselves, because Anthropic rotates refresh tokens on each
-            // use and we would race the Claude Code CLI, invalidating whichever
-            // side cached the old token. Instead we surface a clear hint and wait
-            // for the CLI to rotate the Keychain entry on its own schedule.
+            // MyUsage is a passive reader: we never call Anthropic's OAuth
+            // refresh endpoint ourselves, because Anthropic rotates refresh
+            // tokens on each use and we would race the Claude Code CLI
+            // (docs/claude-token-rotation-bug.md). Instead, delegate: run the
+            // CLI briefly so IT rotates the Keychain entry, then re-read.
+            // Cooldown-gated, so at most one CLI spawn per 5 minutes.
             if creds.isExpired {
-                error = Self.tokenExpiredErrorMessage()
-                Logger.claude.info("Access token expired; waiting for Claude CLI to refresh Keychain")
-                return
+                Logger.claude.info("Access token expired; attempting delegated CLI refresh")
+                _ = await ClaudeDelegatedRefresh.attempt()
+                if let fresh = loadCredentials(interactive: false),
+                   let freshOAuth = fresh.claudeAiOauth,
+                   !fresh.isExpired {
+                    creds = fresh
+                    oauth = freshOAuth
+                    fingerprint = ClaudeUsageCache.fingerprint(refreshToken: freshOAuth.refreshToken)
+                    Logger.claude.info("Delegated refresh yielded a valid token")
+                } else {
+                    error = Self.tokenExpiredErrorMessage()
+                    Logger.claude.info("Still expired after delegated refresh; waiting for the CLI")
+                    return
+                }
             }
 
             // Fetch the profile (email + plan) when we don't have one yet,
