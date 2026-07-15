@@ -263,6 +263,14 @@ final class ClaudeProvider: UsageProvider {
 
     // MARK: - State
 
+    /// Prompt-minimizing credential loader (file → CLI Keychain no-UI →
+    /// own cached copy → one gated interactive read). See
+    /// `ClaudeCredentialStore` for the full chain.
+    private let credentialStore = ClaudeCredentialStore()
+
+    /// Last successfully loaded credentials — served when every store
+    /// source comes up empty mid-run (e.g. transient Keychain weirdness)
+    /// so an established session doesn't flap to "No credentials found".
     private var credentials: ClaudeCredentials?
 
     /// Cached profile (email + plan). Keyed by the credential fingerprint
@@ -322,7 +330,12 @@ final class ClaudeProvider: UsageProvider {
         error = nil
 
         do {
-            guard let creds = loadCredentials(), let oauth = creds.claudeAiOauth else {
+            // Interactive is allowed here (not in detect/account paths): if
+            // the CLI's Keychain item is ACL-blocked and we hold no usable
+            // copy, this is the one place the "Always Allow" dialog may
+            // appear — rate-limited by the store so it can't storm.
+            guard let creds = loadCredentials(interactive: true),
+                  let oauth = creds.claudeAiOauth else {
                 error = "No credentials found"
                 return
             }
@@ -582,30 +595,34 @@ final class ClaudeProvider: UsageProvider {
     /// user *is* a Claude user whose Keychain item is ACL-restricted to the
     /// CLI itself, and surface a helpful error instead of "Not configured".
     private func detectAvailability() {
-        // 1) File path first.
-        if let data = FileManager.default.contents(atPath: Self.credentialFilePath),
-           let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
-           creds.claudeAiOauth != nil {
+        // Silent pass through the whole source chain (file → CLI Keychain
+        // no-UI → own cache). Never prompts — detection runs at launch and
+        // a password dialog before the user even opened the popover is
+        // exactly the experience we're eliminating.
+        if let result = credentialStore.load(interactive: false) {
+            credentials = result.credentials
             isAvailable = true
             error = nil
+            Logger.claude.info(
+                "Claude credentials loaded from \(result.origin.rawValue, privacy: .public)"
+            )
             return
         }
 
-        // 2) Keychain (with status for diagnostics).
-        let result = KeychainHelper.readGenericPasswordResult(service: Self.keychainService)
-        if let data = result.data,
-           let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
-           creds.claudeAiOauth != nil {
+        // The silent probe told us the CLI's item exists but is
+        // ACL-blocked: definitely a Claude user. Mark available and let
+        // the first refresh run the (rate-limited) interactive bootstrap.
+        if credentialStore.lastCLIStatus == errSecInteractionNotAllowed {
             isAvailable = true
             error = nil
-            Logger.claude.info("Claude credentials loaded from Keychain")
+            Logger.claude.info("Claude Keychain item present but ACL-blocked; will bootstrap on refresh")
             return
         }
 
         isAvailable = false
 
-        // 3) Distinguish "user never installed Claude" from "installed but we
-        //    cannot read the Keychain item".
+        // Distinguish "user never installed Claude" from "installed but we
+        // cannot read the Keychain item".
         let claudeDirExists = FileManager.default.fileExists(atPath: Self.claudeDirectory)
         if !claudeDirExists {
             // Genuinely not a Claude user. Leave error nil → "Not configured".
@@ -613,10 +630,11 @@ final class ClaudeProvider: UsageProvider {
             return
         }
 
+        let status = credentialStore.lastCLIStatus ?? errSecItemNotFound
         Logger.claude.error(
-            "Claude credentials unreadable (keychain status=\(result.status, privacy: .public))"
+            "Claude credentials unreadable (keychain status=\(status, privacy: .public))"
         )
-        error = Self.credentialAccessErrorMessage(status: result.status)
+        error = Self.credentialAccessErrorMessage(status: status)
     }
 
     /// User-facing message shown when `~/.claude/` exists but credentials
@@ -634,16 +652,19 @@ final class ClaudeProvider: UsageProvider {
     // MARK: - Credentials
 
     func loadCredentials() -> ClaudeCredentials? {
-        if let data = FileManager.default.contents(atPath: Self.credentialFilePath) {
-            if let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
-               creds.claudeAiOauth != nil {
-                return creds
-            }
+        loadCredentials(interactive: false)
+    }
+
+    /// `interactive: true` permits the store's one gated "Always Allow"
+    /// bootstrap prompt; every other caller stays silent. Falls back to
+    /// the last in-memory copy when the store comes up empty, so a live
+    /// session degrades to "token expired" instead of "no credentials".
+    private func loadCredentials(interactive: Bool) -> ClaudeCredentials? {
+        if let result = credentialStore.load(interactive: interactive) {
+            credentials = result.credentials
+            return result.credentials
         }
-        return KeychainHelper.readGenericPasswordJSON(
-            service: Self.keychainService,
-            as: ClaudeCredentials.self
-        )
+        return credentials
     }
 
     // MARK: - Plan label
