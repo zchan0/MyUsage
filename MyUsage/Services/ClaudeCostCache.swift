@@ -31,6 +31,11 @@ enum ClaudeCostCache {
         /// Next stat pass uses this as the cache-invalidation key.
         let maxSourceMtime: Date
         let computedAt: Date
+        /// `PricingCatalog.fingerprint` at compute time. A remote pricing
+        /// update changes the fingerprint and forces one recompute, so
+        /// totals never keep quoting superseded prices. nil on pre-existing
+        /// caches → treated as a mismatch.
+        var pricingFingerprint: String? = nil
     }
 
     /// Codable mirror of `TokenUsage` kept local to the cache so schema

@@ -513,7 +513,8 @@ struct ClaudeProviderTests {
             preComputedCost: 99.99,
             tokensByModel: [:],
             maxSourceMtime: mtime,
-            computedAt: .now
+            computedAt: .now,
+            pricingFingerprint: PricingCatalog.shared.fingerprint
         )
         try ClaudeCostCache.write(bogus, to: fixture.cacheURL)
 
@@ -523,6 +524,37 @@ struct ClaudeProviderTests {
             cacheURL: fixture.cacheURL
         )
         #expect(total == 99.99)
+    }
+
+    @Test("computeMonthlyCostSync invalidates cache when pricing changed")
+    func costSyncPricingRollover() throws {
+        let fixture = try makeCostFixture(costUSD: 0.05)
+        defer { fixture.cleanup() }
+
+        // Same month + mtime, but a fingerprint from an older price table:
+        // the cached total was computed at superseded rates and must be
+        // recomputed, not served.
+        let mtime = try #require(
+            ClaudeLogParser.maxMtime(roots: [fixture.root], since: .distantPast)
+        )
+        let stale = ClaudeCostCache.Payload(
+            v: ClaudeCostCache.currentVersion,
+            month: ClaudeCostCache.monthKey(for: .now),
+            totalUSD: 99.99,
+            preComputedCost: 99.99,
+            tokensByModel: [:],
+            maxSourceMtime: mtime,
+            computedAt: .now,
+            pricingFingerprint: "outdated0"
+        )
+        try ClaudeCostCache.write(stale, to: fixture.cacheURL)
+
+        let total = ClaudeProvider.computeMonthlyCostSync(
+            roots: [fixture.root],
+            now: .now,
+            cacheURL: fixture.cacheURL
+        )
+        #expect(abs(total - 0.05) < 1e-9, "stale-pricing cache must be recomputed")
     }
 
     @Test("computeMonthlyCostSync invalidates cache on month rollover")

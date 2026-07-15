@@ -1,9 +1,12 @@
+import CryptoKit
 import Foundation
 
 /// Looks up `ModelPricing` by model name, using longest-prefix matching.
 ///
-/// Pricing data is loaded from `Resources/pricing.json` bundled with the app.
-/// The catalog is immutable after construction; rebuild to pick up edits.
+/// Pricing data comes from the freshest available source: the remote
+/// LiteLLM-derived cache maintained by `PricingUpdater`, falling back to
+/// `Resources/pricing.json` bundled with the app. A catalog value is
+/// immutable; `PricingCatalog.shared` can be hot-swapped via `install`.
 struct PricingCatalog: Sendable {
     private let models: [String: ModelPricing]
     /// Keys sorted by length (desc) for longest-prefix matching.
@@ -12,11 +15,24 @@ struct PricingCatalog: Sendable {
     let version: Int
     let updated: String?
 
+    /// Stable digest of the price table itself (keys + input/output rates).
+    /// Cost caches store this so a price update forces one recompute; it
+    /// deliberately ignores `updated` so a daily re-fetch with identical
+    /// prices doesn't churn the caches.
+    let fingerprint: String
+
     init(file: PricingFile) {
         self.models = file.models
         self.sortedKeys = file.models.keys.sorted { $0.count > $1.count }
         self.version = file.version
         self.updated = file.updated
+
+        let canonical = file.models
+            .map { "\($0.key):\($0.value.input):\($0.value.output)" }
+            .sorted()
+            .joined(separator: "|")
+        let digest = SHA256.hash(data: Data(canonical.utf8))
+        self.fingerprint = digest.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Look up pricing for a model name. Matches the longest key that is a prefix of `modelName`.
@@ -75,11 +91,43 @@ extension PricingCatalog {
         }
     }
 
-    /// Process-wide shared catalog. Falls back to an empty catalog if the
-    /// bundled JSON is missing or malformed — in that case `cost` returns 0
-    /// everywhere rather than crashing.
-    static let shared: PricingCatalog = {
-        if let catalog = try? PricingCatalog.loadBundled() { return catalog }
-        return PricingCatalog(file: PricingFile(version: 0, updated: nil, models: [:]))
-    }()
+    /// Process-wide shared catalog. Seeds from the remote disk cache when
+    /// one exists (any age — stale beats bundled, which is even staler),
+    /// else the bundled JSON, else an empty catalog so `cost` returns 0
+    /// everywhere rather than crashing. `PricingUpdater` hot-swaps a fresh
+    /// remote catalog in via `install(_:)`.
+    static var shared: PricingCatalog { store.current }
+
+    /// Replace the live catalog (thread-safe). Called by `PricingUpdater`
+    /// after a validated remote fetch.
+    static func install(_ catalog: PricingCatalog) { store.replace(catalog) }
+
+    private static let store = Store()
+
+    private final class Store: @unchecked Sendable {
+        private let lock = NSLock()
+        private var catalog: PricingCatalog
+
+        init() {
+            if let remote = PricingUpdater.loadCachedCatalog() {
+                catalog = remote
+            } else if let bundled = try? PricingCatalog.loadBundled() {
+                catalog = bundled
+            } else {
+                catalog = PricingCatalog(file: PricingFile(version: 0, updated: nil, models: [:]))
+            }
+        }
+
+        var current: PricingCatalog {
+            lock.lock()
+            defer { lock.unlock() }
+            return catalog
+        }
+
+        func replace(_ new: PricingCatalog) {
+            lock.lock()
+            catalog = new
+            lock.unlock()
+        }
+    }
 }

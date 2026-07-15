@@ -133,6 +133,11 @@ final class UsageManager {
             lastRefreshed = .now
         }
 
+        // Keep the pricing catalog fresh (LiteLLM, ≤ once per 24h).
+        // Fire-and-forget: cost estimates for THIS refresh use whatever
+        // catalog is installed; the swap benefits the next one.
+        Task.detached(priority: .utility) { await PricingUpdater.refreshIfStale() }
+
         // Refresh providers concurrently so a slow one (e.g. Claude
         // waiting on the network) doesn't hold up the others. Each
         // provider is @MainActor-isolated, but its `refresh()` suspends at

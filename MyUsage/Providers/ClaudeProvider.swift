@@ -519,13 +519,17 @@ final class ClaudeProvider: UsageProvider {
     ) -> Double {
         let since = Date.startOfCurrentMonth(now: now)
         let month = ClaudeCostCache.monthKey(for: now)
+        let catalog = PricingCatalog.shared
 
         // 1) Stat pass — cheap, no parse. `nil` means no in-scope files.
         let maxMtime = ClaudeLogParser.maxMtime(roots: roots, since: since)
 
-        // 2) Cache hit? Require matching month AND matching max mtime.
+        // 2) Cache hit? Require matching month, matching max mtime, AND a
+        //    matching pricing fingerprint — a remote price update must not
+        //    keep serving totals computed at superseded rates.
         if let cached = ClaudeCostCache.read(from: cacheURL),
            cached.month == month,
+           cached.pricingFingerprint == catalog.fingerprint,
            let mtime = maxMtime,
            abs(cached.maxSourceMtime.timeIntervalSinceReferenceDate
                - mtime.timeIntervalSinceReferenceDate) < 1e-6 {
@@ -536,7 +540,7 @@ final class ClaudeProvider: UsageProvider {
         let breakdown = ClaudeLogParser.scanBreakdown(roots: roots, since: since)
         let tokenCost = CostCalculator.totalCost(
             of: breakdown.tokensByModel,
-            catalog: PricingCatalog.shared
+            catalog: catalog
         )
         let total = breakdown.preComputedCost + tokenCost
 
@@ -551,7 +555,8 @@ final class ClaudeProvider: UsageProvider {
                 preComputedCost: breakdown.preComputedCost,
                 tokensByModel: counts,
                 maxSourceMtime: mtime,
-                computedAt: now
+                computedAt: now,
+                pricingFingerprint: catalog.fingerprint
             )
             do {
                 try ClaudeCostCache.write(payload, to: cacheURL)
