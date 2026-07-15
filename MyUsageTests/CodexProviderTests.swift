@@ -177,6 +177,43 @@ struct CodexProviderTests {
         #expect(snapshot.credits == nil)
     }
 
+    @Test("Weekly-only response renders no bogus 5h window")
+    func mapWeeklyOnly() {
+        // Current Codex plans without a session limit return a single
+        // weekly window as primary_window. It must land in weeklyUsage.
+        let response = CodexUsageResponse(
+            planType: "plus",
+            rateLimit: CodexRateLimit(
+                primaryWindow: CodexWindow(usedPercent: 37, resetAt: 1738900000, limitWindowSeconds: 604800),
+                secondaryWindow: nil
+            ),
+            credits: nil,
+            codeReviewRateLimit: nil
+        )
+        let snapshot = CodexProvider.mapToSnapshot(response)
+
+        #expect(snapshot.sessionUsage == nil)
+        #expect(snapshot.weeklyUsage?.percentUsed == 37)
+        #expect(snapshot.weeklyUsage?.windowDuration == 604800)
+    }
+
+    @Test("Windows classify by duration even when positions are swapped")
+    func mapSwappedWindows() {
+        let response = CodexUsageResponse(
+            planType: nil,
+            rateLimit: CodexRateLimit(
+                primaryWindow: CodexWindow(usedPercent: 41, resetAt: nil, limitWindowSeconds: 604800),
+                secondaryWindow: CodexWindow(usedPercent: 62, resetAt: nil, limitWindowSeconds: 18000)
+            ),
+            credits: nil,
+            codeReviewRateLimit: nil
+        )
+        let snapshot = CodexProvider.mapToSnapshot(response)
+
+        #expect(snapshot.sessionUsage?.percentUsed == 62)
+        #expect(snapshot.weeklyUsage?.percentUsed == 41)
+    }
+
     @Test("Map credits with has_credits false")
     func mapCreditsDisabled() {
         let response = CodexUsageResponse(

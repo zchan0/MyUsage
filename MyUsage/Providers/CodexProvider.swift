@@ -275,14 +275,19 @@ final class CodexProvider: UsageProvider {
 
     private func recordDailyCostsToLedger(accountID: String) async {
         guard let ledger else { return }
-        let byDay = await Task.detached(priority: .utility) {
-            CodexLogParser.scanDailyCost(
+        let breakdown = await Task.detached(priority: .utility) {
+            CodexLogParser.scanDailyBreakdown(
                 roots: CodexLogParser.defaultRoots(),
                 since: Date.startOfCurrentMonth()
             )
         }.value
-        guard !byDay.isEmpty else { return }
-        await ledger.recordDailyCosts(provider: .codex, byDay: byDay, accountID: accountID)
+        guard !breakdown.total.isEmpty else { return }
+        await ledger.recordDailyCosts(
+            provider: .codex,
+            byDay: breakdown.total,
+            perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel,
+            accountID: accountID
+        )
     }
 
     /// Scan `~/.codex/sessions` + `archived_sessions` modified since the first
@@ -413,24 +418,39 @@ final class CodexProvider: UsageProvider {
         // Plan name
         snapshot.planName = response.planType.map { $0.prefix(1).uppercased() + $0.dropFirst() }
 
-        // Session (5h)
-        if let primary = response.rateLimit?.primaryWindow, let used = primary.usedPercent {
-            let resetDate = primary.resetAt.map { Date(timeIntervalSince1970: Double($0)) }
-            snapshot.sessionUsage = UsageWindow(
-                percentUsed: Double(used),
-                resetsAt: resetDate,
-                windowDuration: 5 * 3600
-            )
-        }
+        // Windows are classified by their actual `limit_window_seconds`, not
+        // by primary/secondary position. OpenAI has dropped the 5h window for
+        // some plans — those accounts now return a single weekly window as
+        // `primary_window`, and the old position-based mapping rendered it as
+        // a bogus "5-hour" bar. ≤6h → session; anything longer → weekly.
+        // Windows without `limit_window_seconds` (older CLI proxies) fall
+        // back to the legacy positional rule.
+        let rateLimit = response.rateLimit
+        for (window, isPrimary) in [(rateLimit?.primaryWindow, true), (rateLimit?.secondaryWindow, false)] {
+            guard let window, let used = window.usedPercent else { continue }
+            let resetDate = window.resetAt.map { Date(timeIntervalSince1970: Double($0)) }
 
-        // Weekly (7d)
-        if let secondary = response.rateLimit?.secondaryWindow, let used = secondary.usedPercent {
-            let resetDate = secondary.resetAt.map { Date(timeIntervalSince1970: Double($0)) }
-            snapshot.weeklyUsage = UsageWindow(
-                percentUsed: Double(used),
-                resetsAt: resetDate,
-                windowDuration: 7 * 24 * 3600
-            )
+            let isSession: Bool
+            if let seconds = window.limitWindowSeconds {
+                isSession = seconds <= 6 * 3600
+            } else {
+                // Legacy responses without the field: positional semantics.
+                isSession = isPrimary
+            }
+
+            if isSession, snapshot.sessionUsage == nil {
+                snapshot.sessionUsage = UsageWindow(
+                    percentUsed: Double(used),
+                    resetsAt: resetDate,
+                    windowDuration: window.limitWindowSeconds.map(Double.init) ?? 5 * 3600
+                )
+            } else if !isSession, snapshot.weeklyUsage == nil {
+                snapshot.weeklyUsage = UsageWindow(
+                    percentUsed: Double(used),
+                    resetsAt: resetDate,
+                    windowDuration: window.limitWindowSeconds.map(Double.init) ?? 7 * 24 * 3600
+                )
+            }
         }
 
         // Credits

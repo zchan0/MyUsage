@@ -133,4 +133,55 @@ struct CodexLogParserTests {
         let result = CodexLogParser.scan(roots: [tmp], since: Date(timeIntervalSinceNow: -86400))
         #expect(result["gpt-5-codex"] == TokenUsage(input: 100, output: 50))
     }
+
+    // MARK: - Model family normalization
+
+    @Test("Normalizes Codex model identifiers to display families")
+    func normalizeFamilies() {
+        #expect(CodexLogParser.normalizeModelFamily("gpt-5-codex") == "GPT-5 Codex")
+        #expect(CodexLogParser.normalizeModelFamily("gpt-5.2-codex") == "GPT-5.2 Codex")
+        #expect(CodexLogParser.normalizeModelFamily("gpt-5.1-codex-max") == "GPT-5.1 Codex Max")
+        #expect(CodexLogParser.normalizeModelFamily("gpt-5") == "GPT-5")
+        #expect(CodexLogParser.normalizeModelFamily("gpt-5-2025-08-07") == "GPT-5")
+        #expect(CodexLogParser.normalizeModelFamily("codex-mini-latest") == "Codex Mini Latest")
+        #expect(CodexLogParser.normalizeModelFamily("") == nil)
+    }
+
+    // MARK: - Daily breakdown (ledger / chart)
+
+    @Test("Daily breakdown attributes cost per model family")
+    func dailyBreakdownByModel() throws {
+        let fm = FileManager.default
+        let tmp = fm.temporaryDirectory.appendingPathComponent("codex-daily-test-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tmp) }
+
+        let sub = tmp.appendingPathComponent("2026/07/14")
+        try fm.createDirectory(at: sub, withIntermediateDirectories: true)
+        let rollout = """
+        {"timestamp":"2026-07-14T10:00:00Z","type":"turn_context","payload":{"model":"gpt-5-codex"}}
+        {"timestamp":"2026-07-14T10:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000000,"output_tokens":0}}}}
+        {"timestamp":"2026-07-14T10:02:00Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+        {"timestamp":"2026-07-14T10:03:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000000,"output_tokens":0}}}}
+        """
+        try rollout.write(to: sub.appendingPathComponent("rollout-a.jsonl"), atomically: true, encoding: .utf8)
+
+        let catalog = try PricingCatalog.load(from: Data("""
+        {"version":1,"updated":null,"models":{
+          "gpt-5-codex":{"input":1.25,"output":10.0},
+          "gpt-5.2":{"input":1.75,"output":14.0}
+        }}
+        """.utf8))
+
+        let breakdown = CodexLogParser.scanDailyBreakdown(
+            roots: [tmp],
+            since: Date(timeIntervalSinceNow: -86400 * 365),
+            catalog: catalog
+        )
+
+        let day = "2026-07-14"
+        #expect(abs((breakdown.total[day] ?? 0) - 3.0) < 1e-9)
+        #expect(abs((breakdown.byModel[day]?["GPT-5 Codex"] ?? 0) - 1.25) < 1e-9)
+        #expect(abs((breakdown.byModel[day]?["GPT-5.2 Codex"] ?? 0) - 1.75) < 1e-9)
+    }
 }

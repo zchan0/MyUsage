@@ -100,22 +100,75 @@ enum CodexLogParser {
 
     // MARK: - Per-day cost breakdown (ledger)
 
+    /// Per-day cost totals plus per-model-family attribution — the same
+    /// shape as `ClaudeLogParser.DailyBreakdown`, so both providers feed
+    /// `LedgerEntry.costByModel` identically and the daily chart can stack
+    /// Codex days by model instead of lumping everything into "Other".
+    struct DailyBreakdown: Sendable, Equatable {
+        var total: [String: Double] = [:]
+        var byModel: [String: [String: Double]] = [:]
+    }
+
+    /// Normalise a raw Codex model identifier into a display family:
+    /// strips a trailing date snapshot ("gpt-5-2025-08-07" → "gpt-5"),
+    /// uppercases the gpt prefix and capitalises word tokens
+    /// ("gpt-5.2-codex" → "GPT-5.2 Codex"). Version tokens stay as-is.
+    static func normalizeModelFamily(_ raw: String) -> String? {
+        var lc = raw.lowercased()
+        guard !lc.isEmpty else { return nil }
+        // Drop a trailing -YYYY-MM-DD snapshot suffix.
+        if let match = lc.range(of: #"-\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) {
+            lc.removeSubrange(match)
+        }
+        var out = ""
+        for part in lc.split(separator: "-") {
+            let token = String(part)
+            let display = token.hasPrefix("gpt") ? token.uppercased() : token.capitalized
+            if out.isEmpty {
+                out = display
+            } else if token.first?.isNumber == true {
+                // Version tokens attach to the name: "gpt" + "5.2" → "GPT-5.2".
+                out += "-" + token
+            } else {
+                out += " " + display
+            }
+        }
+        return out.isEmpty ? nil : out
+    }
+
     /// Scan default roots, producing a `YYYY-MM-DD` (UTC) → USD map for all
     /// JSONL files modified since `since`. Used by the multi-device ledger.
     static func scanDailyCost(
         since: Date,
         catalog: PricingCatalog = .shared
     ) -> [String: Double] {
-        scanDailyCost(roots: defaultRoots(), since: since, catalog: catalog)
+        scanDailyBreakdown(roots: defaultRoots(), since: since, catalog: catalog).total
     }
 
-    /// Testable core of `scanDailyCost`.
+    /// Testable totals-only wrapper.
     static func scanDailyCost(
         roots: [URL],
         since: Date,
         catalog: PricingCatalog = .shared
     ) -> [String: Double] {
-        var result: [String: Double] = [:]
+        scanDailyBreakdown(roots: roots, since: since, catalog: catalog).total
+    }
+
+    /// Full per-day scan with model attribution.
+    static func scanDailyBreakdown(
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> DailyBreakdown {
+        scanDailyBreakdown(roots: defaultRoots(), since: since, catalog: catalog)
+    }
+
+    /// Testable core of `scanDailyBreakdown`.
+    static func scanDailyBreakdown(
+        roots: [URL],
+        since: Date,
+        catalog: PricingCatalog = .shared
+    ) -> DailyBreakdown {
+        var result = DailyBreakdown()
         let fm = FileManager.default
         for root in roots {
             guard fm.fileExists(atPath: root.path) else { continue }
@@ -143,7 +196,7 @@ enum CodexLogParser {
     private static func parseFileDaily(
         url: URL,
         mtime: Date,
-        into result: inout [String: Double],
+        into result: inout DailyBreakdown,
         catalog: PricingCatalog
     ) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
@@ -193,7 +246,10 @@ enum CodexLogParser {
                     catalog: catalog
                 )
                 guard usd > 0 else { return }
-                acc[lastDay, default: 0] += usd
+                acc.total[lastDay, default: 0] += usd
+                if let family = Self.normalizeModelFamily(model) {
+                    acc.byModel[lastDay, default: [:]][family, default: 0] += usd
+                }
             default:
                 return
             }

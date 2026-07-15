@@ -118,4 +118,25 @@ struct PricingCatalogTests {
         #expect(catalog.pricing(for: "claude-sonnet-4-5") != nil)
         #expect(catalog.pricing(for: "gpt-5-codex") != nil)
     }
+
+    @Test("Bundled catalog prices current-generation models correctly")
+    func bundledCurrentGeneration() throws {
+        let catalog = try PricingCatalog.loadBundled()
+
+        // Fable was absent before v2 — its cost silently computed as 0 and
+        // the daily chart lumped all Fable usage into "Other".
+        #expect(catalog.pricing(for: "claude-fable-5")?.input == 10.00)
+        #expect(catalog.pricing(for: "claude-fable-5")?.output == 50.00)
+
+        // Opus 4.8 must hit its own $5/$25 entry, not longest-prefix-match
+        // into the legacy claude-opus-4 ($15/$75) row.
+        #expect(catalog.pricing(for: "claude-opus-4-8")?.input == 5.00)
+        // Opus 4.0/4.1 keep the legacy price.
+        #expect(catalog.pricing(for: "claude-opus-4-1")?.input == 15.00)
+
+        // gpt-5.x point releases must beat the bare gpt-5 prefix.
+        #expect(catalog.pricing(for: "gpt-5.2-codex")?.input == 1.75)
+        #expect(catalog.pricing(for: "gpt-5.1-codex-max")?.input == 1.25)
+        #expect(catalog.pricing(for: "gpt-5.1-codex-mini")?.input == 0.25)
+    }
 }

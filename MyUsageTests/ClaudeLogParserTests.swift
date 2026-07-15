@@ -241,6 +241,9 @@ struct ClaudeLogParserTests {
         #expect(ClaudeLogParser.normalizeModelFamily("claude-opus") == "Opus")
         // Case-insensitive input.
         #expect(ClaudeLogParser.normalizeModelFamily("CLAUDE-Sonnet-4-5") == "Sonnet")
+        // Current-generation families must not fall through to "Other".
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-fable-5") == "Fable")
+        #expect(ClaudeLogParser.normalizeModelFamily("claude-mythos-5") == "Mythos")
     }
 
     @Test("normalizeModelFamily returns nil for non-claude / synthetic model strings")
