@@ -160,23 +160,64 @@ struct ProviderCard: View {
         }
     }
 
-    /// Big-number stat row shown only on the provider's own tab
-    /// (`showsHero`), and only for kinds with rolling windows — Cursor /
-    /// Antigravity have no 5h/weekly pair to headline.
+    /// Stat-tile row shown only on the provider's own tab (`showsHero`).
+    /// Deliberately NOT the window percentages — the limit bars below
+    /// already show those. These are the numbers the bars don't carry:
+    /// today's spend, the projected end-of-window position (CodexBar's
+    /// reserve/deficit), and the credit balance when the account has one.
     @ViewBuilder
     private func heroSection(_ snapshot: UsageSnapshot) -> some View {
-        if showsHero, provider.kind == .claude || provider.kind == .codex,
-           snapshot.sessionUsage != nil || snapshot.weeklyUsage != nil {
+        if showsHero, provider.kind == .claude || provider.kind == .codex {
             HStack(spacing: 8) {
-                if let session = snapshot.sessionUsage {
-                    HeroStat(title: "5-HOUR", window: session)
-                }
+                HeroTile(
+                    title: "TODAY",
+                    value: todayCost.map { ProviderCardCostRow.formatCost($0) } ?? "—",
+                    caption: "est. cost"
+                )
+
                 if let weekly = snapshot.weeklyUsage {
-                    HeroStat(title: "WEEKLY", window: weekly)
+                    let projected = weekly.projectedFinalPercent()
+                    HeroTile(
+                        title: "PACE",
+                        value: projected.map { "→ \(Int($0.rounded()))%" } ?? "—",
+                        caption: paceCaption(projected: projected),
+                        accent: projected.map(paceAccent(for:))
+                    )
+                }
+
+                if let credits = snapshot.credits {
+                    HeroTile(
+                        title: "CREDITS",
+                        value: "$" + String(format: "%.2f", credits.amount),
+                        caption: "balance"
+                    )
                 }
             }
             .padding(.bottom, 1)
         }
+    }
+
+    /// Today's ledger cost for this provider, all devices. nil when the
+    /// ledger has no row for today yet (fresh day / no usage).
+    private var todayCost: Double? {
+        let today = LedgerCalendar.dayKey(for: .now)
+        return manager.ledger.dailyCosts[provider.kind]?
+            .first { $0.day == today }?.totalUSD
+    }
+
+    /// "at reset" pace framing: reserve (under 100%) vs deficit (over).
+    private func paceCaption(projected: Double?) -> String {
+        guard let projected else { return "at reset" }
+        if projected > 100 {
+            return "deficit +\(Int((projected - 100).rounded()))%"
+        }
+        return "reserve \(Int((100 - projected).rounded()))%"
+    }
+
+    private func paceAccent(for projected: Double) -> Color {
+        if projected > 150 { return LimitSafety.Level.crit.accent }
+        if projected > 100 { return LimitSafety.Level.warn.accent }
+        return LimitSafety.Level.healthy.accent
     }
 
     // Limit-bar block lives in ProviderCardLimits.swift — accessed via
@@ -277,12 +318,13 @@ struct ProviderCard: View {
 
 }
 
-/// One big-number stat tile in the hero row: tiny tracked-out label,
-/// 24pt severity-tinted percentage, reset line underneath. Two of these
-/// side by side (5-hour / Weekly) headline a provider's detail tab.
-struct HeroStat: View {
+/// One stat tile in the hero row: tiny tracked-out label, a prominent
+/// value (severity-tinted when the metric warrants it), caption below.
+struct HeroTile: View {
     let title: String
-    let window: UsageWindow
+    let value: String
+    let caption: String
+    var accent: Color? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -291,23 +333,18 @@ struct HeroStat: View {
                 .tracking(0.8)
                 .foregroundStyle(.secondary.opacity(0.75))
 
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text("\(Int(window.percentUsed.rounded()))")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("%")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            .foregroundStyle(level.accent)
+            Text(value)
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(accent ?? .primary.opacity(0.92))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
-            if let reset = window.resetCountdown {
-                Text("resets \(reset)")
-                    .font(.system(size: 9.5, weight: .regular, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary.opacity(0.7))
-                    .lineLimit(1)
-            }
+            Text(caption)
+                .font(.system(size: 9.5, weight: .regular, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.secondary.opacity(0.7))
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
@@ -316,17 +353,6 @@ struct HeroStat: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(Color.primary.opacity(0.045))
         )
-    }
-
-    /// Takes the higher of the current-usage band and the projection
-    /// band, mirroring `LimitBar.level`, so the hero number and the bar
-    /// below it never disagree about severity.
-    private var level: LimitSafety.Level {
-        let current = LimitSafety.level(for: window.percentUsed)
-        guard let projected = window.projectedFinalPercent(), projected > 100 else {
-            return current
-        }
-        return max(current, projected > 150 ? .crit : .warn)
     }
 }
 
