@@ -186,7 +186,7 @@ struct ProgressTrack: View {
     /// (clamped 0–200% so the bar overflow doesn't run off the card).
     var projectedPercent: Double? = nil
     var level: LimitSafety.Level = .healthy
-    var height: CGFloat = 4
+    var height: CGFloat = 5
 
     /// 3pt overhang each side gives the marker enough vertical presence
     /// to read against a thin 4pt bar — total marker = 10pt.
@@ -204,10 +204,19 @@ struct ProgressTrack: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.primary.opacity(0.10))
+                    .fill(Color.primary.opacity(0.08))
 
+                // Slight leading→trailing brightening gives the fill a
+                // faint sheen — reads as deliberate, not flat, without
+                // fighting the calm palette.
                 Capsule()
-                    .fill(fillColor)
+                    .fill(
+                        LinearGradient(
+                            colors: [fillColor.opacity(0.82), fillColor],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .frame(width: fillWidth)
                     .animation(.easeInOut(duration: 0.4), value: percent)
             }
@@ -234,14 +243,18 @@ struct ProgressTrack: View {
         }
     }
 
-    private var fillColor: Color {
-        switch level {
-        // Sage green, matched to the safety palette used by Settings →
-        // Sync status indicator. Low saturation keeps the popover calm
-        // while still communicating "this is healthy" — distinguishable
-        // from the neutral-gray track at a glance, where the previous
-        // gray-on-gray fill was indistinguishable from a missing-data
-        // state.
+    private var fillColor: Color { level.accent }
+}
+
+extension LimitSafety.Level {
+    /// Shared severity accent — bar fills, hero stat numbers, pct pills.
+    ///
+    /// Sage green for healthy, matched to the safety palette used by
+    /// Settings → Sync status indicator. Low saturation keeps the popover
+    /// calm while still communicating "this is healthy" — distinguishable
+    /// from the neutral-gray track at a glance.
+    var accent: Color {
+        switch self {
         case .healthy: Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55)
         case .warn:    Color(hue: 38.0/360.0,  saturation: 0.92, brightness: 0.55)
         case .crit:    Color(hue: 8.0/360.0,   saturation: 0.78, brightness: 0.58)
