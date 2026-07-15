@@ -54,7 +54,19 @@ final class NoopNotificationDispatcher: NotificationDispatcher, @unchecked Senda
 @MainActor
 final class LimitNotifier {
 
-    static let shared = LimitNotifier(center: UNUserNotificationCenter.current())
+    /// `UNUserNotificationCenter.current()` throws
+    /// `NSInternalInconsistencyException` ("bundleProxyForCurrentProcess
+    /// is nil") when the process is a bare executable rather than a real
+    /// `.app` bundle — which is exactly what `swift run MyUsage` produces.
+    /// Fall back to the no-op dispatcher there so dev runs don't crash at
+    /// launch; notifications simply don't fire outside a bundled build.
+    static let shared: LimitNotifier = {
+        guard Bundle.main.bundleURL.pathExtension == "app" else {
+            Logger.general.info("Not running from an .app bundle — notifications disabled")
+            return LimitNotifier(center: NoopNotificationDispatcher())
+        }
+        return LimitNotifier(center: UNUserNotificationCenter.current())
+    }()
 
     enum Tier: String, Codable, Comparable, Sendable {
         case healthy
