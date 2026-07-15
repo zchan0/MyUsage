@@ -23,6 +23,10 @@ final class LedgerSync {
     /// `YYYY-MM` → provider → [DeviceContribution] for the popover.
     private(set) var monthlyByDevice: [String: [ProviderKind: [DeviceContribution]]] = [:]
 
+    /// Trailing-30-day daily aggregates per provider (all devices), for
+    /// the daily-cost chart. Refreshed together with the monthly totals.
+    private(set) var dailyCosts: [ProviderKind: [LedgerStore.DailyCost]] = [:]
+
     /// The current device's UUID — "Mine" in UI rows.
     let selfDeviceID: String
 
@@ -314,8 +318,15 @@ final class LedgerSync {
 
         var totals: [ProviderKind: Double] = [:]
         var byDevice: [ProviderKind: [DeviceContribution]] = [:]
+        let chartFromDay = LedgerCalendar.dayKey(
+            for: now.addingTimeInterval(-29 * 86_400)
+        )
 
         for provider in [ProviderKind.claude, .codex] {
+            dailyCosts[provider] = (try? store.dailyCosts(
+                provider: provider,
+                fromDay: chartFromDay
+            )) ?? []
             let sum = (try? store.monthlyTotal(
                 provider: provider,
                 monthKey: monthKey

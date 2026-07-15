@@ -199,4 +199,55 @@ struct LedgerStoreTests {
         #expect(entries.map(\.day) == ["2026-04-01", "2026-04-02"])
         #expect(entries.map(\.costUSD) == [1, 2])
     }
+
+    // MARK: - dailyCosts (chart query)
+
+    @Test("dailyCosts aggregates across devices per day, sorted ascending")
+    func dailyCostsAggregates() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "A", provider: .claude, day: "2026-04-02", costUSD: 1.5,
+                        costByModel: ["Opus": 1.0, "Sonnet": 0.5], recordedAt: now),
+            LedgerEntry(deviceId: "B", provider: .claude, day: "2026-04-02", costUSD: 2.0,
+                        costByModel: ["Opus": 2.0], recordedAt: now),
+            LedgerEntry(deviceId: "A", provider: .claude, day: "2026-04-01", costUSD: 3.0,
+                        costByModel: ["Sonnet": 3.0], recordedAt: now)
+        ])
+
+        let days = try store.dailyCosts(provider: .claude, fromDay: "2026-04-01")
+        #expect(days.map(\.day) == ["2026-04-01", "2026-04-02"])
+        #expect(days[0].totalUSD == 3.0)
+        #expect(days[1].totalUSD == 3.5)
+        #expect(days[1].byModel == ["Opus": 3.0, "Sonnet": 0.5])
+    }
+
+    @Test("dailyCosts respects fromDay cutoff and provider filter")
+    func dailyCostsCutoff() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "A", provider: .claude, day: "2026-03-31", costUSD: 9, recordedAt: now),
+            LedgerEntry(deviceId: "A", provider: .claude, day: "2026-04-01", costUSD: 1, recordedAt: now),
+            LedgerEntry(deviceId: "A", provider: .codex,  day: "2026-04-01", costUSD: 7, recordedAt: now)
+        ])
+
+        let days = try store.dailyCosts(provider: .claude, fromDay: "2026-04-01")
+        #expect(days.map(\.day) == ["2026-04-01"])
+        #expect(days[0].totalUSD == 1)
+    }
+
+    @Test("dailyCosts keeps totals for rows without model breakdown")
+    func dailyCostsUnattributed() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(deviceId: "A", provider: .claude, day: "2026-04-01", costUSD: 4.0,
+                        recordedAt: now)
+        ])
+
+        let days = try store.dailyCosts(provider: .claude, fromDay: "2026-04-01")
+        #expect(days[0].totalUSD == 4.0)
+        #expect(days[0].byModel.isEmpty)
+    }
 }

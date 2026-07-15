@@ -315,6 +315,72 @@ final class LedgerStore: @unchecked Sendable {
         return totals
     }
 
+    /// One day's aggregate for a provider across all devices + accounts.
+    /// Feeds the daily-cost chart on the provider's popover tab.
+    struct DailyCost: Sendable, Equatable, Identifiable {
+        /// UTC `YYYY-MM-DD`.
+        let day: String
+        /// Authoritative total for the day (sum of `cost_usd`).
+        let totalUSD: Double
+        /// Per-model-family breakdown. Can sum to less than `totalUSD` —
+        /// rows without attribution (pre-v2 entries, server-priced days)
+        /// contribute to the total only; the chart renders the remainder
+        /// as "Other".
+        let byModel: [String: Double]
+
+        var id: String { day }
+    }
+
+    /// Day-by-day aggregates for a provider from `fromDay` (inclusive,
+    /// UTC `YYYY-MM-DD`) onward, across all devices and accounts, sorted
+    /// ascending by day. String comparison is safe because day keys are
+    /// zero-padded ISO dates.
+    func dailyCosts(provider: ProviderKind, fromDay: String) throws -> [DailyCost] {
+        let sql = """
+            SELECT day, cost_usd, cost_by_model
+            FROM ledger_entries
+            WHERE provider = ?1 AND day >= ?2
+            ORDER BY day ASC;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, fromDay, -1, SQLITE_TRANSIENT_DEST)
+
+        var totals: [String: Double] = [:]
+        var byModel: [String: [String: Double]] = [:]
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let dayCStr = sqlite3_column_text(stmt, 0) else { continue }
+            let day = String(cString: dayCStr)
+            totals[day, default: 0] += sqlite3_column_double(stmt, 1)
+
+            guard let jsonCStr = sqlite3_column_text(stmt, 2) else { continue }
+            let json = String(cString: jsonCStr)
+            guard let data = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Double]
+            else { continue }
+            for (model, cost) in dict {
+                byModel[day, default: [:]][model, default: 0] += cost
+            }
+        }
+
+        return totals.keys.sorted().map { day in
+            DailyCost(
+                day: day,
+                totalUSD: totals[day] ?? 0,
+                byModel: byModel[day] ?? [:]
+            )
+        }
+    }
+
     /// Per-device subtotal for a given (provider, month). Used by the
     /// provider-card popover.
     struct DeviceTotal: Sendable, Equatable {

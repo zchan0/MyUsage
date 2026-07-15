@@ -129,6 +129,7 @@ struct ProviderCard: View {
                 heroSection(snapshot)
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
+                chartSection
                 staleWarningRow(staleMessage)
             }
         } else {
@@ -136,6 +137,25 @@ struct ProviderCard: View {
                 heroSection(snapshot)
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
+                chartSection
+            }
+        }
+    }
+
+    /// Daily-cost chart, detail tab only. Claude/Codex are the ledger
+    /// providers; gated on the same `showEstimatedCost` toggle as the
+    /// cost row so "no cost UI" means none anywhere.
+    @ViewBuilder
+    private var chartSection: some View {
+        if showsHero,
+           manager.showEstimatedCost,
+           let series = manager.ledger.dailyCosts[provider.kind],
+           !series.isEmpty {
+            VStack(alignment: .leading, spacing: 9) {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.06))
+                    .frame(height: 0.5)
+                DailyCostChart(series: series)
             }
         }
     }
