@@ -56,6 +56,11 @@ final class MenuBarCoordinator {
         }
         controllers[index].debugToggle()
     }
+
+    func debugSnapshot(_ index: Int, to path: String) {
+        guard controllers.indices.contains(index) else { return }
+        controllers[index].debugSnapshot(to: path)
+    }
     #endif
 
     private func observeLayout() {

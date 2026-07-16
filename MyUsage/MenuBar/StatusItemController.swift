@@ -142,6 +142,20 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         togglePanel()
     }
+
+    /// Render the panel's content into a PNG — in-process, permission-free,
+    /// pixel-accurate capture for design iteration.
+    func debugSnapshot(to path: String) {
+        guard let view = panel.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            DebugLog.info("StatusItem[\(label)] snapshot FAILED (no view/rep)")
+            return
+        }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: URL(fileURLWithPath: path))
+        DebugLog.info("StatusItem[\(label)] snapshot -> \(path) (\(view.bounds.size))")
+    }
     #endif
 
     private func togglePanel() {

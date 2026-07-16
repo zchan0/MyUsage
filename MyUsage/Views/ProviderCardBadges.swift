@@ -23,15 +23,14 @@ struct StaleDot: View {
 struct PlanPill: View {
     let text: String
     var body: some View {
-        Text(text)
-            .font(.system(size: 9, weight: .medium, design: .monospaced))
-            .monospacedDigit()
-            .foregroundStyle(.secondary.opacity(0.78))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(
-                Color.primary.opacity(0.06),
-                in: Capsule()
+        Text(text.uppercased())
+            .font(.system(size: 8, weight: .semibold))
+            .tracking(0.7)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5.5)
+            .padding(.vertical, 2)
+            .overlay(
+                Capsule().strokeBorder(Color.primary.opacity(0.14), lineWidth: 1)
             )
     }
 }

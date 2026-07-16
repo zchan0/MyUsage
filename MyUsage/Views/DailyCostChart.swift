@@ -66,7 +66,8 @@ struct DailyCostChart: View {
         Chart(segments) { segment in
             BarMark(
                 x: .value("Day", segment.day, unit: .day),
-                y: .value("Cost", segment.usd)
+                y: .value("Cost", segment.usd),
+                width: .fixed(6)
             )
             .foregroundStyle(by: .value("Model", segment.family))
             .cornerRadius(1.5)
@@ -75,27 +76,52 @@ struct DailyCostChart: View {
         .chartForegroundStyleScale(domain: familyOrder, range: familyColors)
         .chartLegend(.hidden)
         .chartXSelection(value: $selectedDate)
+        // Pin the domain to the full trailing-30-day window. Without it
+        // the axis collapses to the data extent — two days of usage
+        // rendered as two enormous bars filling the plot.
+        .chartXScale(domain: xDomain)
         .chartXAxis {
             AxisMarks(values: .stride(by: .day, count: 7)) { _ in
-                AxisGridLine().foregroundStyle(Color.primary.opacity(0.05))
+                AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
                 AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                     .font(.system(size: 8.5, design: .monospaced))
-                    .foregroundStyle(Color.secondary.opacity(0.6))
+                    .foregroundStyle(Color.secondary.opacity(0.65))
             }
         }
         .chartYAxis {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
-                AxisGridLine().foregroundStyle(Color.primary.opacity(0.05))
+                AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
                 AxisValueLabel {
                     if let usd = value.as(Double.self) {
-                        Text("$\(usd, format: .number.precision(.fractionLength(0)))")
+                        // Adaptive precision: "$1", "$0.50" — never a
+                        // rounded-to-zero duplicate tick.
+                        Text(Self.axisLabel(usd))
                             .font(.system(size: 8.5, design: .monospaced))
-                            .foregroundStyle(Color.secondary.opacity(0.6))
+                            .foregroundStyle(Color.secondary.opacity(0.65))
                     }
                 }
             }
         }
+        // Trailing inset keeps the last axis label from clipping at the
+        // plot edge ("Ju…").
+        .chartPlotStyle { $0.padding(.trailing, 14) }
         .frame(height: 96)
+    }
+
+    /// Trailing 30 days ending today (UTC day buckets, matching the data).
+    private var xDomain: ClosedRange<Date> {
+        let todayStart = Self.parseDay(LedgerCalendar.dayKey(for: .now)) ?? .now
+        let end = todayStart.addingTimeInterval(86_400)
+        return end.addingTimeInterval(-30 * 86_400)...end
+    }
+
+    /// "$1" for whole dollars, "$0.50" below — duplicate "$0 / $0" ticks
+    /// came from forcing zero fraction digits on sub-dollar scales.
+    static func axisLabel(_ usd: Double) -> String {
+        if usd == usd.rounded() {
+            return "$\(Int(usd))"
+        }
+        return String(format: "$%.2f", usd)
     }
 
     /// Compact legend chips: color dot + family name in secondary text.

@@ -20,47 +20,32 @@ struct ProviderCard: View {
     /// 5h / weekly numbers) above the limit bars. Overview cards stay
     /// compact.
     var showsHero: Bool = false
+    /// False on the provider's own tab, where the panel header already
+    /// names the provider — repeating it inside the card wastes a row.
+    var showsHead: Bool = true
 
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            cardHead
+            if showsHead { cardHead }
             bodySection
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 12)
+        // Premium = restraint: a neutral surface with a crisp hairline.
+        // Brand colour lives only in the icon tile; data colour lives
+        // only in the bars/severity accents. (The earlier brand-tinted
+        // gradient wash read as muddy gray-on-gray.)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.background.opacity(0.62))
-                // Brand-tinted ambient wash from the head corner — ties
-                // the card to its provider without shouting. This is
-                // where the popover stops being gray-on-gray.
-                .overlay(
-                    LinearGradient(
-                        colors: [provider.kind.brandTileColor.opacity(0.09), .clear],
-                        startPoint: .topLeading,
-                        endPoint: UnitPoint(x: 0.65, y: 0.85)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                )
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.background.opacity(0.55))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            provider.kind.brandTileColor.opacity(0.28),
-                            Color.primary.opacity(0.07),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.5
-                )
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .opacity(isDimmed ? 0.7 : 1.0)
     }
 
@@ -169,17 +154,19 @@ struct ProviderCard: View {
     private func heroSection(_ snapshot: UsageSnapshot) -> some View {
         if showsHero, provider.kind == .claude || provider.kind == .codex {
             HStack(spacing: 8) {
+                // No ledger row for today means exactly $0 so far — say
+                // that, rather than an em-dash that reads as "broken".
                 HeroTile(
-                    title: "TODAY",
-                    value: todayCost.map { ProviderCardCostRow.formatCost($0) } ?? "—",
+                    title: "Today",
+                    value: ProviderCardCostRow.formatCost(todayCost ?? 0),
                     caption: "est. cost"
                 )
 
                 if let weekly = snapshot.weeklyUsage {
                     let projected = weekly.projectedFinalPercent()
                     HeroTile(
-                        title: "PACE",
-                        value: projected.map { "→ \(Int($0.rounded()))%" } ?? "—",
+                        title: "Pace",
+                        value: projected.map { "→ \(Int($0.rounded()))%" } ?? "–",
                         caption: paceCaption(projected: projected),
                         accent: projected.map(paceAccent(for:))
                     )
@@ -187,7 +174,7 @@ struct ProviderCard: View {
 
                 if let credits = snapshot.credits {
                     HeroTile(
-                        title: "CREDITS",
+                        title: "Credits",
                         value: "$" + String(format: "%.2f", credits.amount),
                         caption: "balance"
                     )
@@ -206,8 +193,10 @@ struct ProviderCard: View {
     }
 
     /// "at reset" pace framing: reserve (under 100%) vs deficit (over).
+    /// No projection yet (burn-rate gate: <20% of the window elapsed)
+    /// gets an honest caption instead of a dash with no explanation.
     private func paceCaption(projected: Double?) -> String {
-        guard let projected else { return "at reset" }
+        guard let projected else { return "gathering data" }
         if projected > 100 {
             return "deficit +\(Int((projected - 100).rounded()))%"
         }
@@ -328,30 +317,30 @@ struct HeroTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(.secondary.opacity(0.75))
+            Text(title.uppercased())
+                .font(.system(size: 8.5, weight: .semibold))
+                .tracking(1.1)
+                .foregroundStyle(.tertiary)
 
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(accent ?? .primary.opacity(0.92))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
             Text(caption)
-                .font(.system(size: 9.5, weight: .regular, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.secondary.opacity(0.7))
+                .font(.system(size: 9.5))
+                .foregroundStyle(.secondary.opacity(0.75))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.primary.opacity(0.045))
+        .padding(.vertical, 7)
+        // Hairline-only tile — crisper than a gray fill-on-gray-card.
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         )
     }
 }

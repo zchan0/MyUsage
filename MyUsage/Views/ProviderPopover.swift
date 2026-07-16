@@ -17,7 +17,9 @@ struct ProviderPopover: View {
 
             if let provider = manager.orderedProviders.first(where: { $0.kind == kind }) {
                 VStack(spacing: 7) {
-                    ProviderCard(provider: provider, showsHero: true)
+                    // Head hidden: this panel's header already names the
+                    // provider — the card starts straight at the data.
+                    ProviderCard(provider: provider, showsHero: true, showsHead: false)
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
@@ -31,10 +33,17 @@ struct ProviderPopover: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
+            ProviderIconTile(kind: kind, size: 18, glyph: 11)
+
             Text(kind.displayName)
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .tracking(-0.2)
+
+            if let plan = manager.orderedProviders
+                .first(where: { $0.kind == kind })?.snapshot?.planName {
+                PlanPill(text: plan)
+            }
 
             Spacer()
 
@@ -120,10 +129,14 @@ struct PopoverFooterBar: View {
     var body: some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(Color.primary.opacity(0.06))
-                .frame(height: 0.5)
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 1)
 
             HStack {
+                Text("v\(AppInfo.version)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+
                 Spacer()
 
                 SettingsLink {

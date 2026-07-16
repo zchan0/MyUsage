@@ -186,7 +186,7 @@ struct ProgressTrack: View {
     /// (clamped 0–200% so the bar overflow doesn't run off the card).
     var projectedPercent: Double? = nil
     var level: LimitSafety.Level = .healthy
-    var height: CGFloat = 5
+    var height: CGFloat = 6
 
     /// 3pt overhang each side gives the marker enough vertical presence
     /// to read against a thin 4pt bar — total marker = 10pt.
@@ -204,19 +204,12 @@ struct ProgressTrack: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.primary.opacity(0.08))
+                    .fill(Color.primary.opacity(0.07))
 
-                // Slight leading→trailing brightening gives the fill a
-                // faint sheen — reads as deliberate, not flat, without
-                // fighting the calm palette.
+                // Flat, saturated fill — crisper than a gradient sheen,
+                // and colour stays reserved for data.
                 Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [fillColor.opacity(0.82), fillColor],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(fillColor)
                     .frame(width: fillWidth)
                     .animation(.easeInOut(duration: 0.4), value: percent)
             }

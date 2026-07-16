@@ -27,9 +27,10 @@ struct ProviderTabBar: View {
 
             ForEach(providers, id: \.self) { kind in
                 segment(tab: .provider(kind)) {
-                    ProviderIconTile(kind: kind, size: 16, glyph: 9.5)
-                        .saturation(selection == .provider(kind) ? 1.0 : 0.35)
-                        .opacity(selection == .provider(kind) ? 1.0 : 0.75)
+                    // Full-colour brand tile — identity stays crisp; the
+                    // unselected state recedes via opacity alone.
+                    ProviderIconTile(kind: kind, size: 18, glyph: 11)
+                        .opacity(selection == .provider(kind) ? 1.0 : 0.72)
                 }
                 .help(kind.displayName)
             }
@@ -37,7 +38,11 @@ struct ProviderTabBar: View {
         .padding(2)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.055))
+                .fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
 
@@ -47,19 +52,19 @@ struct ProviderTabBar: View {
         } label: {
             content()
                 .frame(maxWidth: .infinity)
-                .frame(height: 22)
+                .frame(height: 24)
                 .background {
                     if selection == tab {
-                        RoundedRectangle(cornerRadius: 6.5, style: .continuous)
-                            .fill(.background.opacity(0.85))
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(.background)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6.5, style: .continuous)
-                                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
                             )
-                            .shadow(color: .black.opacity(0.10), radius: 1.5, x: 0, y: 0.5)
+                            .shadow(color: .black.opacity(0.08), radius: 1, x: 0, y: 0.5)
                     }
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 6.5, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
     }

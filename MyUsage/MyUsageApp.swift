@@ -35,6 +35,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // exact code paths the Settings picker and status-item clicks use,
         // with NSLog breadcrumbs, so mode-switch bugs can be reproduced
         // headlessly (`swift run` + grep) instead of by hand.
+        // "open:N" opens status item N's panel, waits for data to land,
+        // and (when MYUSAGE_SNAPSHOT is set) renders the panel to a PNG —
+        // the design-iteration loop.
+        if let value = ProcessInfo.processInfo.environment["MYUSAGE_AUTOPILOT"],
+           value.hasPrefix("open:"),
+           let index = Int(value.dropFirst(5)),
+           let coordinator = menuBarCoordinator {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                coordinator.debugToggle(index)
+                if let path = ProcessInfo.processInfo.environment["MYUSAGE_SNAPSHOT"] {
+                    try? await Task.sleep(nanoseconds: 6_000_000_000)
+                    coordinator.debugSnapshot(index, to: path)
+                }
+                DebugLog.info("AUTOPILOT open:\(index) done")
+            }
+        }
+
         if ProcessInfo.processInfo.environment["MYUSAGE_AUTOPILOT"] == "1",
            let coordinator = menuBarCoordinator {
             Task { @MainActor [usageManager] in
