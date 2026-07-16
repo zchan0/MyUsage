@@ -22,10 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let usageManager = UsageManager()
     let updateChecker = UpdateChecker.shared
 
-    private var statusItemController: StatusItemController?
+    private var menuBarCoordinator: MenuBarCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItemController = StatusItemController(manager: usageManager, updateChecker: updateChecker)
+        menuBarCoordinator = MenuBarCoordinator(manager: usageManager, updateChecker: updateChecker)
         usageManager.startTimer()
 
         Task { await usageManager.refreshAll() }

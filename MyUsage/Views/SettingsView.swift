@@ -54,16 +54,35 @@ struct SettingsView: View {
                 }
 
                 SettingsCard("Menu Bar") {
-                    SettingsRow("Tracked provider", caption: "Drives the icon's tint and percentage.") {
-                        Picker("", selection: $mgr.iconTrackProvider) {
-                            Text("None").tag("")
-                            ForEach(manager.providers, id: \.kind) { provider in
-                                Text(provider.kind.displayName).tag(provider.kind.rawValue)
+                    VStack(alignment: .leading, spacing: 0) {
+                        SettingsRow(
+                            "Icons",
+                            caption: "Merged: one icon with an Overview and provider tabs. One per provider: each enabled provider gets its own icon and panel."
+                        ) {
+                            Picker("", selection: $mgr.menuBarMode) {
+                                Text("Merged").tag(UsageManager.MenuBarMode.merged)
+                                Text("One per provider").tag(UsageManager.MenuBarMode.separate)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 160)
+                        }
+
+                        if manager.menuBarMode == .merged {
+                            CardDivider()
+
+                            SettingsRow("Tracked provider", caption: "Drives the icon's tint and percentage.") {
+                                Picker("", selection: $mgr.iconTrackProvider) {
+                                    Text("None").tag("")
+                                    ForEach(manager.providers, id: \.kind) { provider in
+                                        Text(provider.kind.displayName).tag(provider.kind.rawValue)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .frame(maxWidth: 160)
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: 160)
                     }
                 }
 

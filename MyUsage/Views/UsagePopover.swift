@@ -33,8 +33,7 @@ struct UsagePopover: View {
                 }
             }
 
-            footerDivider
-            footer
+            PopoverFooterBar()
         }
         .frame(width: 340)
         // Take the content's ideal height. The hosting panel measures this
@@ -55,57 +54,10 @@ struct UsagePopover: View {
             Spacer()
 
             if let lastRefreshed = manager.lastRefreshed {
-                (
-                    Text(lastRefreshed, style: .relative)
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .monospacedDigit()
-                    + Text(" ago")
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                )
-                .foregroundStyle(.secondary.opacity(0.7))
+                RelativeTimestampLabel(date: lastRefreshed)
             }
 
-            Button {
-                Task { await manager.refreshAll() }
-            } label: {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "arrow.clockwise")
-                        // `.resizable().scaledToFit()` makes the symbol a
-                        // pure shape that fills its frame, geometrically
-                        // centered — so rotating around .center spins it in
-                        // place. A font-sized symbol sits on a text baseline
-                        // offset from the frame's geometric center, so
-                        // rotating it orbits / wobbles (the "displacement"
-                        // motion, worse since the macOS 26 symbol-rendering
-                        // change). resizable removes the baseline entirely.
-                        .resizable()
-                        .scaledToFit()
-                        .fontWeight(.regular)
-                        .frame(width: 13, height: 13)
-                        .rotationEffect(.degrees(manager.isRefreshing ? 360 : 0), anchor: .center)
-                        .animation(
-                            manager.isRefreshing
-                                ? .linear(duration: 1).repeatForever(autoreverses: false)
-                                : .default,
-                            value: manager.isRefreshing
-                        )
-
-                    if updateChecker.updateAvailable != nil {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 6, height: 6)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 2)
-                            )
-                            .offset(x: 4, y: -3)
-                            .help("An update is available — open Settings → About to view it.")
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .disabled(manager.isRefreshing)
+            PopoverRefreshButton()
         }
         .padding(.horizontal, 14)
         .padding(.top, 12)
@@ -169,32 +121,6 @@ struct UsagePopover: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
-    }
-
-    private var footerDivider: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.06))
-            .frame(height: 0.5)
-    }
-
-    private var footer: some View {
-        HStack {
-            Spacer()
-
-            SettingsLink {
-                Image(systemName: "gear")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture().onEnded {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    NSApp.activate(ignoringOtherApps: true)
-                }
-            })
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
     }
 
     // MARK: - Helpers

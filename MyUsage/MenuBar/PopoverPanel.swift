@@ -23,7 +23,15 @@ final class PopoverPanel: NSPanel {
     private let visualEffectView: NSVisualEffectView
     private let hostingView: NSHostingView<AnyView>
 
-    init(manager: UsageManager, updateChecker: UpdateChecker) {
+    /// Merged-mode convenience: hosts the Overview + tabs popover.
+    convenience init(manager: UsageManager, updateChecker: UpdateChecker) {
+        self.init(manager: manager, updateChecker: updateChecker, rootView: AnyView(UsagePopover()))
+    }
+
+    /// Host an arbitrary SwiftUI root (separate mode passes a single
+    /// provider's popover). Environment objects and the size-tracking
+    /// wrapper are applied here either way.
+    init(manager: UsageManager, updateChecker: UpdateChecker, rootView: AnyView) {
         let effect = NSVisualEffectView()
         effect.material = .popover
         effect.blendingMode = .behindWindow
@@ -83,7 +91,7 @@ final class PopoverPanel: NSPanel {
         // material, not the cleared window). And because the *measured* size
         // is the inner ideal (taken before the flexible frame), the window
         // tracks the true content height without a feedback loop.
-        let content = UsagePopover()
+        let content = rootView
             .environment(manager)
             .environment(updateChecker)
             .onSizeChange { [weak self] size in

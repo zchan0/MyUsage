@@ -27,8 +27,23 @@ final class UsageManager {
     }
 
     /// Which provider to show usage for in the menu bar. Empty string = none.
+    /// Merged mode only — separate mode gives every provider its own icon.
     var iconTrackProvider: String {
         didSet { UserDefaults.standard.set(iconTrackProvider, forKey: "iconTrackProvider") }
+    }
+
+    /// How status items appear in the menu bar (CodexBar-style).
+    ///
+    /// - `merged` (default): one icon; the panel is Overview + provider tabs.
+    /// - `separate`: one icon per enabled provider; clicking an icon opens
+    ///   a panel with only that provider — no Overview, no tab strip.
+    enum MenuBarMode: String, CaseIterable, Sendable {
+        case merged
+        case separate
+    }
+
+    var menuBarMode: MenuBarMode {
+        didSet { UserDefaults.standard.set(menuBarMode.rawValue, forKey: "menuBarMode") }
     }
 
     /// Custom display order for providers.
@@ -88,6 +103,8 @@ final class UsageManager {
             ?? storedOrder?.first
             ?? ProviderKind.allCases.first?.rawValue
             ?? ""
+        self.menuBarMode = UserDefaults.standard.string(forKey: "menuBarMode")
+            .flatMap(MenuBarMode.init(rawValue:)) ?? .merged
         self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
         self.showPerModelBars = UserDefaults.standard.object(forKey: "showPerModelBars") as? Bool ?? true
         self.notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
@@ -207,7 +224,16 @@ final class UsageManager {
     /// Short text for the menu bar label, based on tracked provider.
     var menuBarDisplayText: String? {
         guard !iconTrackProvider.isEmpty,
-              let provider = providers.first(where: { $0.kind.rawValue == iconTrackProvider }),
+              let provider = providers.first(where: { $0.kind.rawValue == iconTrackProvider })
+        else { return nil }
+        return menuBarText(for: provider.kind)
+    }
+
+    /// Short menu-bar label text for one provider — used by the merged
+    /// icon (via `menuBarDisplayText`) and by each per-provider status
+    /// item in separate-icons mode.
+    func menuBarText(for kind: ProviderKind) -> String? {
+        guard let provider = providers.first(where: { $0.kind == kind }),
               let snapshot = provider.snapshot else { return nil }
 
         switch provider.kind {

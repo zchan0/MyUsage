@@ -2,23 +2,40 @@ import AppKit
 import SwiftUI
 import Observation
 
-/// Owns the menu-bar status item and the popover panel, replacing
+/// Owns one menu-bar status item and its popover panel, replacing
 /// `MenuBarExtra`. Toggling, anchoring, and dismiss-on-outside-click are all
 /// handled here so the panel can be sized deterministically (see `PopoverPanel`).
+///
+/// `kind == nil` is the merged item (Overview + tabs panel); a non-nil kind
+/// is one provider's own item in separate-icons mode, whose panel shows only
+/// that provider. `MenuBarCoordinator` decides which set of controllers
+/// exists at any moment.
 @MainActor
 final class StatusItemController: NSObject, NSWindowDelegate {
     private let manager: UsageManager
     private let statusItem: NSStatusItem
     private let panel: PopoverPanel
+    /// nil = merged mode item.
+    private let kind: ProviderKind?
 
     private var localMonitor: LocalEventMonitor?
     private var globalMonitor: GlobalEventMonitor?
     private var fallbackIcon: NSImage?
+    private var isTornDown = false
 
-    init(manager: UsageManager, updateChecker: UpdateChecker) {
+    init(manager: UsageManager, updateChecker: UpdateChecker, kind: ProviderKind? = nil) {
         self.manager = manager
+        self.kind = kind
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        self.panel = PopoverPanel(manager: manager, updateChecker: updateChecker)
+        if let kind {
+            self.panel = PopoverPanel(
+                manager: manager,
+                updateChecker: updateChecker,
+                rootView: AnyView(ProviderPopover(kind: kind))
+            )
+        } else {
+            self.panel = PopoverPanel(manager: manager, updateChecker: updateChecker)
+        }
         super.init()
 
         configureButton()
@@ -68,6 +85,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// Re-renders the status-item icon + title whenever the observed
     /// `@Observable` manager properties change. Re-arms tracking each pass.
     private func startObservingManager() {
+        guard !isTornDown else { return }
         withObservationTracking { [weak self] in
             self?.updateButton()
         } onChange: { [weak self] in
@@ -78,11 +96,34 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func updateButton() {
-        guard let button = statusItem.button else { return }
-        let providerImage = ProviderKind(rawValue: manager.iconTrackProvider)
-            .flatMap { ProviderTemplateIcon.image(for: $0) }
-        button.image = providerImage ?? fallbackIcon
-        button.title = manager.menuBarDisplayText ?? ""
+        guard !isTornDown, let button = statusItem.button else { return }
+        if let kind {
+            // Separate mode: this item IS one provider — fixed icon, that
+            // provider's own label text.
+            button.image = ProviderTemplateIcon.image(for: kind) ?? fallbackIcon
+            button.title = manager.menuBarText(for: kind) ?? ""
+        } else {
+            let providerImage = ProviderKind(rawValue: manager.iconTrackProvider)
+                .flatMap { ProviderTemplateIcon.image(for: $0) }
+            button.image = providerImage ?? fallbackIcon
+            button.title = manager.menuBarDisplayText ?? ""
+        }
+    }
+
+    // MARK: Teardown
+
+    /// Remove this item from the menu bar and stop all event monitors.
+    /// Called by `MenuBarCoordinator` when the mode or the enabled-provider
+    /// set changes and this controller is no longer part of the layout.
+    func tearDown() {
+        isTornDown = true
+        hidePanel()
+        localMonitor?.stop()
+        localMonitor = nil
+        globalMonitor?.stop()
+        globalMonitor = nil
+        panel.close()
+        NSStatusBar.system.removeStatusItem(statusItem)
     }
 
     // MARK: Panel toggle
