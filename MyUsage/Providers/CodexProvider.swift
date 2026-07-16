@@ -278,7 +278,7 @@ final class CodexProvider: UsageProvider {
         let breakdown = await Task.detached(priority: .utility) {
             CodexLogParser.scanDailyBreakdown(
                 roots: CodexLogParser.defaultRoots(),
-                since: Date.startOfCurrentMonth()
+                since: Date.ledgerBackfillStart()
             )
         }.value
         guard !breakdown.total.isEmpty else { return }

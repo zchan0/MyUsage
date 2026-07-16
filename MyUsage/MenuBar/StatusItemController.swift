@@ -122,6 +122,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         localMonitor = nil
         globalMonitor?.stop()
         globalMonitor = nil
+        panel.delegate = nil
         panel.close()
         NSStatusBar.system.removeStatusItem(statusItem)
     }
@@ -156,6 +157,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func hidePanel() {
+        // Only balance the tracking notification when the panel is actually
+        // up. tearDown() calls this unconditionally on every layout rebuild;
+        // posting endMenuTracking without a matching begin desynchronizes
+        // HIToolbox's menu-tracking state — after which freshly shown panels
+        // get dismissed as "menus that never appeared" (clicks appear dead)
+        // and normal windows fight to stay key.
+        guard panel.isVisible else { return }
         DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
         globalMonitor?.stop()
         panel.orderOut(nil)

@@ -27,17 +27,22 @@ final class MenuBarCoordinator {
     }
 
     private func observeLayout() {
-        withObservationTracking { [weak self] in
-            self?.applyLayoutIfChanged()
+        // Track ONLY the layout inputs (mode + enabled set). Building the
+        // controllers happens outside the tracked scope — their own
+        // updateButton() observation must not register snapshot/refresh
+        // state as dependencies of the coordinator, or every refresh tick
+        // re-enters here.
+        let layout = withObservationTracking { [weak self] in
+            self?.currentLayout() ?? []
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.observeLayout()
             }
         }
+        applyIfChanged(layout)
     }
 
-    private func applyLayoutIfChanged() {
-        let layout = currentLayout()
+    private func applyIfChanged(_ layout: [String]) {
         guard layout != appliedLayout else { return }
         appliedLayout = layout
 

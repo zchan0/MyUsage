@@ -589,7 +589,7 @@ final class ClaudeProvider: UsageProvider {
         let breakdown = await Task.detached(priority: .utility) {
             ClaudeLogParser.scanDailyBreakdown(
                 roots: ClaudeLogParser.defaultRoots(),
-                since: Date.startOfCurrentMonth()
+                since: Date.ledgerBackfillStart()
             )
         }.value
         guard !breakdown.total.isEmpty else { return }

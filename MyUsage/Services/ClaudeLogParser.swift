@@ -395,4 +395,16 @@ extension Date {
         let comps = calendar.dateComponents([.year, .month], from: now)
         return calendar.date(from: comps) ?? now
     }
+
+    /// Scan window for ledger daily-cost recording: the earlier of the
+    /// month start and 30 days back. The monthly cost row only needs the
+    /// current month, but the daily chart shows a trailing 30 days — early
+    /// in a month, month-start-only scanning would leave last month's tail
+    /// permanently un(re)attributed (the "Codex chart is all Other" bug:
+    /// rows written before per-model attribution existed were never
+    /// rescanned because they fell outside the month window).
+    static func ledgerBackfillStart(calendar: Calendar = .current, now: Date = .now) -> Date {
+        min(startOfCurrentMonth(calendar: calendar, now: now),
+            now.addingTimeInterval(-30 * 86_400))
+    }
 }
