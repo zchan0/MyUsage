@@ -190,7 +190,10 @@ final class ClaudeCredentialStore {
         lastCachedPayload = data
     }
 
-    private static func decode(_ data: Data) -> ClaudeCredentials? {
+    /// nonisolated: pure function, and the CI toolchain (older Swift than
+    /// local) rejects passing a MainActor-isolated method as a function
+    /// value to `flatMap` from a nonisolated context.
+    nonisolated private static func decode(_ data: Data) -> ClaudeCredentials? {
         guard let creds = try? JSONDecoder().decode(ClaudeCredentials.self, from: data),
               creds.claudeAiOauth != nil else { return nil }
         return creds
