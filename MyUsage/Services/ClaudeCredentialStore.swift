@@ -88,28 +88,31 @@ final class ClaudeCredentialStore {
             + "/.claude/.credentials.json",
         cliKeychainService: String = "Claude Code-credentials",
         io: IO = .live,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        suppressPrompts: Bool = ClaudeCredentialStore.environmentSuppressesPrompts
     ) {
         self.credentialFilePath = credentialFilePath
         self.cliKeychainService = cliKeychainService
         self.io = io
         self.defaults = defaults
+        self.promptSuppressed = suppressPrompts
     }
 
     /// Hard kill-switch for the interactive Keychain prompt. Dev/test runs
     /// (`swift run`, autopilot, CI) rebuild the ad-hoc binary constantly —
     /// every rebuild is a new signing identity, every prior "Always Allow"
     /// is void, and each run would throw the password dialog at whoever is
-    /// sitting at the machine. Set either env var to keep those runs
-    /// strictly silent; a stale cached token is fine for development.
-    private var promptSuppressed: Bool {
+    /// sitting at the machine. Any non-.app invocation is such a build
+    /// (including `.xctest` runners), so only bundled builds may prompt;
+    /// the env vars force silence even there. Injected at init so unit
+    /// tests can exercise the interactive path explicitly.
+    static var environmentSuppressesPrompts: Bool {
         let env = ProcessInfo.processInfo.environment
         if env["MYUSAGE_NO_PROMPT"] == "1" || env["MYUSAGE_AUTOPILOT"] != nil { return true }
-        // Any non-.app invocation IS a dev build — its ad-hoc signature
-        // changes on every rebuild, so it could never hold a durable
-        // Keychain approval anyway. Only real bundled builds may prompt.
         return Bundle.main.bundleURL.pathExtension != "app"
     }
+
+    private let promptSuppressed: Bool
 
     /// Walk the source chain. `interactive` gates step 4 only — steps 1–3
     /// are always silent. Returns nil when no source yields credentials

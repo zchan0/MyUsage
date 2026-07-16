@@ -78,7 +78,11 @@ final class ClaudeCredentialStoreTests: XCTestCase {
                         }
                     }
                 ),
-                defaults: defaults
+                defaults: defaults,
+                // Tests run inside an .xctest bundle, which the default
+                // policy treats as a dev build and silences — but these
+                // tests exercise the interactive path deliberately.
+                suppressPrompts: false
             )
         }
     }
