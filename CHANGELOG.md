@@ -6,6 +6,100 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.13.0 — 2026-07-16
+
+### Added
+- **Tabbed popover.** The panel now opens on an Overview (the full card
+  stack) with a segmented tab strip — one brand-tile tab per enabled
+  provider. A provider's own tab shows its expanded card: hero stat
+  tiles (**today's estimated cost**, **pace** — the projected
+  end-of-window position with a reserve/deficit readout, severity
+  tinted — and the **credit balance** where the account has one).
+- **Separate menu-bar icons mode.** Settings → Menu Bar → Icons:
+  `One per provider` gives each enabled provider its own status item
+  (brand icon + its own label text) whose panel shows only that
+  provider. Toggling the mode or a provider rebuilds the bar live.
+- **30-day daily cost chart**, stacked by model family, on the Claude
+  and Codex tabs — fed by the multi-device ledger, with a CVD-validated
+  palette and a hover readout of each day's date + total.
+- **Self-updating model prices.** Pricing now refreshes from LiteLLM's
+  public price table (at most once per 24h, cached on disk, bundled
+  fallback) — new models price correctly the day they're listed instead
+  of waiting for an app release. A price update forces exactly one
+  monthly-cost recompute.
+- **Hands-off Claude token refresh.** When the access token expires,
+  MyUsage runs the Claude CLI briefly on a PTY so the CLI itself
+  rotates the Keychain entry, then continues with the fresh token — the
+  "Run `claude` once in Terminal" hint is now just the fallback.
+  MyUsage still never touches the OAuth refresh endpoint.
+- **Far fewer Keychain password prompts.** Claude credentials load
+  through a prompt-minimizing chain: credentials file → the CLI's
+  Keychain item via silent no-UI probes → MyUsage's own cached copy.
+  The "Always Allow" dialog can only appear once, is rate-limited, and
+  an explicit denial backs off for 8 hours. Dev builds (anything not
+  running from an .app bundle) never prompt at all.
+
+### Changed
+- **Codex windows classify by actual duration.** Plans that only have a
+  weekly limit no longer render it as a bogus "5-hour" bar.
+- **Codex daily costs now attribute per model** (e.g. "GPT-5.2 Codex")
+  in the ledger and the chart, matching Claude.
+- **Bundled prices refreshed for the 2026 model generation** — adds
+  Claude Fable 5 / Sonnet 5 / Opus 4.6–4.8 and the GPT-5.1–5.4
+  families, and fixes Opus 4.5+ being over-priced at legacy Opus 4
+  rates via prefix collision (monthly estimates were inflated).
+- **Visual refresh**: brand-tinted card gradients and borders, thicker
+  limit bars with a subtle sheen, unified severity accents.
+
+### Fixed
+- Panels created after a menu-bar layout rebuild could collapse to an
+  invisible zero-size window — clicks on status items looked dead and
+  the invisible key window kept stealing focus from Settings.
+- Settings now activates and comes to the front reliably when opened
+  from the popover gear (LSUIElement + macOS cooperative activation).
+- Running a dev build via `swift run` no longer crashes at launch
+  (UserNotifications requires an .app bundle; notifications are now
+  disabled outside one).
+- Ledger daily scans cover a trailing 30 days (not just the current
+  month), so late-last-month days get model attribution too.
+
+### 中文
+
+- **Tab 式弹窗。** 面板打开即 Overview(完整卡片堆叠),上方分段式 Tab 栏
+  每个启用的 provider 一个品牌图标 Tab。provider 自己的 Tab 显示扩展卡片:
+  hero 指标贴片(**今日估算成本**、**pace**——按当前速度预测的周期末位置,
+  带 reserve/deficit 标注和健康度着色、以及有余额时的 **credit 余额**)。
+- **菜单栏多图标模式。** 设置 → Menu Bar → Icons 选 `One per provider`,
+  每个启用的 provider 独立菜单栏图标(品牌图标+各自文字),点开只显示该
+  provider;切换模式或开关 provider 即时重建菜单栏。
+- **30 天每日成本图表**,按模型家族堆叠,位于 Claude / Codex 的 Tab 页,
+  数据来自多设备 ledger,配色通过色觉无障碍校验,hover 显示当日日期与金额。
+- **模型价格自动更新。** 定价改从 LiteLLM 公开价格表拉取(每 24 小时至多
+  一次,磁盘缓存,内置表兜底)——新模型上线当天即可正确计价,不再等发版;
+  价格变化只触发一次月成本重算。
+- **Claude token 免手动刷新。** access token 过期时,MyUsage 在 PTY 上短暂
+  运行 Claude CLI,由 CLI 自己轮转 Keychain 里的 token,然后继续刷新;
+  "去终端跑一次 claude" 的提示降级为兜底。MyUsage 依然不碰 OAuth 刷新端点。
+- **Keychain 密码弹窗大幅减少。** Claude 凭据按最小弹窗链加载:凭据文件 →
+  CLI Keychain 条目的静默探测 → MyUsage 自有缓存副本;"始终允许"对话框至多
+  出现一次且有频控,明确拒绝后退避 8 小时;dev 构建(非 .app 运行)完全不弹。
+
+- **Codex 窗口按实际时长分类**,只有周限额的套餐不再显示伪 "5-hour" 条。
+- **Codex 每日成本按模型归因**(如 "GPT-5.2 Codex"),与 Claude 一致。
+- **内置价格表更新到 2026 模型代际**——新增 Claude Fable 5 / Sonnet 5 /
+  Opus 4.6–4.8 与 GPT-5.1–5.4 系列;修复 Opus 4.5+ 因前缀匹配落到旧
+  Opus 4 价格导致的月成本虚高。
+- **视觉升级**:品牌色卡片渐变与描边、更厚的进度条与微光泽、统一的健康度
+  配色。
+
+- 修复菜单栏布局重建后面板可能塌缩为不可见零尺寸窗口的问题(点击图标像
+  没反应,且隐形窗口持续抢走 Settings 焦点)。
+- 从弹窗齿轮打开 Settings 现在可靠地激活并置顶。
+- `swift run` 运行 dev 构建不再启动即崩溃(UserNotifications 需要 .app
+  bundle,非 bundle 环境下通知功能自动停用)。
+- ledger 每日扫描覆盖最近 30 天(不再只扫当月),上月末的天数也能获得模型
+  归因。
+
 ## v0.12.0 — 2026-07-11
 
 ### Added
