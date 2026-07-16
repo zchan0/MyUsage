@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// A single limit row. v0.9.1 shape:
+/// A single limit row. v0.14 "instrument" shape:
 ///
 ///     5-hour                                                47%   ← name (L) + pct (R)
-///     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ← 4pt bar
-///     resets 2h 14m · 16:30                  projected 118%       ← reset (L, with
-///                                                                   absolute clock
-///                                                                   time appended)
-///                                                                   + alarm-only
-///                                                                   projection note (R)
+///     ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮│▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯  ← segmented tick rail
+///                     └ solid on-pace notch                        + pace notch
+///     resets 2h 14m · 16:30                       pace 43%        ← reset (L) + pace
+///                                                                   text (R); an
+///                                                                   overshoot alarm
+///                                                                   ("projected 118%")
+///                                                                   takes the R slot
+///                                                                   when predicted
 ///
 /// Three rows. Splitting pct (top-right) from reset (bottom-left)
 /// gives each its own visual lane, instead of crowding both onto a
@@ -34,6 +36,12 @@ struct LimitBar: View {
     /// When true, the name is rendered in monospaced 10.5pt — used by
     /// Antigravity per-model rows ("flash 47/200").
     var monoName: Bool = false
+    /// Where the fill would sit right now on a steady burn-100%-across-
+    /// the-window pace, from `UsageWindow.onPacePercent(now:)`. Rendered
+    /// twice — a solid notch on the track AND a "pace N%" footer note —
+    /// so the reading works both geometrically and literally. nil = not
+    /// applicable (no window duration, cached snapshot).
+    var pacePercent: Double? = nil
     /// When true, this row's cached value is from a window that has since
     /// reset (an inactive multi-account snapshot viewed past its
     /// `resetsAt`). The percentage is no longer meaningful and we can't
@@ -57,6 +65,7 @@ struct LimitBar: View {
             ProgressTrack(
                 percent: expired ? 0 : percent,
                 projectedPercent: alarmingProjection,
+                pacePercent: expired ? nil : pacePercent,
                 level: expired ? .healthy : level
             )
 
@@ -70,7 +79,8 @@ struct LimitBar: View {
     @ViewBuilder
     private var footerRow: some View {
         let note = projectionNote
-        if reset != nil || note != nil {
+        let pace = paceNote
+        if reset != nil || note != nil || pace != nil {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let reset {
                     Text(reset)
@@ -79,14 +89,28 @@ struct LimitBar: View {
                         .foregroundStyle(.secondary.opacity(0.7))
                 }
                 Spacer(minLength: 0)
+                // One right-hand slot: the overshoot alarm outranks the
+                // routine pace reading — both at once would crowd the row
+                // and the alarm already implies "you're over pace".
                 if let note {
                     Text(note)
                         .font(.system(size: 10, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Self.warnAccent)
+                } else if let pace {
+                    Text(pace)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary.opacity(0.55))
                 }
             }
         }
+    }
+
+    /// Footer-right pace text — always-on companion to the track notch.
+    private var paceNote: String? {
+        guard !expired, let pace = pacePercent else { return nil }
+        return "pace \(Int(pace.rounded()))%"
     }
 
     @ViewBuilder
@@ -185,6 +209,11 @@ struct ProgressTrack: View {
     /// When non-nil, draws a dashed vertical marker at this position
     /// (clamped 0–200% so the bar overflow doesn't run off the card).
     var projectedPercent: Double? = nil
+    /// When non-nil, draws a solid neutral notch at this position — the
+    /// on-pace reference. Fill left of the notch = headroom, right =
+    /// burning hot. Solid vs the projection marker's dashes so the two
+    /// never read as the same signal.
+    var pacePercent: Double? = nil
     var level: LimitSafety.Level = .healthy
     var height: CGFloat = 6
 
@@ -195,6 +224,7 @@ struct ProgressTrack: View {
     var body: some View {
         bar
             .frame(height: height)
+            .overlay(alignment: .leading) { paceOverlay }
             .overlay(alignment: .leading) { markerOverlay }
     }
 
@@ -202,17 +232,42 @@ struct ProgressTrack: View {
         GeometryReader { geo in
             let fillWidth = max(0, geo.size.width * min(percent, 100) / 100)
 
+            // Segmented tick rail (v0.14 "instrument" pass): the same
+            // fill-fraction reading as the old continuous capsule, drawn
+            // as 3pt ticks on a 5pt pitch. The deliberately low visual
+            // resolution matches what the number actually is — a quota
+            // gauge — and the tick texture is the popover's visual
+            // signature. Fill = the track pattern re-tinted and masked to
+            // the exact percent width, so a partial tick at the boundary
+            // stays pixel-accurate.
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.07))
+                TickPattern()
+                    .fill(Color.primary.opacity(0.08))
 
-                // Flat, saturated fill — crisper than a gradient sheen,
-                // and colour stays reserved for data.
-                Capsule()
+                TickPattern()
                     .fill(fillColor)
-                    .frame(width: fillWidth)
-                    .animation(.easeInOut(duration: 0.4), value: percent)
+                    .mask(alignment: .leading) {
+                        Rectangle()
+                            .frame(width: fillWidth)
+                            .animation(.easeInOut(duration: 0.4), value: percent)
+                    }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var paceOverlay: some View {
+        if let pace = pacePercent {
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 0.75)
+                    .fill(Color.primary.opacity(0.32))
+                    .frame(width: 1.5, height: height + Self.markerOverhang * 2)
+                    .offset(
+                        x: geo.size.width * min(max(pace, 0), 100) / 100 - 0.75,
+                        y: -Self.markerOverhang
+                    )
+            }
+            .allowsHitTesting(false)
         }
     }
 
@@ -237,6 +292,30 @@ struct ProgressTrack: View {
     }
 
     private var fillColor: Color { level.accent }
+}
+
+/// The tick texture both rail layers share: 3pt-wide rounded ticks on a
+/// 5pt pitch, spanning the full height of whatever rect they're given.
+/// A `Shape` (not a repeating gradient) so the rounded tick corners stay
+/// crisp at any backing scale and the final partial tick clips exactly
+/// at the rail's right edge.
+private struct TickPattern: Shape {
+    var tickWidth: CGFloat = 3
+    var gap: CGFloat = 2
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        var x: CGFloat = 0
+        while x < rect.width {
+            let width = min(tickWidth, rect.width - x)
+            path.addRoundedRect(
+                in: CGRect(x: x, y: 0, width: width, height: rect.height),
+                cornerSize: CGSize(width: 1, height: 1)
+            )
+            x += tickWidth + gap
+        }
+        return path
+    }
 }
 
 extension LimitSafety.Level {
@@ -292,15 +371,16 @@ private struct DashedMarker: View {
 
 #Preview("Limits") {
     VStack(alignment: .leading, spacing: 14) {
-        // Healthy, no projection
-        LimitBar(name: "5-hour", percent: 6, reset: "resets 4h 46m · 19:00")
-        // Healthy with safe projection (suppressed by alarmingProjection)
-        LimitBar(name: "Weekly", percent: 31, reset: "resets 5d 12h · Tue 09:00", projectedPercent: 58)
+        // Healthy, ahead of pace (fill past the notch)
+        LimitBar(name: "5-hour", percent: 47, reset: "resets 2h 14m · 16:30", pacePercent: 43)
+        // Healthy with headroom (fill behind the notch); safe projection suppressed
+        LimitBar(name: "Weekly", percent: 31, reset: "resets 5d 12h · Tue 09:00", projectedPercent: 58, pacePercent: 55)
         // Warn band → pct gets amber pill
-        LimitBar(name: "Weekly", percent: 78, reset: "resets 3d 4h · Sat 12:00")
-        // Crit band + alarm projection → red pill + overflow marker + footer note
-        LimitBar(name: "Daily cap", percent: 91, reset: "resets in 4h · 18:30", projectedPercent: 145)
-        // Antigravity-style: no reset, no projection, no pill
+        LimitBar(name: "Weekly", percent: 78, reset: "resets 3d 4h · Sat 12:00", pacePercent: 60)
+        // Crit band + alarm projection → red pill + overflow marker; alarm
+        // note takes the pace slot
+        LimitBar(name: "Daily cap", percent: 91, reset: "resets in 4h · 18:30", projectedPercent: 145, pacePercent: 55)
+        // Antigravity-style: no reset, no projection, no pill, no pace
         LimitBar(name: "flash 47/200", percent: 23, monoName: true)
     }
     .padding(16)

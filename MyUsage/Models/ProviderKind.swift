@@ -18,6 +18,17 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// One-word name for tight spots (summary-tile captions) where
+    /// "Claude Code · 5h" would overflow a 9pt line.
+    var shortName: String {
+        switch self {
+        case .claude: "Claude"
+        case .codex: "Codex"
+        case .cursor: "Cursor"
+        case .antigravity: "Antigravity"
+        }
+    }
+
     /// Brand color for the provider.
     var accentColor: Color {
         switch self {

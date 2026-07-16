@@ -23,6 +23,9 @@ struct UsagePopover: View {
             if enabledProviders.isEmpty {
                 emptyState
             } else {
+                if effectiveTab == .overview {
+                    OverviewStatTiles(providers: enabledProviders)
+                }
                 tabBar
 
                 switch effectiveTab {
@@ -66,7 +69,12 @@ struct UsagePopover: View {
 
     private var tabBar: some View {
         ProviderTabBar(
-            providers: enabledProviders.map(\.kind),
+            items: enabledProviders.map { provider in
+                .init(
+                    kind: provider.kind,
+                    worstPercent: provider.snapshot.map(\.worstUsagePercent)
+                )
+            },
             selection: $selectedTab
         )
         .padding(.horizontal, 12)

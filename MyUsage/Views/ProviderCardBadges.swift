@@ -35,6 +35,39 @@ struct PlanPill: View {
     }
 }
 
+/// One-glance severity verdict on the card head's right edge: the card's
+/// worst window as a word instead of making the user read every bar.
+/// "● Healthy" (sage) / "▲ Watch" (amber) / "▲ Critical" (red) — glyph +
+/// label, never color alone (status is never encoded by hue only).
+struct StatusChip: View {
+    let level: LimitSafety.Level
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(glyph)
+                .font(.system(size: 6.5))
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+        }
+        .foregroundStyle(level.accent)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 2.5)
+        .background(level.accent.opacity(0.13), in: Capsule())
+    }
+
+    private var glyph: String {
+        level == .healthy ? "●" : "▲"
+    }
+
+    private var label: String {
+        switch level {
+        case .healthy: "Healthy"
+        case .warn:    "Watch"
+        case .crit:    "Critical"
+        }
+    }
+}
+
 /// Periwinkle "LIVE" badge for Antigravity when the IDE is running.
 struct LiveBadge: View {
     var body: some View {

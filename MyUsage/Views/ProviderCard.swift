@@ -72,6 +72,13 @@ struct ProviderCard: View {
 
             Spacer(minLength: 6)
 
+            // Severity verdict, non-Antigravity cards with data. Antigravity
+            // keeps its LIVE badge — "IDE running" is that card's state
+            // story, and two chips on one head row would fight.
+            if provider.kind != .antigravity, let snapshot = provider.snapshot {
+                StatusChip(level: LimitSafety.level(for: snapshot.worstUsagePercent))
+            }
+
             if provider.kind == .antigravity, isAntigravityLive {
                 LiveBadge()
             }
@@ -115,6 +122,7 @@ struct ProviderCard: View {
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
                 chartSection
+                accountRow(snapshot)
                 staleWarningRow(staleMessage)
             }
         } else {
@@ -123,6 +131,7 @@ struct ProviderCard: View {
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
                 chartSection
+                accountRow(snapshot)
             }
         }
     }
@@ -145,21 +154,24 @@ struct ProviderCard: View {
         }
     }
 
-    /// Stat-tile row shown only on the provider's own tab (`showsHero`).
+    /// Stat-tile grid shown only on the provider's own tab (`showsHero`).
     /// Deliberately NOT the window percentages — the limit bars below
     /// already show those. These are the numbers the bars don't carry:
-    /// today's spend, the projected end-of-window position (CodexBar's
-    /// reserve/deficit), and the credit balance when the account has one.
+    /// today's spend (with the vs-7-day-average delta), the projected
+    /// end-of-window position (CodexBar's reserve/deficit), the credit
+    /// balance, and the multi-device split. 2-column grid: tiles are
+    /// text-dense enough that three abreast squeezed every caption.
     @ViewBuilder
     private func heroSection(_ snapshot: UsageSnapshot) -> some View {
         if showsHero, provider.kind == .claude || provider.kind == .codex {
-            HStack(spacing: 8) {
+            let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+            LazyVGrid(columns: columns, spacing: 8) {
                 // No ledger row for today means exactly $0 so far — say
                 // that, rather than an em-dash that reads as "broken".
                 HeroTile(
                     title: "Today",
                     value: ProviderCardCostRow.formatCost(todayCost ?? 0),
-                    caption: "est. cost"
+                    caption: todayCaption
                 )
 
                 if let weekly = snapshot.weeklyUsage {
@@ -179,6 +191,10 @@ struct ProviderCard: View {
                         caption: "balance"
                     )
                 }
+
+                if let devices = devicesTile {
+                    HeroTile(title: "Devices", value: devices.value, caption: devices.caption)
+                }
             }
             .padding(.bottom, 1)
         }
@@ -190,6 +206,39 @@ struct ProviderCard: View {
         let today = LedgerCalendar.dayKey(for: .now)
         return manager.ledger.dailyCosts[provider.kind]?
             .first { $0.day == today }?.totalUSD
+    }
+
+    /// "↑ 38% vs 7d avg" — neutral text, not severity-tinted: spending
+    /// more than usual is context, not an alarm (unlike quota pressure).
+    /// Falls back to the plain "est. cost" label until the ledger has a
+    /// week of history to compare against.
+    private var todayCaption: String {
+        guard let series = manager.ledger.dailyCosts[provider.kind] else { return "est. cost" }
+        return OverviewSummary.deltaCaption(
+            today: todayCost ?? 0,
+            average: OverviewSummary.trailingDailyAverage(dailyCosts: [provider.kind: series])
+        ) ?? "est. cost"
+    }
+
+    /// Devices tile: count + the cost split across Macs this month.
+    /// nil for single-device accounts — a "1 / this Mac 100%" tile is
+    /// dead weight. Surfaces what the ⊕ breakdown popover buries.
+    private var devicesTile: (value: String, caption: String)? {
+        let monthKey = LedgerCalendar.monthKey(for: .now)
+        let contributions = manager.ledger.contributions(provider: provider.kind, monthKey: monthKey)
+        guard contributions.count > 1 else { return nil }
+        let total = contributions.reduce(0) { $0 + $1.costUSD }
+        let caption: String
+        if total > 0.005 {
+            caption = contributions
+                .sorted { $0.costUSD > $1.costUSD }
+                .prefix(2)
+                .map { "\($0.displayName) \(Int(($0.costUSD / total * 100).rounded()))%" }
+                .joined(separator: " · ")
+        } else {
+            caption = "no cost this month"
+        }
+        return ("\(contributions.count)", caption)
     }
 
     /// "at reset" pace framing: reserve (under 100%) vs deficit (over).
@@ -216,6 +265,49 @@ struct ProviderCard: View {
 
     // Cost row lives in ProviderCardCostRow.swift — accessed via
     // `ProviderCardCostRow(kind:, snapshot:)`.
+
+    // MARK: - Account row
+
+    /// Detail-tab footer inside the card: whose account this data belongs
+    /// to. Matters the moment two accounts (or two Macs) are in play —
+    /// the rest of the card never says who "you" is.
+    @ViewBuilder
+    private func accountRow(_ snapshot: UsageSnapshot) -> some View {
+        if showsHero, let email = snapshot.email {
+            VStack(alignment: .leading, spacing: 9) {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.06))
+                    .frame(height: 0.5)
+
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(email)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer(minLength: 6)
+
+                    if let trailing = accountTrailing(snapshot) {
+                        Text(trailing)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    /// "Max · 2 devices" — plan when known, device count when shared.
+    private func accountTrailing(_ snapshot: UsageSnapshot) -> String? {
+        var parts: [String] = []
+        if let plan = snapshot.planName { parts.append(plan) }
+        let monthKey = LedgerCalendar.monthKey(for: .now)
+        let deviceCount = manager.ledger.contributions(provider: provider.kind, monthKey: monthKey).count
+        if deviceCount > 1 { parts.append("\(deviceCount) devices") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 
     // MARK: - Stale warning
 

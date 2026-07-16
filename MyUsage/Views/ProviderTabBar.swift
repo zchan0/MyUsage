@@ -11,8 +11,22 @@ enum PopoverTab: Equatable {
 /// recessed track with an elevated pill under the selected segment —
 /// but with the provider brand tiles as the tab glyphs, which is where
 /// the popover gets its colour.
+///
+/// Each provider glyph carries a 2pt micro-bar underneath: that
+/// provider's worst window (`worstUsagePercent`), severity-tinted. The
+/// CodexBar trick — every provider's pressure is scannable without
+/// switching tabs.
 struct ProviderTabBar: View {
-    let providers: [ProviderKind]
+    /// One provider segment: the brand tile + its micro-bar reading.
+    struct Item: Identifiable {
+        let kind: ProviderKind
+        /// Worst-window percent (0–100); nil = no snapshot yet, which
+        /// renders an empty track rather than a fake 0% reading.
+        let worstPercent: Double?
+        var id: ProviderKind { kind }
+    }
+
+    let items: [Item]
     @Binding var selection: PopoverTab
 
     var body: some View {
@@ -25,14 +39,17 @@ struct ProviderTabBar: View {
                     )
             }
 
-            ForEach(providers, id: \.self) { kind in
-                segment(tab: .provider(kind)) {
-                    // Full-colour brand tile — identity stays crisp; the
-                    // unselected state recedes via opacity alone.
-                    ProviderIconTile(kind: kind, size: 18, glyph: 11)
-                        .opacity(selection == .provider(kind) ? 1.0 : 0.72)
+            ForEach(items) { item in
+                segment(tab: .provider(item.kind)) {
+                    VStack(spacing: 3) {
+                        // Full-colour brand tile — identity stays crisp; the
+                        // unselected state recedes via opacity alone.
+                        ProviderIconTile(kind: item.kind, size: 16, glyph: 9.5)
+                            .opacity(selection == .provider(item.kind) ? 1.0 : 0.72)
+                        MicroUsageBar(percent: item.worstPercent)
+                    }
                 }
-                .help(kind.displayName)
+                .help(item.kind.displayName)
             }
         }
         .padding(2)
@@ -52,7 +69,7 @@ struct ProviderTabBar: View {
         } label: {
             content()
                 .frame(maxWidth: .infinity)
-                .frame(height: 24)
+                .frame(height: 27)
                 .background {
                     if selection == tab {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -70,12 +87,39 @@ struct ProviderTabBar: View {
     }
 }
 
+/// The 2pt bar under a tab's brand tile. Fill = worst-window percent,
+/// severity-tinted so an amber/red provider announces itself from the
+/// tab strip. nil percent renders the bare track (provider not loaded).
+private struct MicroUsageBar: View {
+    let percent: Double?
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                if let percent {
+                    Capsule()
+                        .fill(LimitSafety.level(for: percent).accent)
+                        .frame(width: max(1.5, geo.size.width * min(percent, 100) / 100))
+                }
+            }
+        }
+        .frame(width: 16, height: 2)
+    }
+}
+
 #Preview {
     struct Host: View {
         @State var selection: PopoverTab = .overview
         var body: some View {
             ProviderTabBar(
-                providers: [.claude, .codex, .cursor, .antigravity],
+                items: [
+                    .init(kind: .claude, worstPercent: 62),
+                    .init(kind: .codex, worstPercent: 23),
+                    .init(kind: .cursor, worstPercent: 84),
+                    .init(kind: .antigravity, worstPercent: nil),
+                ],
                 selection: $selection
             )
             .padding(12)

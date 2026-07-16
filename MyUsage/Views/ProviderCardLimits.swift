@@ -28,6 +28,7 @@ struct ProviderCardLimits: View {
                         percent: session.percentUsed,
                         reset: cached ? nil : session.resetCountdown.map { "resets \($0)" },
                         projectedPercent: session.projectedFinalPercent(),
+                        pacePercent: cached ? nil : session.onPacePercent(),
                         expired: isExpired(session)
                     )
                 }
@@ -37,6 +38,7 @@ struct ProviderCardLimits: View {
                         percent: weekly.percentUsed,
                         reset: cached ? nil : weekly.resetCountdown.map { "resets \($0)" },
                         projectedPercent: weekly.projectedFinalPercent(),
+                        pacePercent: cached ? nil : weekly.onPacePercent(),
                         expired: isExpired(weekly)
                     )
                     // Per-bucket caps render as peers of the Weekly bar,
