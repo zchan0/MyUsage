@@ -133,8 +133,22 @@ struct PopoverFooterBar: View {
                 }
                 .buttonStyle(.plain)
                 .simultaneousGesture(TapGesture().onEnded {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    // An LSUIElement app isn't active when the click comes
+                    // from a nonactivating panel, so the Settings window
+                    // opens behind whatever app IS active. Activate now,
+                    // then explicitly raise the Settings window once
+                    // SettingsLink has created it — under macOS 14+
+                    // cooperative activation the delayed activate alone
+                    // isn't reliable.
+                    NSApp.activate(ignoringOtherApps: true)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         NSApp.activate(ignoringOtherApps: true)
+                        let settings = NSApp.windows.first {
+                            $0.identifier?.rawValue.contains("Settings") == true
+                                || $0.frameAutosaveName.contains("Settings")
+                        }
+                        settings?.makeKeyAndOrderFront(nil)
+                        settings?.orderFrontRegardless()
                     }
                 })
             }

@@ -46,6 +46,16 @@ final class UsageManager {
         didSet { UserDefaults.standard.set(menuBarMode.rawValue, forKey: "menuBarMode") }
     }
 
+    /// Adopt an externally written `menuBarMode` (e.g. `defaults write`)
+    /// into the live property so the menu bar rebuilds without a relaunch.
+    /// Called from a `UserDefaults.didChangeNotification` observer.
+    func syncMenuBarModeFromDefaults() {
+        guard let raw = UserDefaults.standard.string(forKey: "menuBarMode"),
+              let mode = MenuBarMode(rawValue: raw),
+              mode != menuBarMode else { return }
+        menuBarMode = mode
+    }
+
     /// Custom display order for providers.
     var providerOrder: [String] {
         didSet { UserDefaults.standard.set(providerOrder, forKey: "providerOrder") }
@@ -124,8 +134,20 @@ final class UsageManager {
         // for spec 13 cross-device sync) is untouched.
         Self.removeOrphanedAccountStore()
 
+        // Pick up `defaults write MyUsage menuBarMode …` while running —
+        // used by automated testing and handy for scripting. KVO (not
+        // didChangeNotification) because only KVO sees writes made by
+        // OTHER processes via cfprefsd.
+        menuBarModeObserver = DefaultsKeyObserver(key: "menuBarMode") { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.syncMenuBarModeFromDefaults()
+            }
+        }
+
         Task { await ledger.start() }
     }
+
+    private var menuBarModeObserver: DefaultsKeyObserver?
 
     /// Deletes the orphaned `~/Library/Application Support/MyUsage/accounts.json`
     /// left behind by the removed multi-account feature.

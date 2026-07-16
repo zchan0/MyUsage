@@ -96,10 +96,26 @@ final class ClaudeCredentialStore {
         self.defaults = defaults
     }
 
+    /// Hard kill-switch for the interactive Keychain prompt. Dev/test runs
+    /// (`swift run`, autopilot, CI) rebuild the ad-hoc binary constantly —
+    /// every rebuild is a new signing identity, every prior "Always Allow"
+    /// is void, and each run would throw the password dialog at whoever is
+    /// sitting at the machine. Set either env var to keep those runs
+    /// strictly silent; a stale cached token is fine for development.
+    private var promptSuppressed: Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env["MYUSAGE_NO_PROMPT"] == "1" || env["MYUSAGE_AUTOPILOT"] != nil { return true }
+        // Any non-.app invocation IS a dev build — its ad-hoc signature
+        // changes on every rebuild, so it could never hold a durable
+        // Keychain approval anyway. Only real bundled builds may prompt.
+        return Bundle.main.bundleURL.pathExtension != "app"
+    }
+
     /// Walk the source chain. `interactive` gates step 4 only — steps 1–3
     /// are always silent. Returns nil when no source yields credentials
     /// with an OAuth payload.
     func load(interactive: Bool, now: Date = .now) -> LoadResult? {
+        let interactive = interactive && !promptSuppressed
         // 1) Credentials file — free to read, authoritative when present.
         if let data = io.readFile(credentialFilePath),
            let creds = Self.decode(data) {

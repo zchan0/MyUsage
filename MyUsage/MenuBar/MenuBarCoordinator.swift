@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import os
 
 /// Decides which status items exist, based on `UsageManager.menuBarMode`
 /// and the enabled-provider set (the CodexBar model):
@@ -24,7 +25,38 @@ final class MenuBarCoordinator {
         self.manager = manager
         self.updateChecker = updateChecker
         observeLayout()
+
+        #if DEBUG
+        // Automation hook: bumping `debugTogglePanel` (int) via
+        // `defaults write MyUsage debugTogglePanel -int N` toggles the
+        // panel of the status item at `debugToggleIndex`.
+        debugToggleObserver = DefaultsKeyObserver(key: "debugTogglePanel") { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let counter = UserDefaults.standard.integer(forKey: "debugTogglePanel")
+                guard counter != self.lastDebugToggle else { return }
+                self.lastDebugToggle = counter
+                let index = UserDefaults.standard.integer(forKey: "debugToggleIndex")
+                guard self.controllers.indices.contains(index) else { return }
+                self.controllers[index].debugToggle()
+            }
+        }
+        #endif
     }
+
+    #if DEBUG
+    private var lastDebugToggle = 0
+    private var debugToggleObserver: DefaultsKeyObserver?
+
+    /// Autopilot access — toggle the panel of status item `index`.
+    func debugToggle(_ index: Int) {
+        guard controllers.indices.contains(index) else {
+            DebugLog.info("debugToggle(\(index)): no such controller (count=\(controllers.count))")
+            return
+        }
+        controllers[index].debugToggle()
+    }
+    #endif
 
     private func observeLayout() {
         // Track ONLY the layout inputs (mode + enabled set). Building the
@@ -44,6 +76,8 @@ final class MenuBarCoordinator {
 
     private func applyIfChanged(_ layout: [String]) {
         guard layout != appliedLayout else { return }
+        Logger.general.info("MenuBar layout rebuild: \(self.appliedLayout.joined(separator: ","), privacy: .public) -> \(layout.joined(separator: ","), privacy: .public)")
+        DebugLog.info("MenuBar rebuild: \(appliedLayout) -> \(layout)")
         appliedLayout = layout
 
         for controller in controllers {

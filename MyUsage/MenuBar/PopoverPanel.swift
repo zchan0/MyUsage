@@ -20,6 +20,13 @@ final class PopoverPanel: NSPanel {
     /// (StatusItemController) re-anchors and resizes the window in response.
     var onContentResize: ((CGSize) -> Void)?
 
+    /// Last ideal size SwiftUI reported via onSizeChange. This is the ONE
+    /// trustworthy measurement: AppKit-side `intrinsicContentSize` /
+    /// `fittingSize` on the hosting view can return invalid values at
+    /// arbitrary times (they produced the 0×0 and 200pt-placeholder
+    /// panels). SwiftUI reports it even while the panel is hidden.
+    private(set) var lastReportedContentSize: CGSize?
+
     private let visualEffectView: NSVisualEffectView
     private let hostingView: NSHostingView<AnyView>
 
@@ -95,6 +102,7 @@ final class PopoverPanel: NSPanel {
             .environment(manager)
             .environment(updateChecker)
             .onSizeChange { [weak self] size in
+                self?.lastReportedContentSize = size
                 self?.onContentResize?(size)
             }
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
@@ -123,7 +131,36 @@ final class PopoverPanel: NSPanel {
         // a too-small size and then animates up to the real one — which
         // on macOS 26 looks like a top-down spring/bounce.
         effect.layoutSubtreeIfNeeded()
-        setContentSize(hostingView.intrinsicContentSize)
+        setContentSize(Self.sanitized(hostingView.intrinsicContentSize))
+    }
+
+    /// Best current measurement of the SwiftUI content, safe against the
+    /// hosting view reporting `NSViewNoIntrinsicMetric` (-1) or zero.
+    /// Panels created during a menu-bar layout rebuild hit exactly that:
+    /// `setContentSize(-1, -1)` collapsed the window to 0×0, SwiftUI never
+    /// lays out inside a zero window, so the self-correcting resize
+    /// callback never fired — the panel "showed" as an invisible zero-size
+    /// key window (clicks looked dead, and it invisibly stole focus).
+    func measuredContentSize() -> CGSize {
+        if let reported = lastReportedContentSize, reported.height > 80 {
+            return reported
+        }
+        contentView?.layoutSubtreeIfNeeded()
+        var size = hostingView.intrinsicContentSize
+        if size.width <= 0 || size.height <= 0 {
+            size = hostingView.fittingSize
+        }
+        return Self.sanitized(size)
+    }
+
+    private static func sanitized(_ size: CGSize) -> CGSize {
+        var out = size
+        if out.width <= 0 { out.width = 340 }
+        // A real popover is never this short; a placeholder height gets
+        // corrected by the first onContentResize once SwiftUI lays out
+        // inside a non-zero window.
+        if out.height < 80 { out.height = 200 }
+        return out
     }
 
     override var canBecomeKey: Bool { true }

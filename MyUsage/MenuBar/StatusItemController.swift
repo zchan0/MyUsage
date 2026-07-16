@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 import Observation
 
@@ -129,7 +130,23 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     // MARK: Panel toggle
 
+    private var label: String { kind?.rawValue ?? "merged" }
+
+    #if DEBUG
+    /// Test hook — drives the same path as a status-item click, and logs
+    /// the button's screen frame so automation can post real CGEvent
+    /// clicks at it (AX can't reach a bare SPM binary's status items).
+    func debugToggle() {
+        if let window = statusItem.button?.window {
+            DebugLog.info("StatusItem[\(label)] buttonFrame=\(window.frame)")
+        }
+        togglePanel()
+    }
+    #endif
+
     private func togglePanel() {
+        Logger.general.info("StatusItem[\(self.label, privacy: .public)] click; panelVisible=\(self.panel.isVisible, privacy: .public)")
+        DebugLog.info("StatusItem[\(label)] click; visible=\(panel.isVisible)")
         if panel.isVisible {
             hidePanel()
         } else {
@@ -143,9 +160,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // height between shows (a refresh updated a card), and because the
         // resize-while-hidden path snaps without animation, doing it here
         // means the post-show measurement matches the panel and won't trigger
-        // a visible catch-up animation.
-        panel.contentView?.layoutSubtreeIfNeeded()
-        setPanelFrame(size: panel.frame.size)
+        // a visible catch-up animation. Uses a fresh measurement rather than
+        // the panel's current frame — a panel built during a layout rebuild
+        // can be carrying a collapsed frame (see measuredContentSize()).
+        // Applied immediately: this is the click path, not a SwiftUI layout
+        // pass, so the one-tick deferral would only let the panel flash at
+        // its stale frame before makeKeyAndOrderFront.
+        setPanelFrame(size: panel.measuredContentSize(), immediate: true)
 
         // Tell the system menu UI that menu tracking has begun, otherwise it
         // may dismiss our panel as a "menu that never appeared" — which
@@ -153,6 +174,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
         panel.makeKeyAndOrderFront(nil)
         globalMonitor?.start()
+        Logger.general.info("StatusItem[\(self.label, privacy: .public)] showPanel; frame=\(String(describing: self.panel.frame), privacy: .public) visible=\(self.panel.isVisible, privacy: .public)")
+        DebugLog.info("StatusItem[\(label)] showPanel frame=\(panel.frame) visible=\(panel.isVisible)")
         Task { await manager.refreshAll() }
     }
 
@@ -172,6 +195,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     // MARK: NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
+        Logger.general.info("StatusItem[\(self.label, privacy: .public)] panel resigned key")
+        DebugLog.info("StatusItem[\(label)] resignKey")
         hidePanel()
     }
 
@@ -189,7 +214,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// from the menu-bar button it slides in from wherever its previous frame
     /// happened to be. The animated path is also deferred a runloop tick so
     /// it starts only after SwiftUI commits the new layout.
-    private func setPanelFrame(size: CGSize) {
+    private func setPanelFrame(size: CGSize, immediate: Bool = false) {
         guard let buttonWindow = statusItem.button?.window else { return }
         let buttonFrame = buttonWindow.frame
 
@@ -210,13 +235,20 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
         guard frame != panel.frame else { return }
 
-        // Always defer to the next runloop tick — applying setFrame
-        // synchronously during SwiftUI's layout pass races it and the height
-        // ends up wrong. Only the ANIMATION is gated on visibility: a resize
-        // while the panel is shown animates; one while hidden (including the
-        // pre-show positioning) snaps, so the panel never slides in from a
-        // stale frame on first appearance. `animate` is captured now, before
-        // the panel is ordered front, so the show path stays un-animated.
+        // `immediate` (the click/show path) applies synchronously — that
+        // caller is never inside a SwiftUI layout pass, and deferring would
+        // let the panel appear at its stale frame for one tick. All other
+        // callers (onContentResize) defer to the next runloop tick, because
+        // applying setFrame synchronously during SwiftUI's layout pass races
+        // it and the height ends up wrong. Only the ANIMATION is gated on
+        // visibility: a resize while the panel is shown animates; one while
+        // hidden snaps, so the panel never slides in from a stale frame on
+        // first appearance.
+        DebugLog.info("StatusItem[\(label)] setPanelFrame size=\(size) immediate=\(immediate)")
+        if immediate {
+            panel.setFrame(frame, display: true, animate: false)
+            return
+        }
         let animate = panel.isVisible
         DispatchQueue.main.async { [weak self] in
             self?.panel.setFrame(frame, display: true, animate: animate)
