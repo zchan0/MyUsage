@@ -53,7 +53,54 @@ enum KeychainHelper {
         if status == errSecSuccess, let data = result as? Data {
             return (data, status)
         }
-        return (nil, status)
+        guard !allowUI else { return (nil, status) }
+
+        // A no-UI read of an ACL-restricted item on the legacy login
+        // keychain fails with `errSecAuthFailed` — NOT the
+        // `errSecInteractionNotAllowed` that the data-protection keychain
+        // returns and that the whole credential chain keys off of. Consult a
+        // metadata-only existence probe (never ACL-gated, never prompts) and
+        // normalize a "present but unreadable without interaction" outcome to
+        // the canonical `errSecInteractionNotAllowed`, so callers can tell it
+        // apart from a genuinely missing item regardless of which keychain
+        // backs it.
+        let normalized = Self.normalizedNoUIStatus(rawStatus: status) {
+            Self.genericPasswordExists(service: service, account: account)
+        }
+        return (nil, normalized)
+    }
+
+    /// Canonicalize the `OSStatus` of a failed **no-UI** read. `errSecSuccess`
+    /// and `errSecItemNotFound` pass through untouched; any other failure is
+    /// mapped to `errSecInteractionNotAllowed` when `itemExists()` confirms
+    /// the item is actually present (so the failure means "ACL-blocked", not
+    /// "absent"). `itemExists` is a closure so the (real-Keychain) probe only
+    /// runs when the raw status is ambiguous.
+    static func normalizedNoUIStatus(rawStatus: OSStatus, itemExists: () -> Bool) -> OSStatus {
+        guard rawStatus != errSecSuccess, rawStatus != errSecItemNotFound else {
+            return rawStatus
+        }
+        return itemExists() ? errSecInteractionNotAllowed : rawStatus
+    }
+
+    /// Whether a generic-password item exists, via a **metadata-only** query
+    /// (`kSecReturnAttributes`, never `kSecReturnData`). The ACL guards only
+    /// an item's secret data, not its attributes, so this never prompts and
+    /// needs no interaction switch — it reports presence even for items whose
+    /// data is ACL-restricted to another app, the exact case of the Claude
+    /// CLI's `Claude Code-credentials`.
+    static func genericPasswordExists(service: String, account: String? = nil) -> Bool {
+        var query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecMatchLimit: kSecMatchLimitOne,
+            kSecReturnAttributes: true,
+        ]
+        if let account {
+            query[kSecAttrAccount] = account
+        }
+        var result: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess
     }
 
     /// No-UI `SecItemCopyMatching` for the legacy file-based login
