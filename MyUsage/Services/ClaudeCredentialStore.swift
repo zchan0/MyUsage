@@ -106,8 +106,17 @@ final class ClaudeCredentialStore {
     /// (including `.xctest` runners), so only bundled builds may prompt;
     /// the env vars force silence even there. Injected at init so unit
     /// tests can exercise the interactive path explicitly.
+    ///
+    /// `MYUSAGE_FORCE_PROMPT=1` is the developer escape hatch: it re-enables
+    /// the prompt on a bare-binary/dev build so the credential-read path can
+    /// be bootstrapped and tested without packaging a `.app`. The grant still
+    /// won't survive the next rebuild (new signature) — it's for a single
+    /// test session — but it lets a dev run actually read the CLI's
+    /// ACL-restricted item after one "Always Allow". It wins over every
+    /// suppression rule below.
     static var environmentSuppressesPrompts: Bool {
         let env = ProcessInfo.processInfo.environment
+        if env["MYUSAGE_FORCE_PROMPT"] == "1" { return false }
         if env["MYUSAGE_NO_PROMPT"] == "1" || env["MYUSAGE_AUTOPILOT"] != nil { return true }
         return Bundle.main.bundleURL.pathExtension != "app"
     }
