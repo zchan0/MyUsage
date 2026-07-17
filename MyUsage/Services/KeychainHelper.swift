@@ -35,22 +35,46 @@ enum KeychainHelper {
             query[kSecAttrAccount] = account
         }
         if !allowUI {
-            // Belt and suspenders: `kSecUseAuthenticationUI` is the modern
-            // switch, but on macOS file-based keychains the LAContext flag
-            // is what reliably suppresses the ACL dialog (same recipe
-            // CodexBar uses for its no-UI probes).
-            query[kSecUseAuthenticationUI] = kSecUseAuthenticationUIFail
+            // Modern, warning-free suppression for **data-protection**
+            // keychain items: a no-interaction LAContext makes
+            // SecItemCopyMatching fail rather than prompt. (This is the
+            // replacement Apple's own `kSecUseAuthenticationUIFail`
+            // deprecation message points to.) It does NOT cover the legacy
+            // file-based "login" keychain — see `copyMatchingNoInteraction`.
             let context = LAContext()
             context.interactionNotAllowed = true
             query[kSecUseAuthenticationContext] = context
         }
 
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = allowUI
+            ? SecItemCopyMatching(query as CFDictionary, &result)
+            : Self.copyMatchingNoInteraction(query as CFDictionary, &result)
         if status == errSecSuccess, let data = result as? Data {
             return (data, status)
         }
         return (nil, status)
+    }
+
+    /// No-UI `SecItemCopyMatching` for the legacy file-based login
+    /// keychain — where the Claude CLI's `Claude Code-credentials` item
+    /// lives. Its ACL dialog ("enter the login keychain password") ignores
+    /// the LAContext flag and would block app launch; the process-global
+    /// `SecKeychainSetUserInteractionAllowed` switch is the only thing that
+    /// turns it into a silent `errSecInteractionNotAllowed`. That API is
+    /// deprecated (all of SecKeychain is) but remains the sole option and
+    /// is CodexBar's recipe too — isolating it in one deprecated method
+    /// confines the unavoidable warning to a single, documented call.
+    /// The switch is restored on every exit path so interactive reads
+    /// elsewhere still prompt.
+    @available(macOS, deprecated: 10.10)
+    private static func copyMatchingNoInteraction(
+        _ query: CFDictionary,
+        _ result: inout CFTypeRef?
+    ) -> OSStatus {
+        SecKeychainSetUserInteractionAllowed(false)
+        defer { SecKeychainSetUserInteractionAllowed(true) }
+        return SecItemCopyMatching(query, &result)
     }
 
     /// Read a generic password as a UTF-8 string.
