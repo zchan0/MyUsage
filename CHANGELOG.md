@@ -6,6 +6,62 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.14.0 — 2026-07-17
+
+### Added
+- **Overview summary tiles.** The Overview tab now opens with a
+  three-tile strip — today's estimated spend (with a neutral
+  vs-7-day-average delta), this month's total, and the next window to
+  reset across every provider — shown whenever two or more providers
+  are enabled.
+- **At-a-glance pressure everywhere.** Each provider's tab carries a
+  2pt usage micro-bar (its worst window, severity-tinted), each card
+  gains a one-word status chip (**Healthy / Watch / Critical**), and
+  the monthly-cost row gains a 14-day trend sparkline — so you can read
+  the whole popover without switching tabs.
+- **Always-on pace.** Every rolling-window bar now shows where you'd be
+  on a steady burn (a notch on the bar and a `pace N%` readout), not
+  just when an overshoot is predicted.
+- **Richer provider detail.** A provider's own tab shows a 2×2 stat
+  grid — today's cost, pace, credit balance, and a **multi-device
+  spend split** — plus an account row (email · plan · device count).
+
+### Changed
+- **Popover redesign.** Neutral card surfaces with crisp hairlines
+  replace the old brand-gradient washes; usage bars become segmented
+  tick rails; the layout is roomier throughout (wider panel, more space
+  between and inside cards) and each provider tab now shows its name.
+- **Bottom action menu.** The lone settings gear is replaced by a
+  vertical menu — Refresh, Settings…, About / Update, Quit — the way a
+  menu-bar dropdown reads. Refresh moves here from the panel header, and
+  the update-available indicator moves onto the About row.
+
+### Fixed
+- **Keychain prompt on launch.** Reading the Claude CLI's credentials no
+  longer risks throwing the "enter your login keychain password" dialog
+  and blocking startup — the legacy login-keychain ACL prompt is now
+  suppressed on the silent no-UI probe.
+
+### 中文
+- **概览汇总条**：Overview 顶部新增三枚 stat tile —— 今日预估花费（带
+  与 7 日均值的中性对比）、本月总额、跨 provider 最近解锁的窗口；启用
+  ≥2 个 provider 时显示。
+- **一眼看全压力**：每个 provider 的 tab 带 2pt 用量微条（最紧窗口、按
+  严重度着色），每张卡加一句状态 chip（Healthy / Watch / Critical），
+  月度成本行加 14 天趋势缩影 —— 不切 tab 也能读完整个弹窗。
+- **常驻 pace**：每根滚动窗口条都显示匀速消耗此刻应处的位置（条上刻度
+  线 + `pace N%`），不再只在预测超标时才出现。
+- **更丰富的详情页**：provider 自己的 tab 显示 2×2 指标网格（今日成本、
+  pace、额度余额、多设备花费占比）+ 账户行（email · 计划 · 设备数）。
+- **弹窗改版**：中性卡面 + 细线取代品牌渐变；用量条改分段刻度；整体更
+  宽松（面板加宽、卡片内外留白加大），每个 provider tab 显示名字。
+- **底部动作菜单**：孤零零的齿轮换成竖排菜单 —— Refresh / Settings… /
+  About·Update / Quit，像菜单栏下拉该有的样子；刷新键从头部移到这里，
+  更新提示移到 About 行。
+- **修复启动时的钥匙串弹框**：读取 Claude CLI 凭据不再可能弹出“输入
+  登录钥匙串密码”对话框并卡住启动 —— 旧式登录钥匙串的 ACL 弹框已在
+  静默探测路径上被压制。
+
 ## v0.13.0 — 2026-07-16
 
 ### Added
