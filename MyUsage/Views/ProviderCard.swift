@@ -315,15 +315,15 @@ struct ProviderCard: View {
     /// still being displayed. Single line, amber, with no destructive
     /// styling — the data above is still useful.
     private func staleWarningRow(_ message: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 9.5))
                 .foregroundStyle(.orange)
             Text(message)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
             Button { Task { await provider.refresh() } } label: {
                 Text("Retry")
                     .font(.system(size: 11, weight: .medium))
@@ -346,15 +346,15 @@ struct ProviderCard: View {
     }
 
     private func errorView(_ message: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 11))
                 .foregroundStyle(.orange)
             Text(message)
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 6)
             Button { Task { await provider.refresh() } } label: {
                 Image(systemName: "arrow.clockwise").font(.system(size: 11))
             }

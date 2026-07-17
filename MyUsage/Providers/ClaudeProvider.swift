@@ -469,8 +469,21 @@ final class ClaudeProvider: UsageProvider {
     /// Formats the user-facing message shown on a 429. Kept internal + static
     /// so it's easy to unit-test without spinning up the full provider.
     nonisolated static func rateLimitErrorMessage(retryAfter: TimeInterval) -> String {
-        let seconds = max(1, Int(retryAfter.rounded()))
-        return "Rate limited. Retry in \(seconds)s. If this persists, run `claude logout && claude login` in Terminal."
+        "Rate limited. Retry in \(formatRetryDelay(retryAfter)). If this persists, run `claude logout && claude login` in Terminal."
+    }
+
+    /// Compact, human-readable retry delay. Sub-minute values stay precise in
+    /// seconds ("45s"); anything longer rounds to the coarser unit with a "~"
+    /// so a server's 2504-second cooldown reads "~42 min" instead of the
+    /// unparseable "2504s". Hours fold in remaining minutes ("~1h 5m").
+    nonisolated static func formatRetryDelay(_ seconds: TimeInterval) -> String {
+        let total = max(1, Int(seconds.rounded()))
+        if total < 60 { return "\(total)s" }
+        let totalMinutes = Int((Double(total) / 60).rounded())
+        if totalMinutes < 60 { return "~\(totalMinutes) min" }
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        return minutes == 0 ? "~\(hours)h" : "~\(hours)h \(minutes)m"
     }
 
     /// Shown when the cached access token has expired and we're waiting for the
@@ -485,8 +498,7 @@ final class ClaudeProvider: UsageProvider {
         underlying: String,
         retryAfter: TimeInterval
     ) -> String {
-        let seconds = max(1, Int(retryAfter.rounded()))
-        return "\(underlying). Retrying in \(seconds)s."
+        "\(underlying). Retrying in \(formatRetryDelay(retryAfter))."
     }
 
     /// Exponential-backoff delay in seconds for the Nth consecutive failure.
@@ -873,7 +885,7 @@ enum ProviderError: LocalizedError {
         case .apiFailed(let code): "API error (\(code))"
         case .rateLimited(let retry):
             if let retry, retry > 0 {
-                "Rate limited (retry in \(Int(retry.rounded()))s)"
+                "Rate limited (retry in \(ClaudeProvider.formatRetryDelay(retry)))"
             } else {
                 "Rate limited"
             }

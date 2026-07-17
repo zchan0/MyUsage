@@ -396,10 +396,31 @@ struct ClaudeProviderTests {
         #expect(message.contains("Retry in 1s"))
     }
 
+    @Test("Rate-limit error message renders a long cooldown in minutes")
+    func rateLimitMessageFormatsMinutes() {
+        // A real server retry-after (2504s) must read as minutes, not "2504s".
+        let message = ClaudeProvider.rateLimitErrorMessage(retryAfter: 2504)
+        #expect(message.contains("Retry in ~42 min"))
+        #expect(!message.contains("2504"))
+    }
+
+    @Test("formatRetryDelay picks a human unit per magnitude")
+    func formatRetryDelayUnits() {
+        #expect(ClaudeProvider.formatRetryDelay(0.2) == "1s")
+        #expect(ClaudeProvider.formatRetryDelay(45) == "45s")
+        #expect(ClaudeProvider.formatRetryDelay(60) == "~1 min")
+        #expect(ClaudeProvider.formatRetryDelay(2504) == "~42 min")
+        #expect(ClaudeProvider.formatRetryDelay(3600) == "~1h")
+        #expect(ClaudeProvider.formatRetryDelay(5400) == "~1h 30m")
+    }
+
     @Test("ProviderError.rateLimited description reflects retry value")
     func providerErrorRateLimitedDescription() {
         let withRetry = ProviderError.rateLimited(retryAfter: 45)
         #expect(withRetry.errorDescription == "Rate limited (retry in 45s)")
+
+        let longWait = ProviderError.rateLimited(retryAfter: 2504)
+        #expect(longWait.errorDescription == "Rate limited (retry in ~42 min)")
 
         let withoutRetry = ProviderError.rateLimited(retryAfter: nil)
         #expect(withoutRetry.errorDescription == "Rate limited")
@@ -435,7 +456,7 @@ struct ClaudeProviderTests {
             retryAfter: 60
         )
         #expect(message.contains("API error (503)"))
-        #expect(message.contains("Retrying in 60s"))
+        #expect(message.contains("Retrying in ~1 min"))
     }
 
     // MARK: - Token expiry
