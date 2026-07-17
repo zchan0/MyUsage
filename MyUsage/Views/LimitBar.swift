@@ -50,7 +50,7 @@ struct LimitBar: View {
     var expired: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             // Row 1 — name (left) + pct (right).
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 nameView

@@ -38,7 +38,7 @@ struct UsagePopover: View {
 
             PopoverFooterBar()
         }
-        .frame(width: 340)
+        .frame(width: 356)
         // Take the content's ideal height. The hosting panel measures this
         // (via onSizeChange) and resizes its window to match exactly — both
         // growing and shrinking — so there's never a leftover gap. Chrome
@@ -59,12 +59,10 @@ struct UsagePopover: View {
             if let lastRefreshed = manager.lastRefreshed {
                 RelativeTimestampLabel(date: lastRefreshed)
             }
-
-            PopoverRefreshButton()
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 9)
+        .padding(.horizontal, 16)
+        .padding(.top, 13)
+        .padding(.bottom, 10)
     }
 
     private var tabBar: some View {
@@ -77,8 +75,8 @@ struct UsagePopover: View {
             },
             selection: $selectedTab
         )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 9)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 11)
     }
 
     // MARK: - Pages
@@ -91,24 +89,24 @@ struct UsagePopover: View {
     /// plain VStack sizes to its cards and renders reliably; there are
     /// only ever a handful of provider cards, so scrolling buys nothing.
     private var overviewStack: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 10) {
             ForEach(enabledProviders, id: \.kind) { provider in
                 ProviderCard(provider: provider)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 14)
     }
 
     /// Provider tab: one card, expanded with the hero stat row.
     @ViewBuilder
     private func detailPage(kind: ProviderKind) -> some View {
         if let provider = enabledProviders.first(where: { $0.kind == kind }) {
-            VStack(spacing: 7) {
+            VStack(spacing: 10) {
                 ProviderCard(provider: provider, showsHero: true)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
         }
     }
 

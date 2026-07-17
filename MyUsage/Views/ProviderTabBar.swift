@@ -40,13 +40,21 @@ struct ProviderTabBar: View {
             }
 
             ForEach(items) { item in
+                let selected = selection == .provider(item.kind)
                 segment(tab: .provider(item.kind)) {
-                    VStack(spacing: 3) {
-                        // Full-colour brand tile — identity stays crisp; the
-                        // unselected state recedes via opacity alone.
+                    // Icon + short name + micro-bar, laid out horizontally so
+                    // the wide provider segments carry a legible label instead
+                    // of an icon marooned in dead space.
+                    HStack(spacing: 5) {
                         ProviderIconTile(kind: item.kind, size: 16, glyph: 9.5)
-                            .opacity(selection == .provider(item.kind) ? 1.0 : 0.72)
-                        MicroUsageBar(percent: item.worstPercent)
+                            .opacity(selected ? 1.0 : 0.72)
+                        VStack(alignment: .leading, spacing: 2.5) {
+                            Text(item.kind.shortName)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                                .lineLimit(1)
+                            MicroUsageBar(percent: item.worstPercent)
+                        }
                     }
                 }
                 .help(item.kind.displayName)
@@ -105,7 +113,8 @@ private struct MicroUsageBar: View {
                 }
             }
         }
-        .frame(width: 16, height: 2)
+        .frame(height: 2)
+        .frame(maxWidth: .infinity)
     }
 }
 

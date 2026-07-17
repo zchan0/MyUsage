@@ -27,12 +27,12 @@ struct ProviderCard: View {
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             if showsHead { cardHead }
             bodySection
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 14)
         // Premium = restraint: a neutral surface with a crisp hairline.
         // Brand colour lives only in the icon tile; data colour lives
         // only in the bars/severity accents. (The earlier brand-tinted
@@ -117,7 +117,7 @@ struct ProviderCard: View {
         if provider.kind == .antigravity, !isAntigravityLive {
             EmptyView()
         } else if let staleMessage = provider.error {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 11) {
                 heroSection(snapshot)
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)
@@ -126,7 +126,7 @@ struct ProviderCard: View {
                 staleWarningRow(staleMessage)
             }
         } else {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 11) {
                 heroSection(snapshot)
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot, cached: false)
                 ProviderCardCostRow(kind: provider.kind, snapshot: snapshot)

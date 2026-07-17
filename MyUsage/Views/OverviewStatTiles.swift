@@ -24,13 +24,13 @@ struct OverviewStatTiles: View {
     var body: some View {
         let tiles = buildTiles()
         if providers.count >= 2, !tiles.isEmpty {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 ForEach(tiles) { tile in
                     StatTile(tile: tile)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 9)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 11)
         }
     }
 
