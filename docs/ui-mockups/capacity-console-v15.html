@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyUsage Capacity Console Mockup</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --stage: #101113;
+    --stage-line: rgba(255, 255, 255, 0.08);
+    --stage-ink: #f2f2f4;
+    --stage-muted: #92969d;
+    --panel: #222326;
+    --panel-raised: #292a2e;
+    --panel-soft: rgba(255, 255, 255, 0.035);
+    --ink: #f5f5f7;
+    --secondary: #a9abb1;
+    --tertiary: #777b84;
+    --hairline: rgba(255, 255, 255, 0.085);
+    --track: rgba(255, 255, 255, 0.09);
+    --hover: rgba(255, 255, 255, 0.065);
+    --healthy: #68a77b;
+    --healthy-soft: rgba(104, 167, 123, 0.14);
+    --warn: #d19a3d;
+    --warn-soft: rgba(209, 154, 61, 0.15);
+    --critical: #d0665b;
+    --critical-soft: rgba(208, 102, 91, 0.15);
+    --info: #7f9fd7;
+    --info-soft: rgba(127, 159, 215, 0.14);
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.42), 0 3px 12px rgba(0, 0, 0, 0.22);
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --stage: #e8eaed;
+    --stage-line: rgba(23, 27, 34, 0.1);
+    --stage-ink: #1b1d21;
+    --stage-muted: #686e78;
+    --panel: #f3f3f1;
+    --panel-raised: #ffffff;
+    --panel-soft: rgba(255, 255, 255, 0.46);
+    --ink: #1d1d1f;
+    --secondary: #62666e;
+    --tertiary: #92969d;
+    --hairline: rgba(18, 22, 30, 0.09);
+    --track: rgba(18, 22, 30, 0.075);
+    --hover: rgba(18, 22, 30, 0.055);
+    --healthy: #4f8d64;
+    --healthy-soft: rgba(79, 141, 100, 0.12);
+    --warn: #9c6d18;
+    --warn-soft: rgba(156, 109, 24, 0.12);
+    --critical: #a94235;
+    --critical-soft: rgba(169, 66, 53, 0.11);
+    --info: #4b6fae;
+    --info-soft: rgba(75, 111, 174, 0.11);
+    --shadow: 0 24px 70px rgba(32, 36, 44, 0.18), 0 3px 12px rgba(32, 36, 44, 0.1);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { min-height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--stage);
+    color: var(--stage-ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button { font: inherit; }
+
+  .workspace {
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  .workbar {
+    min-height: 54px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--stage-line);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .work-title {
+    display: grid;
+    gap: 2px;
+    min-width: 190px;
+  }
+
+  .work-title strong { font-size: 12px; font-weight: 650; }
+  .work-title span { color: var(--stage-muted); font: 10px var(--mono); }
+
+  .controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .segmented {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--stage-line);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--stage-ink) 5%, transparent);
+  }
+
+  .segmented button {
+    min-width: 58px;
+    height: 26px;
+    border: 0;
+    border-radius: 5px;
+    padding: 0 9px;
+    background: transparent;
+    color: var(--stage-muted);
+    cursor: pointer;
+    font-size: 10.5px;
+  }
+
+  .segmented button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--stage-ink) 12%, transparent);
+    color: var(--stage-ink);
+    box-shadow: inset 0 0 0 1px var(--stage-line);
+  }
+
+  .icon-button {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--stage-line);
+    border-radius: 7px;
+    display: inline-grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--stage-ink) 5%, transparent);
+    color: var(--stage-ink);
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .stage {
+    display: grid;
+    place-items: start center;
+    padding: 44px 20px 70px;
+  }
+
+  .device-frame { position: relative; }
+
+  .sample-label {
+    margin-bottom: 9px;
+    color: var(--stage-muted);
+    font: 10px var(--mono);
+    text-align: center;
+  }
+
+  .popover {
+    width: 356px;
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+  }
+
+  .app-header {
+    min-height: 47px;
+    padding: 10px 12px 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-mark {
+    width: 19px;
+    height: 19px;
+    border-radius: 5px;
+    display: grid;
+    place-items: center;
+    background: var(--ink);
+    color: var(--panel);
+    font: 700 10px var(--mono);
+  }
+
+  .app-name { font-size: 13px; font-weight: 650; }
+
+  .freshness {
+    margin-left: auto;
+    color: var(--tertiary);
+    font: 9.5px var(--mono);
+    white-space: nowrap;
+  }
+
+  .refresh-button,
+  .footer-button,
+  .notify-button,
+  .disclosure-button {
+    border: 0;
+    background: transparent;
+    color: var(--secondary);
+    cursor: pointer;
+  }
+
+  .refresh-button {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+  }
+
+  .refresh-button:hover,
+  .footer-button:hover,
+  .notify-button:hover,
+  .disclosure-button:hover { background: var(--hover); color: var(--ink); }
+
+  .refresh-button.spinning { animation: spin 0.65s linear; }
+
+  .tabs {
+    height: 34px;
+    margin: 0 12px 9px;
+    padding: 2px;
+    display: grid;
+    grid-template-columns: 1.25fr repeat(4, 1fr);
+    gap: 2px;
+    border-radius: 8px;
+    background: var(--panel-soft);
+    box-shadow: inset 0 0 0 1px var(--hairline);
+  }
+
+  .tab {
+    min-width: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 9.5px;
+    font-weight: 600;
+  }
+
+  .tab.active {
+    background: var(--panel-raised);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 0 0 1px var(--hairline);
+  }
+
+  .tab img {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    padding: 3px;
+    object-fit: contain;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; animation: appear 0.16s ease-out; }
+
+  .outcome {
+    min-height: 54px;
+    padding: 9px 15px 11px;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .outcome-symbol {
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+  }
+
+  .outcome.warn .outcome-symbol { background: var(--warn-soft); color: var(--warn); }
+  .outcome.good .outcome-symbol { background: var(--healthy-soft); color: var(--healthy); }
+  .outcome.partial .outcome-symbol { background: var(--info-soft); color: var(--info); }
+
+  .outcome-copy { min-width: 0; display: grid; gap: 2px; }
+  .outcome-copy strong { font-size: 12.5px; font-weight: 650; }
+  .outcome-copy span { color: var(--secondary); font-size: 10.5px; line-height: 1.3; }
+
+  .section-label {
+    padding: 10px 15px 4px;
+    color: var(--tertiary);
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .provider-list { padding: 0 12px 2px; }
+
+  .provider-row {
+    width: 100%;
+    min-height: 68px;
+    padding: 8px 3px 9px;
+    border: 0;
+    border-bottom: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--ink);
+    text-decoration: none;
+    text-align: left;
+    cursor: pointer;
+    display: grid;
+    gap: 6px;
+  }
+
+  .provider-row:last-child { border-bottom: 0; }
+  .provider-row:hover { background: var(--hover); }
+
+  .provider-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .provider-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    flex: 0 0 18px;
+    padding: 3px;
+    object-fit: contain;
+  }
+
+  img[src*="ProviderIcon-claude"] { background: #d97757; }
+  img[src*="ProviderIcon-codex"] { background: #303136; }
+  img[src*="ProviderIcon-cursor"] { background: #4b515a; }
+  img[src*="ProviderIcon-antigravity"] { background: #735fc1; }
+
+  .provider-name { font-size: 11.5px; font-weight: 650; }
+  .window-label { color: var(--tertiary); font-size: 9.5px; }
+
+  .row-value {
+    margin-left: auto;
+    font: 700 11px var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .row-outcome {
+    margin-left: 4px;
+    color: var(--secondary);
+    font-size: 9.5px;
+    white-space: nowrap;
+  }
+
+  .row-outcome.warn { color: var(--warn); font-weight: 600; }
+  .row-outcome.stale { color: var(--info); font-weight: 600; }
+
+  .instrument { display: grid; gap: 4px; }
+
+  .rail {
+    position: relative;
+    height: 6px;
+    overflow: visible;
+    background: repeating-linear-gradient(90deg, var(--track) 0 3px, transparent 3px 5px);
+  }
+
+  .rail-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--value);
+    background: repeating-linear-gradient(90deg, var(--fill) 0 3px, transparent 3px 5px);
+    transition: width 0.25s ease;
+  }
+
+  .pace-marker {
+    position: absolute;
+    left: var(--pace);
+    top: -3px;
+    width: 1px;
+    height: 12px;
+    background: var(--secondary);
+    opacity: 0.62;
+  }
+
+  .rail-meta {
+    display: flex;
+    justify-content: space-between;
+    color: var(--tertiary);
+    font: 8.5px var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .reset-credit-mini {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    color: var(--warn);
+    font-size: 9px;
+    font-weight: 600;
+  }
+
+  .reset-credit-mini.visible { display: flex; }
+
+  .cost-band {
+    margin-top: 3px;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+    display: grid;
+    grid-template-columns: 0.85fr 1fr 1.1fr;
+  }
+
+  .cost-stat {
+    min-width: 0;
+    min-height: 59px;
+    padding: 9px 10px 8px;
+    display: grid;
+    align-content: start;
+    gap: 2px;
+  }
+
+  .cost-stat + .cost-stat { border-left: 1px solid var(--hairline); }
+  .cost-label { color: var(--tertiary); font-size: 8px; font-weight: 700; text-transform: uppercase; }
+  .cost-value { font: 650 12.5px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cost-caption { color: var(--secondary); font-size: 8.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cost-caption.partial { color: var(--info); font-weight: 600; }
+
+  .sparkline { width: 100%; height: 17px; overflow: visible; }
+  .sparkline path { fill: none; stroke: var(--secondary); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+  .sparkline circle { fill: var(--ink); }
+
+  .detail-header {
+    min-height: 43px;
+    padding: 7px 15px 9px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .detail-header strong { font-size: 12.5px; font-weight: 650; }
+  .detail-header .plan { color: var(--tertiary); font-size: 9.5px; }
+  .account { margin-left: auto; color: var(--tertiary); font: 8.5px var(--mono); max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+
+  .detail-outcome {
+    margin: 10px 12px 2px;
+    min-height: 45px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--panel-soft);
+    box-shadow: inset 0 0 0 1px var(--hairline);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .detail-outcome .status-line { display: grid; gap: 1px; min-width: 0; }
+  .detail-outcome strong { font-size: 11px; font-weight: 650; }
+  .detail-outcome span { color: var(--secondary); font-size: 9.5px; }
+  .detail-outcome .metric { margin-left: auto; color: var(--healthy); font: 700 11px var(--mono); white-space: nowrap; }
+  .detail-outcome.warn .metric { color: var(--warn); }
+
+  .limit-stack { padding: 5px 15px 3px; }
+
+  .limit-detail {
+    padding: 9px 0 10px;
+    display: grid;
+    gap: 7px;
+  }
+
+  .limit-detail + .limit-detail { border-top: 1px solid var(--hairline); }
+
+  .limit-title { display: flex; align-items: baseline; gap: 7px; }
+  .limit-title strong { font-size: 11.5px; font-weight: 650; }
+  .limit-title .percent { margin-left: auto; font: 700 14px var(--mono); }
+  .limit-title .used { color: var(--tertiary); font-size: 8.5px; }
+
+  .detail-rail { height: 8px; }
+  .detail-rail .pace-marker { height: 14px; }
+
+  .scale {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    color: var(--tertiary);
+    font: 8px var(--mono);
+  }
+
+  .scale span:nth-child(2) { text-align: center; }
+  .scale span:last-child { text-align: right; }
+
+  .limit-result { display: flex; color: var(--secondary); font-size: 9.5px; }
+  .limit-result .time { margin-left: auto; font: 8.5px var(--mono); color: var(--tertiary); }
+  .limit-result .warning { color: var(--warn); font-weight: 600; }
+
+  .reset-credits {
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+    margin-top: 4px;
+  }
+
+  .reset-credit-head {
+    min-height: 48px;
+    padding: 7px 11px 7px 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .reset-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: var(--info-soft);
+    color: var(--info);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+  }
+
+  .reset-copy { min-width: 0; display: grid; gap: 2px; }
+  .reset-copy strong { font-size: 10.5px; font-weight: 650; }
+  .reset-copy span { color: var(--secondary); font-size: 9px; white-space: nowrap; }
+  .reset-copy span.soon { color: var(--warn); font-weight: 600; }
+
+  .notify-button,
+  .disclosure-button {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+  }
+
+  .notify-button { margin-left: auto; }
+  .notify-button.on { color: var(--info); background: var(--info-soft); }
+  .notify-button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .disclosure-button.open { transform: rotate(180deg); }
+
+  .credit-inventory {
+    display: grid;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.22s ease;
+  }
+
+  .credit-inventory.open { max-height: 150px; }
+
+  .credit-row {
+    min-height: 36px;
+    margin: 0 15px;
+    padding: 7px 0 7px 32px;
+    border-top: 1px solid var(--hairline);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--secondary);
+    font-size: 9.5px;
+  }
+
+  .credit-index {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--panel-soft);
+    display: grid;
+    place-items: center;
+    color: var(--tertiary);
+    font: 8px var(--mono);
+  }
+
+  .credit-row time { margin-left: auto; color: var(--tertiary); font: 8.5px var(--mono); }
+  .credit-row.soon time { color: var(--warn); font-weight: 650; }
+
+  .cost-detail { padding: 10px 15px 11px; }
+  .cost-detail-head { display: flex; align-items: baseline; }
+  .cost-detail-head strong { font-size: 10.5px; font-weight: 650; }
+  .cost-detail-head span { margin-left: auto; font: 650 10.5px var(--mono); }
+
+  .bars {
+    height: 54px;
+    margin-top: 8px;
+    display: flex;
+    align-items: end;
+    gap: 3px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .bar {
+    flex: 1;
+    min-width: 0;
+    height: var(--h);
+    border-radius: 2px 2px 0 0;
+    background: var(--info);
+    opacity: 0.72;
+  }
+
+  .bar:nth-child(3n) { background: var(--healthy); }
+  .bar:last-child { opacity: 1; }
+
+  .chart-meta { margin-top: 4px; display: flex; justify-content: space-between; color: var(--tertiary); font: 8px var(--mono); }
+
+  .source-row {
+    min-height: 30px;
+    padding: 7px 15px;
+    border-top: 1px solid var(--hairline);
+    display: flex;
+    align-items: center;
+    color: var(--tertiary);
+    font: 8.5px var(--mono);
+  }
+
+  .source-row span:last-child { margin-left: auto; }
+
+  .footer {
+    height: 39px;
+    padding: 5px 8px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .footer-button {
+    width: 29px;
+    height: 29px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+  }
+
+  .footer .version { margin-left: 4px; color: var(--tertiary); font: 8px var(--mono); }
+  .footer .push { margin-left: auto; }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: -43px;
+    transform: translate(-50%, 8px);
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--stage-line);
+    background: color-mix(in srgb, var(--stage) 90%, var(--stage-ink));
+    color: var(--stage-ink);
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes appear { from { opacity: 0.25; transform: translateY(2px); } }
+
+  @media (max-width: 520px) {
+    .workbar { align-items: flex-start; }
+    .work-title { min-width: 0; }
+    .controls { max-width: 210px; }
+    .stage { padding: 26px 10px 60px; }
+    .popover { width: min(356px, calc(100vw - 20px)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="workspace">
+  <header class="workbar">
+    <div class="work-title">
+      <strong>Capacity Console · interactive mockup</strong>
+      <span>356pt · sample dataset · v0.15 direction</span>
+    </div>
+    <div class="controls">
+      <div class="segmented" aria-label="Data scenario">
+        <button type="button" data-scenario="normal" aria-pressed="false">Normal</button>
+        <button type="button" data-scenario="pressure" aria-pressed="true">Pressure</button>
+        <button type="button" data-scenario="partial" aria-pressed="false">Partial</button>
+      </div>
+      <button class="icon-button" id="themeButton" type="button" aria-label="Toggle appearance" title="Toggle light and dark appearance">◐</button>
+    </div>
+  </header>
+
+  <section class="stage" aria-label="MyUsage popover mockup">
+    <div class="device-frame">
+      <div class="sample-label">Interactive sample data</div>
+      <div class="popover">
+        <header class="app-header">
+          <div class="app-mark">M</div>
+          <div class="app-name">MyUsage</div>
+          <div class="freshness" id="freshness">Checked 18s ago</div>
+          <button class="refresh-button" id="refreshButton" type="button" aria-label="Refresh" title="Refresh">↻</button>
+        </header>
+
+        <nav class="tabs" aria-label="Provider views">
+          <button class="tab active" type="button" data-page="overview">Overview</button>
+          <button class="tab" type="button" data-page="claude" title="Claude Code">
+            <img src="../../MyUsage/Resources/Icons/ProviderIcon-claude.svg" alt="">
+            <span>Claude</span>
+          </button>
+          <button class="tab" type="button" data-page="codex" title="Codex">
+            <img src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt="">
+            <span>Codex</span>
+          </button>
+          <button class="tab" type="button" data-page="cursor" title="Cursor">
+            <img src="../../MyUsage/Resources/Icons/ProviderIcon-cursor.svg" alt="">
+          </button>
+          <button class="tab" type="button" data-page="antigravity" title="Antigravity">
+            <img src="../../MyUsage/Resources/Icons/ProviderIcon-antigravity.svg" alt="">
+          </button>
+        </nav>
+
+        <section class="page active" id="overviewPage">
+          <div class="outcome warn" id="overviewOutcome">
+            <div class="outcome-symbol" id="outcomeSymbol">!</div>
+            <div class="outcome-copy">
+              <strong id="outcomeTitle">2 items need attention</strong>
+              <span id="outcomeCaption">Claude may run out early · a Codex reset credit expires soon</span>
+            </div>
+          </div>
+
+          <div class="section-label">Capacity</div>
+          <div class="provider-list">
+            <a class="provider-row" href="#claude" data-open-page="claude">
+              <div class="provider-head">
+                <img class="provider-icon" src="../../MyUsage/Resources/Icons/ProviderIcon-claude.svg" alt="">
+                <span class="provider-name">Claude</span>
+                <span class="window-label" id="claudeWindow">Weekly</span>
+                <span class="row-value" id="claudeValue">91%</span>
+                <span class="row-outcome warn" id="claudeOutcome">~8h early</span>
+              </div>
+              <div class="instrument">
+                <div class="rail" style="--value:91%;--pace:73%;--fill:var(--warn)" id="claudeRail">
+                  <div class="rail-fill"></div><div class="pace-marker"></div>
+                </div>
+                <div class="rail-meta"><span id="claudeMetaLeft">resets Sun 09:00</span><span id="claudeMetaRight">18 pts over pace</span></div>
+              </div>
+            </a>
+
+            <a class="provider-row" href="#codex" data-open-page="codex">
+              <div class="provider-head">
+                <img class="provider-icon" src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt="">
+                <span class="provider-name">Codex</span>
+                <span class="window-label">5-hour</span>
+                <span class="reset-credit-mini visible" id="creditMini">↺ 2 · 2d</span>
+                <span class="row-value" id="codexValue">42%</span>
+                <span class="row-outcome" id="codexOutcome">On pace</span>
+              </div>
+              <div class="instrument">
+                <div class="rail" style="--value:42%;--pace:46%;--fill:var(--healthy)" id="codexRail">
+                  <div class="rail-fill"></div><div class="pace-marker"></div>
+                </div>
+                <div class="rail-meta"><span>resets 2h 42m · 18:30</span><span id="codexMetaRight">4 pts under pace</span></div>
+              </div>
+            </a>
+
+            <a class="provider-row" href="#cursor" data-open-page="cursor">
+              <div class="provider-head">
+                <img class="provider-icon" src="../../MyUsage/Resources/Icons/ProviderIcon-cursor.svg" alt="">
+                <span class="provider-name">Cursor</span>
+                <span class="window-label">Included</span>
+                <span class="row-value">69%</span>
+                <span class="row-outcome">12d left</span>
+              </div>
+              <div class="instrument">
+                <div class="rail" style="--value:69%;--pace:63%;--fill:var(--healthy)">
+                  <div class="rail-fill"></div><div class="pace-marker"></div>
+                </div>
+                <div class="rail-meta"><span>$13.80 of $20</span><span>+$20.70 on-demand</span></div>
+              </div>
+            </a>
+
+            <a class="provider-row" href="#antigravity" data-open-page="antigravity">
+              <div class="provider-head">
+                <img class="provider-icon" src="../../MyUsage/Resources/Icons/ProviderIcon-antigravity.svg" alt="">
+                <span class="provider-name">Antigravity</span>
+                <span class="window-label">Gemini Pro</span>
+                <span class="row-value">8%</span>
+                <span class="row-outcome">Live</span>
+              </div>
+              <div class="instrument">
+                <div class="rail" style="--value:8%;--pace:0%;--fill:var(--healthy)"><div class="rail-fill"></div></div>
+                <div class="rail-meta"><span>model quota</span><span>resets 3h 18m</span></div>
+              </div>
+            </a>
+          </div>
+
+          <div class="section-label">Cost · estimated</div>
+          <div class="cost-band">
+            <div class="cost-stat">
+              <span class="cost-label">Today</span>
+              <span class="cost-value" id="todayCost">~$6.84</span>
+              <span class="cost-caption" id="todayCaption">vs 7d avg +18%</span>
+            </div>
+            <div class="cost-stat">
+              <span class="cost-label">July</span>
+              <span class="cost-value" id="monthCost">~$114.21</span>
+              <span class="cost-caption" id="monthCaption">Claude + Codex</span>
+            </div>
+            <div class="cost-stat">
+              <span class="cost-label">All Macs</span>
+              <svg class="sparkline" viewBox="0 0 82 17" role="img" aria-label="Fourteen day estimated cost trend">
+                <path d="M1 14 L8 13 L15 14 L22 10 L29 11 L36 8 L43 10 L50 7 L57 8 L64 4 L71 6 L81 2"></path>
+                <circle cx="81" cy="2" r="1.7"></circle>
+              </svg>
+              <span class="cost-caption" id="deviceCaption">3 devices · synced 2m</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" id="codexPage">
+          <div class="detail-header">
+            <img class="provider-icon" src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt="">
+            <strong>Codex</strong>
+            <span class="plan">Plus</span>
+            <span class="account">dev@example.com</span>
+          </div>
+
+          <div class="detail-outcome" id="codexDetailOutcome">
+            <div class="status-line">
+              <strong id="codexDetailTitle">Capacity is on pace</strong>
+              <span id="codexDetailCaption">5-hour is the binding window</span>
+            </div>
+            <span class="metric" id="codexDetailMetric">4 pts under</span>
+          </div>
+
+          <div class="limit-stack">
+            <div class="limit-detail">
+              <div class="limit-title"><strong>5-hour</strong><span class="used">used</span><span class="percent" id="detail5hValue">42%</span></div>
+              <div class="rail detail-rail" style="--value:42%;--pace:46%;--fill:var(--healthy)" id="detail5hRail">
+                <div class="rail-fill"></div><div class="pace-marker"></div>
+              </div>
+              <div class="scale"><span>0</span><span>steady pace</span><span>100</span></div>
+              <div class="limit-result"><span id="detail5hResult">On pace at current average</span><span class="time">resets 18:30 · 2h 42m</span></div>
+            </div>
+            <div class="limit-detail">
+              <div class="limit-title"><strong>Weekly</strong><span class="used">used</span><span class="percent">31%</span></div>
+              <div class="rail detail-rail" style="--value:31%;--pace:36%;--fill:var(--healthy)">
+                <div class="rail-fill"></div><div class="pace-marker"></div>
+              </div>
+              <div class="scale"><span>0</span><span>steady pace</span><span>100</span></div>
+              <div class="limit-result"><span>On pace at current average</span><span class="time">resets Tue 09:00 · 3d 16h</span></div>
+            </div>
+          </div>
+
+          <section class="reset-credits" aria-label="Limit reset credits">
+            <div class="reset-credit-head">
+              <div class="reset-icon">↺</div>
+              <div class="reset-copy">
+                <strong><span id="resetCount">2</span> limit reset credits</strong>
+                <span class="soon" id="resetSummary">Next expires in 2d 6h · Jul 20, 18:00</span>
+              </div>
+              <button class="notify-button on" id="notifyButton" type="button" aria-label="Toggle expiry reminders" title="Expiry reminders enabled">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path></svg>
+              </button>
+              <button class="disclosure-button" id="disclosureButton" type="button" aria-label="Show every expiry" title="Show every expiry">⌄</button>
+            </div>
+            <div class="credit-inventory" id="creditInventory">
+              <div class="credit-row soon" id="creditRowOne">
+                <span class="credit-index">1</span><span>Available</span><time id="creditTimeOne">Jul 20 · 18:00</time>
+              </div>
+              <div class="credit-row">
+                <span class="credit-index">2</span><span>Available</span><time id="creditTimeTwo">Aug 15 · 09:00</time>
+              </div>
+            </div>
+          </section>
+
+          <section class="cost-detail" aria-label="Codex estimated cost trend">
+            <div class="cost-detail-head"><strong>Estimated cost · last 14 days</strong><span>~$52.87</span></div>
+            <div class="bars" aria-hidden="true">
+              <div class="bar" style="--h:24%"></div><div class="bar" style="--h:38%"></div><div class="bar" style="--h:30%"></div>
+              <div class="bar" style="--h:54%"></div><div class="bar" style="--h:43%"></div><div class="bar" style="--h:68%"></div>
+              <div class="bar" style="--h:57%"></div><div class="bar" style="--h:76%"></div><div class="bar" style="--h:48%"></div>
+              <div class="bar" style="--h:61%"></div><div class="bar" style="--h:82%"></div><div class="bar" style="--h:72%"></div>
+              <div class="bar" style="--h:88%"></div><div class="bar" style="--h:96%"></div>
+            </div>
+            <div class="chart-meta"><span>Jul 5</span><span>Today · ~$3.82</span></div>
+          </section>
+
+          <div class="source-row"><span>OAuth API · local logs × price catalog</span><span>Checked 18s</span></div>
+        </section>
+
+        <section class="page" id="placeholderPage">
+          <div class="outcome good">
+            <div class="outcome-symbol">✓</div>
+            <div class="outcome-copy"><strong id="placeholderTitle">Provider detail</strong><span>Codex is the fully designed detail view in this mockup.</span></div>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <span class="version">mockup v15</span>
+          <button class="footer-button push" type="button" aria-label="Settings" title="Settings">⚙</button>
+          <button class="footer-button" type="button" aria-label="More actions" title="More actions">•••</button>
+        </footer>
+      </div>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const root = document.documentElement;
+  const pages = document.querySelectorAll('.page');
+  const tabs = document.querySelectorAll('.tab');
+  const scenarioButtons = document.querySelectorAll('[data-scenario]');
+  const toast = document.getElementById('toast');
+  let toastTimer;
+
+  const scenarios = {
+    normal: {
+      outcomeClass: 'good', symbol: '✓', title: 'All limits are on pace',
+      caption: 'No capacity or expiring-credit alerts', freshness: 'Checked 18s ago',
+      claudeValue: '47%', claudeOutcome: 'On pace', claudeOutcomeClass: '',
+      claudeRail: ['47%', '61%', 'var(--healthy)'], claudeLeft: 'resets Sun 09:00', claudeRight: '14 pts under pace',
+      codexValue: '42%', codexOutcome: 'On pace', codexRail: ['42%', '46%', 'var(--healthy)'], codexRight: '4 pts under pace',
+      creditMini: '↺ 2 · 26d', resetSummary: 'Next expires in 26d · Aug 15, 09:00', resetSummaryClass: '',
+      creditOne: 'Aug 15 · 09:00', creditTwo: 'Sep 11 · 18:30', creditOneSoon: false,
+      today: '~$6.84', todayCaption: 'vs 7d avg +18%', month: '~$114.21', monthCaption: 'Claude + Codex',
+      deviceCaption: '3 devices · synced 2m', deviceClass: '',
+      detailClass: '', detailTitle: 'Capacity is on pace', detailCaption: '5-hour is the binding window', detailMetric: '4 pts under',
+      detailValue: '42%', detailRail: ['42%', '46%', 'var(--healthy)'], detailResult: 'On pace at current average'
+    },
+    pressure: {
+      outcomeClass: 'warn', symbol: '!', title: '2 items need attention',
+      caption: 'Claude may run out early · a Codex reset credit expires soon', freshness: 'Checked 18s ago',
+      claudeValue: '91%', claudeOutcome: '~8h early', claudeOutcomeClass: 'warn',
+      claudeRail: ['91%', '73%', 'var(--warn)'], claudeLeft: 'resets Sun 09:00', claudeRight: '18 pts over pace',
+      codexValue: '42%', codexOutcome: 'On pace', codexRail: ['42%', '46%', 'var(--healthy)'], codexRight: '4 pts under pace',
+      creditMini: '↺ 2 · 2d', resetSummary: 'Next expires in 2d 6h · Jul 20, 18:00', resetSummaryClass: 'soon',
+      creditOne: 'Jul 20 · 18:00', creditTwo: 'Aug 15 · 09:00', creditOneSoon: true,
+      today: '~$6.84', todayCaption: 'vs 7d avg +18%', month: '~$114.21', monthCaption: 'Claude + Codex',
+      deviceCaption: '3 devices · synced 2m', deviceClass: '',
+      detailClass: '', detailTitle: 'Capacity is on pace', detailCaption: '5-hour is the binding window', detailMetric: '4 pts under',
+      detailValue: '42%', detailRail: ['42%', '46%', 'var(--healthy)'], detailResult: 'On pace at current average'
+    },
+    partial: {
+      outcomeClass: 'partial', symbol: 'i', title: 'Some readings are incomplete',
+      caption: 'Claude is stale · cost excludes one unpriced model', freshness: 'Checked 18s · partial',
+      claudeValue: '62%', claudeOutcome: 'Stale 34m', claudeOutcomeClass: 'stale',
+      claudeRail: ['62%', '73%', 'var(--info)'], claudeLeft: 'last good reading 15:14', claudeRight: 'projection unavailable',
+      codexValue: '42%', codexOutcome: 'On pace', codexRail: ['42%', '46%', 'var(--healthy)'], codexRight: '4 pts under pace',
+      creditMini: '↺ 2 · 2d', resetSummary: 'Next expires in 2d 6h · Jul 20, 18:00', resetSummaryClass: 'soon',
+      creditOne: 'Jul 20 · 18:00', creditTwo: 'Aug 15 · 09:00', creditOneSoon: true,
+      today: 'Partial', todayCaption: 'one model unpriced', month: 'Partial', monthCaption: 'known cost ~$108.90',
+      deviceCaption: '2 of 3 devices fresh', deviceClass: 'partial',
+      detailClass: '', detailTitle: 'Capacity is on pace', detailCaption: '5-hour is the binding window', detailMetric: '4 pts under',
+      detailValue: '42%', detailRail: ['42%', '46%', 'var(--healthy)'], detailResult: 'On pace at current average'
+    }
+  };
+
+  function setRail(id, values) {
+    const el = document.getElementById(id);
+    el.style.setProperty('--value', values[0]);
+    el.style.setProperty('--pace', values[1]);
+    el.style.setProperty('--fill', values[2]);
+  }
+
+  function applyScenario(name) {
+    const data = scenarios[name];
+    scenarioButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.scenario === name)));
+
+    const overviewOutcome = document.getElementById('overviewOutcome');
+    overviewOutcome.className = `outcome ${data.outcomeClass}`;
+    document.getElementById('outcomeSymbol').textContent = data.symbol;
+    document.getElementById('outcomeTitle').textContent = data.title;
+    document.getElementById('outcomeCaption').textContent = data.caption;
+    document.getElementById('freshness').textContent = data.freshness;
+
+    document.getElementById('claudeValue').textContent = data.claudeValue;
+    const claudeOutcome = document.getElementById('claudeOutcome');
+    claudeOutcome.textContent = data.claudeOutcome;
+    claudeOutcome.className = `row-outcome ${data.claudeOutcomeClass}`;
+    setRail('claudeRail', data.claudeRail);
+    document.getElementById('claudeMetaLeft').textContent = data.claudeLeft;
+    document.getElementById('claudeMetaRight').textContent = data.claudeRight;
+
+    document.getElementById('codexValue').textContent = data.codexValue;
+    document.getElementById('codexOutcome').textContent = data.codexOutcome;
+    setRail('codexRail', data.codexRail);
+    document.getElementById('codexMetaRight').textContent = data.codexRight;
+    document.getElementById('creditMini').textContent = data.creditMini;
+
+    const resetSummary = document.getElementById('resetSummary');
+    resetSummary.textContent = data.resetSummary;
+    resetSummary.className = data.resetSummaryClass;
+    document.getElementById('creditTimeOne').textContent = data.creditOne;
+    document.getElementById('creditTimeTwo').textContent = data.creditTwo;
+    document.getElementById('creditRowOne').classList.toggle('soon', data.creditOneSoon);
+
+    document.getElementById('todayCost').textContent = data.today;
+    document.getElementById('todayCaption').textContent = data.todayCaption;
+    document.getElementById('monthCost').textContent = data.month;
+    document.getElementById('monthCaption').textContent = data.monthCaption;
+    const deviceCaption = document.getElementById('deviceCaption');
+    deviceCaption.textContent = data.deviceCaption;
+    deviceCaption.className = `cost-caption ${data.deviceClass}`;
+
+    const detailOutcome = document.getElementById('codexDetailOutcome');
+    detailOutcome.className = `detail-outcome ${data.detailClass}`;
+    document.getElementById('codexDetailTitle').textContent = data.detailTitle;
+    document.getElementById('codexDetailCaption').textContent = data.detailCaption;
+    document.getElementById('codexDetailMetric').textContent = data.detailMetric;
+    document.getElementById('detail5hValue').textContent = data.detailValue;
+    setRail('detail5hRail', data.detailRail);
+    document.getElementById('detail5hResult').textContent = data.detailResult;
+  }
+
+  function showPage(name) {
+    const resolved = name === 'overview' || name === 'codex' ? name : 'placeholder';
+    pages.forEach(page => page.classList.remove('active'));
+    document.getElementById(`${resolved}Page`).classList.add('active');
+    tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.page === name));
+    if (resolved === 'placeholder') {
+      document.getElementById('placeholderTitle').textContent = `${name[0].toUpperCase()}${name.slice(1)} detail`;
+    }
+  }
+
+  function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('visible'), 1500);
+  }
+
+  tabs.forEach(tab => tab.addEventListener('click', () => showPage(tab.dataset.page)));
+  document.querySelectorAll('[data-open-page]').forEach(row => row.addEventListener('click', event => {
+    event.preventDefault();
+    showPage(row.dataset.openPage);
+  }));
+  scenarioButtons.forEach(button => button.addEventListener('click', () => applyScenario(button.dataset.scenario)));
+
+  document.getElementById('themeButton').addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  });
+
+  document.getElementById('refreshButton').addEventListener('click', event => {
+    event.currentTarget.classList.remove('spinning');
+    requestAnimationFrame(() => event.currentTarget.classList.add('spinning'));
+    document.getElementById('freshness').textContent = 'Checked just now';
+  });
+
+  document.getElementById('disclosureButton').addEventListener('click', event => {
+    const inventory = document.getElementById('creditInventory');
+    const open = inventory.classList.toggle('open');
+    event.currentTarget.classList.toggle('open', open);
+    event.currentTarget.setAttribute('aria-label', open ? 'Hide every expiry' : 'Show every expiry');
+  });
+
+  document.getElementById('notifyButton').addEventListener('click', event => {
+    const on = event.currentTarget.classList.toggle('on');
+    event.currentTarget.title = on ? 'Expiry reminders enabled' : 'Expiry reminders disabled';
+    showToast(on ? 'Reset credit expiry reminders on' : 'Reset credit expiry reminders off');
+  });
+</script>
+</body>
+</html>
