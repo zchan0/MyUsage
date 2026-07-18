@@ -81,15 +81,29 @@ struct DailyCostChart: View {
         // rendered as two enormous bars filling the plot.
         .chartXScale(domain: xDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+            AxisMarks(values: .stride(by: .day, count: 7)) { value in
                 AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
-                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                    .font(.system(size: 8.5, design: .monospaced))
-                    .foregroundStyle(Color.secondary.opacity(0.65))
+                // Closure form + fixedSize: Charts width-limits a *centered*
+                // boundary label to twice its distance from the plot edge, so
+                // the last tick renders as "J…". fixedSize makes the text lay
+                // out at its ideal width and overflow its slot instead of
+                // truncating; the trailing plot inset gives that overflow room.
+                AxisValueLabel {
+                    if let date = value.as(Date.self) {
+                        Text(date, format: .dateTime.month(.abbreviated).day())
+                            .font(.system(size: 8.5, design: .monospaced))
+                            .foregroundStyle(Color.secondary.opacity(0.65))
+                            .fixedSize()
+                    }
+                }
             }
         }
         .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+            // Leading (not trailing): a right-side value axis crowds the last
+            // x-axis label into the corner, clipping "Jul 17" to "J…". On the
+            // left the value labels sit clear of the first x label (~a quarter
+            // of the way in), so both axes read in full.
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
                 AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
                 AxisValueLabel {
                     if let usd = value.as(Double.self) {
@@ -102,9 +116,9 @@ struct DailyCostChart: View {
                 }
             }
         }
-        // Trailing inset keeps the last axis label from clipping at the
-        // plot edge ("Ju…").
-        .chartPlotStyle { $0.padding(.trailing, 14) }
+        // Small trailing inset gives the fixedSize last x-label ("Jul 17")
+        // room to overflow into instead of running to the card edge.
+        .chartPlotStyle { $0.padding(.trailing, 12) }
         .frame(height: 96)
     }
 

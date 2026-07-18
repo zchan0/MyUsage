@@ -30,7 +30,7 @@ struct ProviderTabBar: View {
     @Binding var selection: PopoverTab
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             segment(tab: .overview) {
                 Text("Overview")
                     .font(.system(size: 10.5, weight: .semibold))
@@ -45,10 +45,10 @@ struct ProviderTabBar: View {
                     // Icon + short name + micro-bar, laid out horizontally so
                     // the wide provider segments carry a legible label instead
                     // of an icon marooned in dead space.
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         ProviderIconTile(kind: item.kind, size: 16, glyph: 9.5)
                             .opacity(selected ? 1.0 : 0.72)
-                        VStack(alignment: .leading, spacing: 2.5) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(item.kind.shortName)
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
@@ -60,13 +60,13 @@ struct ProviderTabBar: View {
                 .help(item.kind.displayName)
             }
         }
-        .padding(2)
+        .padding(3)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(Color.primary.opacity(0.05))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
@@ -76,8 +76,9 @@ struct ProviderTabBar: View {
             withAnimation(.easeInOut(duration: 0.15)) { selection = tab }
         } label: {
             content()
+                .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity)
-                .frame(height: 27)
+                .frame(height: 32)
                 .background {
                     if selection == tab {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
