@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyUsage - Priority-led Overview Directions</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    color-scheme: dark;
+    --page: #0d0e10;
+    --page-line: #292b2f;
+    --page-ink: #f3f3f4;
+    --page-muted: #8d919a;
+    --panel: #202226;
+    --panel-2: #27292e;
+    --panel-3: #2d3035;
+    --ink: #f4f4f5;
+    --muted: #a3a6ad;
+    --faint: #747881;
+    --line: rgba(255,255,255,.105);
+    --line-strong: rgba(255,255,255,.16);
+    --track: #393c42;
+    --good: #74ad82;
+    --good-strong: #8cc397;
+    --warn: #d8a445;
+    --warn-bg: rgba(216,164,69,.12);
+    --blue: #7392c5;
+    --claude: #df775b;
+    --codex: #303238;
+    --cursor: #515761;
+    --anti: #7659c9;
+    --shadow: 0 28px 70px rgba(0,0,0,.46), 0 3px 12px rgba(0,0,0,.28);
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  body.light {
+    color-scheme: light;
+    --page: #e8e9ec;
+    --page-line: #cfd1d6;
+    --page-ink: #1f2125;
+    --page-muted: #69707b;
+    --panel: #f8f8f7;
+    --panel-2: #f0f0ef;
+    --panel-3: #e9eaeb;
+    --ink: #222428;
+    --muted: #696e77;
+    --faint: #91969f;
+    --line: rgba(24,27,32,.105);
+    --line-strong: rgba(24,27,32,.16);
+    --track: #dfe1e3;
+    --good: #4e8d61;
+    --good-strong: #397b4e;
+    --warn: #a96d0c;
+    --warn-bg: rgba(178,119,23,.10);
+    --blue: #557caf;
+    --codex: #292b30;
+    --cursor: #4c5159;
+    --shadow: 0 26px 68px rgba(28,32,40,.18), 0 3px 12px rgba(28,32,40,.12);
+  }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--page);
+    color: var(--page-ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: 0;
+    transition: background .2s ease, color .2s ease;
+  }
+  button { font: inherit; letter-spacing: 0; }
+  button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .board-head {
+    min-height: 76px;
+    padding: 18px 26px;
+    border-bottom: 1px solid var(--page-line);
+    display: flex;
+    align-items: center;
+    gap: 22px;
+  }
+  .board-title { min-width: 250px; }
+  .board-title h1 { margin: 0 0 3px; font-size: 16px; font-weight: 650; }
+  .board-title p { margin: 0; color: var(--page-muted); font: 11px var(--mono); }
+  .controls { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+  .control-set {
+    display: flex;
+    align-items: center;
+    padding: 3px;
+    border: 1px solid var(--page-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--page-ink) 4%, transparent);
+  }
+  .control-set button,
+  .theme-button {
+    border: 0;
+    color: var(--page-muted);
+    background: transparent;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .control-set button.active {
+    color: var(--page-ink);
+    background: color-mix(in srgb, var(--page-ink) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--page-ink) 9%, transparent);
+  }
+  .theme-button {
+    width: 36px;
+    padding: 0;
+    border: 1px solid var(--page-line);
+    font-size: 15px;
+  }
+  .stage {
+    padding: 46px 28px 110px;
+    display: grid;
+    justify-items: center;
+  }
+  .stage-note {
+    width: min(100%, 408px);
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--page-muted);
+    font: 10.5px var(--mono);
+  }
+  .stage-note b { color: var(--page-ink); font-weight: 550; font-family: var(--sans); font-size: 12px; }
+  .popover {
+    width: 408px;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+  .app-head {
+    min-height: 58px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mark {
+    width: 25px;
+    height: 25px;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    background: var(--ink);
+    color: var(--panel);
+    font-size: 12px;
+    font-weight: 750;
+  }
+  .app-name { font-size: 14px; font-weight: 670; }
+  .sample-pill {
+    padding: 3px 6px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--faint);
+    font: 8px var(--mono);
+  }
+  .spacer { flex: 1; }
+  .fresh { color: var(--faint); font: 9.5px var(--mono); }
+  .icon-button {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+  }
+  .icon-button:hover { background: var(--panel-3); color: var(--ink); }
+  .icon-button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* The nav is deliberately an icon rail, not a second full-width card. */
+  .nav-rail {
+    height: 48px;
+    padding: 0 12px;
+    display: grid;
+    grid-template-columns: 1.45fr repeat(4, 1fr);
+    align-items: stretch;
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-item {
+    position: relative;
+    border: 0;
+    color: var(--faint);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .nav-item.active { color: var(--ink); }
+  .nav-item.active::after {
+    content: "";
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--ink);
+  }
+  .nav-item span { font-size: 10.5px; font-weight: 600; }
+  .nav-item[data-page="codex"] > span:last-child { display: none; }
+  .nav-item[data-page="codex"].active > span:last-child { display: inline; }
+  .provider-tile {
+    width: 21px;
+    height: 21px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+  .provider-tile img { width: 13px; height: 13px; display: block; }
+  .provider-tile.claude { background: var(--claude); }
+  .provider-tile.codex { background: var(--codex); }
+  .provider-tile.cursor { background: var(--cursor); }
+  .provider-tile.anti { background: var(--anti); }
+  .overview-page, .codex-page { display: none; }
+  .overview-page.active, .codex-page.active { display: block; }
+
+  /* Deck overview */
+  .overview-lead {
+    padding: 20px 18px 18px;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+  }
+  .eyebrow { color: var(--faint); font: 8.5px var(--mono); text-transform: uppercase; }
+  .overview-lead h2 { margin: 4px 0 0; font-size: 21px; line-height: 1.15; font-weight: 640; }
+  .overview-lead .verdict { max-width: 112px; color: var(--muted); font-size: 11px; line-height: 1.35; text-align: right; }
+  .capacity-grid {
+    margin: 0 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .capacity-cell {
+    min-width: 0;
+    min-height: 156px;
+    padding: 16px 14px 14px 0;
+    cursor: pointer;
+  }
+  .capacity-cell:nth-child(even) { padding-left: 16px; padding-right: 0; border-left: 1px solid var(--line); }
+  .capacity-cell:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .cell-head { display: flex; align-items: center; gap: 7px; }
+  .cell-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 630; }
+  .cell-head small { color: var(--faint); font-size: 9px; }
+  .metric-line { margin-top: 15px; display: flex; align-items: flex-end; gap: 8px; }
+  .metric { font: 650 29px/1 var(--mono); }
+  .metric-label { margin-bottom: 2px; color: var(--muted); font-size: 9.5px; line-height: 1.25; }
+  .mini-rail { position: relative; height: 7px; margin-top: 12px; display: flex; gap: 2px; }
+  .mini-rail i { flex: 1; min-width: 1px; height: 7px; background: var(--track); }
+  .mini-rail.paced::after {
+    content: "";
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--muted);
+    opacity: .9;
+  }
+  .normal .mini-rail.paced::after { left: var(--pace-normal); }
+  .pressure .mini-rail.paced::after { left: var(--pace-pressure, var(--pace-normal)); }
+  .normal .mini-rail i.fill-normal,
+  .pressure .mini-rail i.fill-pressure { background: var(--good); }
+  .cell-foot { margin-top: 9px; display: flex; gap: 6px; align-items: baseline; color: var(--faint); font: 9px var(--mono); }
+  .cell-foot .push { margin-left: auto; }
+  .credit-note {
+    margin-top: 9px;
+    color: var(--blue);
+    font: 9px var(--mono);
+    white-space: nowrap;
+  }
+  .credit-note.soon { color: var(--warn); }
+  .cost-dock {
+    margin-top: 18px;
+    padding: 0 18px 18px;
+  }
+  .cost-head { display: flex; align-items: baseline; }
+  .cost-head strong { font-size: 12px; font-weight: 630; }
+  .cost-head span { margin-left: auto; color: var(--faint); font: 9px var(--mono); }
+  .cost-body { margin-top: 11px; display: grid; grid-template-columns: 1fr 88px 88px; gap: 14px; align-items: end; }
+  .spark { height: 48px; display: flex; align-items: end; gap: 3px; border-bottom: 1px solid var(--line-strong); }
+  .spark i { flex: 1; min-width: 2px; background: var(--blue); opacity: .7; }
+  .spark i:nth-child(3n) { background: var(--good); }
+  .cost-stat label { display: block; color: var(--faint); font: 8px var(--mono); text-transform: uppercase; }
+  .cost-stat strong { display: block; margin-top: 4px; font: 600 16px var(--mono); }
+  .cost-stat small { display: block; margin-top: 3px; color: var(--muted); font-size: 8.5px; }
+
+  /* Codex detail uses large instruments and long horizontal measures. */
+  .provider-head {
+    min-height: 66px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .provider-head .provider-tile { width: 27px; height: 27px; border-radius: 8px; }
+  .provider-head .provider-tile img { width: 16px; height: 16px; }
+  .provider-head strong { font-size: 15px; }
+  .provider-head small { color: var(--faint); font-size: 10px; }
+  .provider-head .account { margin-left: auto; color: var(--faint); font: 9px var(--mono); }
+  .detail-summary {
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .detail-summary h2 { margin: 0; font-size: 17px; font-weight: 630; }
+  .detail-summary p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+  .pace-value { margin-left: auto; color: var(--good-strong); font: 600 12px var(--mono); }
+  .instrument-pair {
+    margin: 0 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .instrument {
+    min-width: 0;
+    padding: 17px 16px 17px 0;
+  }
+  .instrument + .instrument { padding-left: 16px; padding-right: 0; border-left: 1px solid var(--line); }
+  .instrument-head { display: flex; align-items: baseline; gap: 7px; }
+  .instrument-head strong { font-size: 12px; }
+  .instrument-head small { color: var(--faint); font-size: 9px; }
+  .instrument-value { margin-top: 9px; font: 650 32px/1 var(--mono); }
+  .instrument-value span { font-size: 13px; color: var(--muted); }
+  .instrument .mini-rail { margin-top: 13px; }
+  .axis { margin-top: 5px; display: flex; justify-content: space-between; color: var(--faint); font: 7.5px var(--mono); }
+  .instrument-foot { margin-top: 9px; color: var(--muted); font: 8.5px/1.35 var(--mono); }
+  .credits-section { padding: 18px; border-bottom: 1px solid var(--line); }
+  .section-head { display: flex; align-items: center; gap: 9px; }
+  .section-head h3 { margin: 0; font-size: 12px; font-weight: 640; }
+  .section-head .count { font: 650 19px var(--mono); }
+  .section-head .next { margin-left: auto; color: var(--faint); font: 8.5px var(--mono); text-align: right; }
+  .section-head .next strong { display: block; margin-top: 2px; color: var(--warn); font-size: 10px; }
+  .credits-list { margin-top: 14px; border-top: 1px solid var(--line); }
+  .credit-row { min-height: 38px; display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+  .credit-row:last-child { border-bottom: 0; }
+  .credit-index { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--faint); background: var(--panel-3); font: 8px var(--mono); }
+  .credit-row span { color: var(--muted); font-size: 10px; }
+  .credit-row time { color: var(--ink); font: 9px var(--mono); }
+  .credit-row time.soon { color: var(--warn); }
+  .detail-cost { padding: 18px; }
+  .detail-cost .cost-body { grid-template-columns: 1fr 96px; }
+  .source-line { padding: 12px 18px; border-top: 1px solid var(--line); color: var(--faint); font: 8.5px var(--mono); display: flex; }
+  .source-line span:last-child { margin-left: auto; }
+
+  .footer {
+    min-height: 46px;
+    padding: 0 12px 0 18px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--line);
+    color: var(--faint);
+    font: 8.5px var(--mono);
+  }
+  .footer-actions { margin-left: auto; display: flex; gap: 2px; }
+
+  /* Classic+ is a fallback, not a second visual system hidden in Deck. */
+  .classic .overview-lead { padding-bottom: 14px; }
+  .classic .overview-lead h2 { font-size: 18px; }
+  .classic .capacity-grid { display: block; border: 0; }
+  .classic .capacity-cell {
+    min-height: 0;
+    margin-bottom: 10px;
+    padding: 14px;
+    border: 1px solid var(--line) !important;
+    border-radius: 10px;
+    background: var(--panel-2);
+  }
+  .classic .capacity-cell .metric-line { margin-top: 12px; }
+  .classic .capacity-cell .metric { margin-left: auto; font-size: 18px; }
+  .classic .capacity-cell .metric-label { order: -1; font-size: 10px; }
+  .classic .capacity-cell .metric-label[data-classic] { font-size: 0; }
+  .classic .capacity-cell .metric-label[data-classic]::after { content: attr(data-classic); font-size: 10px; }
+  .classic .capacity-cell .mini-rail { margin-top: 9px; }
+  .classic .cell-foot { margin-top: 8px; }
+  .classic .cost-dock { padding-top: 4px; }
+  .classic .instrument-pair { display: block; border-bottom: 0; }
+  .classic .instrument { padding: 17px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+  .classic .instrument + .instrument { padding-left: 0; }
+  .classic .instrument-head strong { font-size: 13px; }
+  .classic .instrument-value { margin-left: auto; margin-top: -17px; text-align: right; font-size: 23px; }
+  .classic .axis { font-size: 8px; }
+
+  /* v0.17 overview studies: provider detail remains the Deck direction. */
+  .overview-focus, .overview-rows { display: none; }
+  .popover.focus .overview-focus,
+  .popover.rows .overview-rows { display: block; }
+  .overview-intro {
+    padding: 19px 18px 15px;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+  }
+  .overview-intro h2 { margin: 4px 0 0; font-size: 19px; line-height: 1.15; font-weight: 640; }
+  .overview-intro p { max-width: 132px; margin: 0 0 1px auto; color: var(--muted); font-size: 10px; line-height: 1.35; text-align: right; }
+  .focus-instrument {
+    margin: 0 18px;
+    padding: 16px 0 15px;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .focus-head { display: flex; align-items: center; gap: 8px; }
+  .focus-head strong { font-size: 13px; }
+  .focus-head small { color: var(--faint); font-size: 9.5px; }
+  .focus-verdict { margin-left: auto; color: var(--good-strong); font: 10px var(--mono); }
+  .pressure .focus-verdict { color: var(--warn); }
+  .focus-value-line { margin-top: 14px; display: flex; align-items: flex-end; gap: 9px; }
+  .focus-value { font: 650 36px/1 var(--mono); }
+  .focus-value span { font-size: 15px; color: var(--muted); }
+  .focus-window { margin-bottom: 2px; color: var(--muted); font-size: 10px; line-height: 1.3; }
+  .focus-reset { margin: 0 0 2px auto; color: var(--muted); font: 9px var(--mono); text-align: right; }
+  .focus-instrument .mini-rail { margin-top: 13px; }
+  .focus-context { margin-top: 9px; display: flex; align-items: baseline; color: var(--faint); font: 9px var(--mono); }
+  .focus-context { justify-content: space-between; }
+  .focus-context span:last-child { margin-left: 0; }
+  .focus-credit {
+    margin-top: 13px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    color: var(--blue);
+    font-size: 10px;
+  }
+  .focus-credit strong { color: var(--ink); font: 650 15px var(--mono); }
+  .focus-credit time { margin-left: auto; color: var(--muted); font: 8.5px var(--mono); }
+  .watch-section { padding: 16px 18px 1px; }
+  .watch-head { display: flex; align-items: baseline; }
+  .watch-head strong { font-size: 11px; }
+  .watch-head span { margin-left: auto; color: var(--faint); font: 8px var(--mono); }
+  .watch-list { margin-top: 7px; }
+  .watch-row {
+    min-height: 62px;
+    display: grid;
+    grid-template-columns: 124px 1fr 1fr;
+    gap: 12px;
+    align-items: center;
+    border-top: 1px solid var(--line);
+  }
+  .watch-provider { min-width: 0; display: flex; align-items: center; gap: 7px; }
+  .watch-provider strong { overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; }
+  .watch-provider small { color: var(--faint); font-size: 8px; }
+  .watch-metric { min-width: 0; }
+  .watch-metric .metric-top { display: flex; align-items: baseline; gap: 5px; }
+  .watch-metric strong { font: 600 12.5px var(--mono); }
+  .watch-metric span { color: var(--faint); font-size: 8px; }
+  .micro-rail { position: relative; height: 4px; margin-top: 6px; background: var(--track); }
+  .micro-rail::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--fill); background: var(--good); }
+  .pressure .watch-row.warn-target .micro-rail::before { background: var(--warn); }
+  .watch-detail { margin-top: 5px; color: var(--faint); font: 7.5px var(--mono); white-space: nowrap; }
+  .watch-detail.credit { color: var(--blue); }
+  [data-open="codex"] { cursor: pointer; }
+
+  .rows-head {
+    padding: 18px 18px 13px;
+    display: flex;
+    align-items: baseline;
+  }
+  .rows-head h2 { margin: 0; font-size: 18px; font-weight: 640; }
+  .rows-head span { margin-left: auto; color: var(--faint); font: 8.5px var(--mono); }
+  .wide-rows { margin: 0 18px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); }
+  .wide-row {
+    min-height: 92px;
+    display: grid;
+    grid-template-columns: 120px 1fr 1fr;
+    gap: 15px;
+    align-items: center;
+    border-top: 1px solid var(--line);
+  }
+  .wide-row:first-child { border-top: 0; }
+  .wide-provider { align-self: stretch; padding: 15px 13px 12px 0; border-right: 1px solid var(--line); }
+  .wide-provider .cell-head { gap: 7px; }
+  .wide-provider .cell-head strong { font-size: 11px; }
+  .wide-provider .cell-head small { font-size: 8px; }
+  .wide-note { margin-top: 9px; color: var(--faint); font: 7.5px/1.4 var(--mono); }
+  .wide-note.credit { color: var(--blue); }
+  .wide-metric { min-width: 0; }
+  .wide-metric-head { display: flex; align-items: baseline; gap: 5px; }
+  .wide-metric-head span { color: var(--faint); font-size: 8px; }
+  .wide-metric-head strong { margin-left: auto; font: 600 12.5px var(--mono); }
+  .wide-metric .micro-rail { margin-top: 7px; }
+  .wide-metric small { display: block; margin-top: 6px; color: var(--faint); font: 7px var(--mono); white-space: nowrap; }
+
+  .pressure .normal-copy { display: none !important; }
+  .normal .pressure-copy { display: none !important; }
+  .pressure .warn-target .mini-rail i.fill-pressure { background: var(--warn); }
+  .pressure .warn-target .metric,
+  .pressure .warn-target .instrument-value { color: var(--warn); }
+  .pressure .overview-lead .verdict { color: var(--warn); }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translate(-50%, 12px);
+    padding: 9px 12px;
+    border: 1px solid var(--page-line);
+    border-radius: 7px;
+    color: var(--page-ink);
+    background: var(--page);
+    box-shadow: 0 8px 25px rgba(0,0,0,.2);
+    font-size: 11px;
+    opacity: 0;
+    pointer-events: none;
+    transition: .18s ease;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 620px) {
+    .board-head { align-items: flex-start; padding: 15px; gap: 12px; flex-direction: column; }
+    .controls { margin-left: 0; width: 100%; flex-wrap: wrap; }
+    .control-set { flex: 1; }
+    .control-set button { flex: 1; padding: 0 7px; }
+    .stage { padding: 28px 10px 70px; }
+    .stage-note { width: min(100%, 408px); }
+    .popover { width: min(408px, calc(100vw - 20px)); }
+    .nav-item > span:not(.provider-tile) { display: none !important; }
+    .capacity-grid { margin-left: 14px; margin-right: 14px; }
+    .overview-lead, .cost-dock, .detail-summary, .credits-section, .detail-cost { padding-left: 14px; padding-right: 14px; }
+    .instrument-pair { margin-left: 14px; margin-right: 14px; }
+    .cost-body { grid-template-columns: 1fr 74px 74px; gap: 9px; }
+    .overview-intro, .rows-head { padding-left: 14px; padding-right: 14px; }
+    .focus-instrument, .wide-rows { margin-left: 14px; margin-right: 14px; }
+    .watch-section { padding-left: 14px; padding-right: 14px; }
+    .watch-row { grid-template-columns: 108px 1fr 1fr; gap: 9px; }
+    .wide-row { grid-template-columns: 105px 1fr 1fr; gap: 10px; }
+  }
+</style>
+</head>
+<body class="normal">
+  <header class="board-head">
+    <div class="board-title">
+      <h1>MyUsage overview study</h1>
+      <p>v0.17 / interactive sample data / 408pt</p>
+    </div>
+    <div class="controls">
+      <div class="control-set" aria-label="Design direction">
+        <button class="active" data-design="focus">Focus</button>
+        <button data-design="rows">Rows</button>
+      </div>
+      <div class="control-set" aria-label="Data state">
+        <button class="active" data-state="normal">Normal</button>
+        <button data-state="pressure">Pressure</button>
+      </div>
+      <button class="theme-button" title="Toggle appearance" aria-label="Toggle appearance">◐</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="stage-note"><b id="direction-name">Focus / priority-led overview</b><span>Provider detail: Deck</span></div>
+    <section class="popover focus" id="popover">
+      <header class="app-head">
+        <div class="mark">M</div>
+        <span class="app-name">MyUsage</span>
+        <span class="sample-pill">SAMPLE</span>
+        <span class="spacer">&#8203;</span>
+        <span class="fresh">checked 18s ago</span>
+        <button class="icon-button refresh" title="Refresh" aria-label="Refresh">
+          <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2 5.3"/><path d="M20 4v7h-7"/></svg>
+        </button>
+      </header>
+
+      <nav class="nav-rail" aria-label="Provider views">
+        <button class="nav-item active" data-page="overview"><span>Overview</span></button>
+        <button class="nav-item" data-page="claude" title="Claude">
+          <span class="provider-tile claude"><img src="../../MyUsage/Resources/Icons/ProviderIcon-claude.svg" alt=""></span>
+        </button>
+        <button class="nav-item" data-page="codex" title="Codex">
+          <span class="provider-tile codex"><img src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt=""></span><span>Codex</span>
+        </button>
+        <button class="nav-item" data-page="cursor" title="Cursor">
+          <span class="provider-tile cursor"><img src="../../MyUsage/Resources/Icons/ProviderIcon-cursor.svg" alt=""></span>
+        </button>
+        <button class="nav-item" data-page="anti" title="Antigravity">
+          <span class="provider-tile anti"><img src="../../MyUsage/Resources/Icons/ProviderIcon-antigravity.svg" alt=""></span>
+        </button>
+      </nav>
+
+      <div class="overview-page active">
+        <div class="overview-focus">
+          <section class="overview-intro">
+            <div><div class="eyebrow">What matters now</div><h2 class="normal-copy">Next reset in 2h 42m</h2><h2 class="pressure-copy">Claude weekly needs attention</h2></div>
+            <p class="normal-copy">Codex has 58% capacity remaining.</p>
+            <p class="pressure-copy">Projected to run out about 8h early.</p>
+          </section>
+
+          <section class="focus-instrument normal-copy" data-open="codex">
+            <div class="focus-head">
+              <span class="provider-tile codex"><img src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt=""></span>
+              <strong>Codex</strong><small>Plus</small><span class="focus-verdict">on pace</span>
+            </div>
+            <div class="focus-value-line"><div class="focus-value">42<span>%</span></div><div class="focus-window">5-hour<br>used</div><div class="focus-reset">resets 18:30<br>in 2h 42m</div></div>
+            <div class="mini-rail paced" data-fill="8" style="--pace-normal:46%"></div>
+            <div class="focus-context"><span>0</span><span>pace marker</span><span>100</span></div>
+            <div class="focus-credit"><strong>2</strong><span>limit reset credits</span><time>earliest Aug 15 / 09:00</time></div>
+          </section>
+
+          <section class="focus-instrument pressure-copy warn-target">
+            <div class="focus-head">
+              <span class="provider-tile claude"><img src="../../MyUsage/Resources/Icons/ProviderIcon-claude.svg" alt=""></span>
+              <strong>Claude</strong><small>Max</small><span class="focus-verdict">~8h early</span>
+            </div>
+            <div class="focus-value-line"><div class="focus-value">91<span>%</span></div><div class="focus-window">weekly<br>used</div><div class="focus-reset">resets Sun 09:00<br>18 pts over pace</div></div>
+            <div class="mini-rail paced" data-fill="18" style="--pace-pressure:73%"></div>
+            <div class="focus-context"><span>0</span><span>pace marker</span><span>100</span></div>
+          </section>
+
+          <section class="watch-section">
+            <div class="watch-head"><strong>Also watching</strong><span>ordered by pressure</span></div>
+            <div class="watch-list normal-copy">
+              <div class="watch-row warn-target">
+                <div class="watch-provider"><span class="provider-tile claude"><img src="../../MyUsage/Resources/Icons/ProviderIcon-claude.svg" alt=""></span><strong>Claude</strong><small>Max</small></div>
+                <div class="watch-metric"><div class="metric-top"><strong>47%</strong><span>5-hour</span></div><div class="micro-rail" style="--fill:47%"></div><div class="watch-detail">2h 14m</div></div>
+                <div class="watch-metric"><div class="metric-top"><strong>62%</strong><span>weekly</span></div><div class="micro-rail" style="--fill:62%"></div><div class="watch-detail">Sun 09:00</div></div>
+              </div>
+              <div class="watch-row">
+                <div class="watch-provider"><span class="provider-tile cursor"><img src="../../MyUsage/Resources/Icons/ProviderIcon-cursor.svg" alt=""></span><strong>Cursor</strong><small>Pro</small></div>
+                <div class="watch-metric"><div class="metric-top"><strong>69%</strong><span>included</span></div><div class="micro-rail" style="--fill:69%"></div><div class="watch-detail">$13.80 / $20</div></div>
+                <div class="watch-metric"><div class="metric-top"><strong>41%</strong><span>on-demand</span></div><div class="micro-rail" style="--fill:41%"></div><div class="watch-detail">+$20.70</div></div>
+              </div>
+              <div class="watch-row">
+                <div class="watch-provider"><span class="provider-tile anti"><img src="../../MyUsage/Resources/Icons/ProviderIcon-antigravity.svg" alt=""></span><strong>Antigravity</strong><small>Live</small></div>
+                <div class="watch-metric"><div class="metric-top"><strong>8%</strong><span>Gemini Pro</span></div><div class="micro-rail" style="--fill:8%"></div><div class="watch-detail">3h 18m</div></div>
+                <div class="watch-metric"><div class="metric-top"><strong>23%</strong><span>Flash</span></div><div class="micro-rail" style="--fill:23%"></div><div class="watch-detail">3h 18m</div></div>
+              </div>
+            </div>
+            <div class="watch-list pressure-copy">
+              <div class="watch-row" data-open="codex">
+                <div class="watch-provider"><span class="provider-tile codex"><img src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt=""></span><strong>Codex</strong><small>Plus</small></div>
+                <div class="watch-metric"><div class="metric-top"><strong>42%</strong><span>5-hour</span></div><div class="micro-rail" style="--fill:42%"></div><div class="watch-detail">2h 42m</div></div>
+                <div class="watch-metric"><div class="metric-top"><strong>76%</strong><span>weekly</span></div><div class="micro-rail" style="--fill:76%"></div><div class="watch-detail credit">2 credits / Jul 20</div></div>
+              </div>
+              <div class="watch-row"><div class="watch-provider"><span class="provider-tile cursor"><img src="../../MyUsage/Resources/Icons/ProviderIcon-cursor.svg" alt=""></span><strong>Cursor</strong><small>Pro</small></div><div class="watch-metric"><div class="metric-top"><strong>69%</strong><span>included</span></div><div class="micro-rail" style="--fill:69%"></div><div class="watch-detail">12d left</div></div><div class="watch-metric"><div class="metric-top"><strong>41%</strong><span>on-demand</span></div><div class="micro-rail" style="--fill:41%"></div><div class="watch-detail">+$20.70</div></div></div>
+              <div class="watch-row"><div class="watch-provider"><span class="provider-tile anti"><img src="../../MyUsage/Resources/Icons/ProviderIcon-antigravity.svg" alt=""></span><strong>Antigravity</strong><small>Live</small></div><div class="watch-metric"><div class="metric-top"><strong>8%</strong><span>Gemini Pro</span></div><div class="micro-rail" style="--fill:8%"></div><div class="watch-detail">3h 18m</div></div><div class="watch-metric"><div class="metric-top"><strong>23%</strong><span>Flash</span></div><div class="micro-rail" style="--fill:23%"></div><div class="watch-detail">3h 18m</div></div></div>
+            </div>
+          </section>
+
+          <section class="cost-dock">
+            <div class="cost-head"><strong>Estimated cost</strong><span>local logs x price catalog</span></div>
+            <div class="cost-body"><div class="spark" aria-label="14 day cost history"><i style="height:28%">&#8203;</i><i style="height:38%">&#8203;</i><i style="height:31%">&#8203;</i><i style="height:50%">&#8203;</i><i style="height:41%">&#8203;</i><i style="height:60%">&#8203;</i><i style="height:52%">&#8203;</i><i style="height:69%">&#8203;</i><i style="height:45%">&#8203;</i><i style="height:57%">&#8203;</i><i style="height:73%">&#8203;</i><i style="height:64%">&#8203;</i><i style="height:82%">&#8203;</i><i style="height:91%">&#8203;</i></div><div class="cost-stat"><label>Today</label><strong>~$6.84</strong><small>+18% vs 7d</small></div><div class="cost-stat"><label>July</label><strong>~$114</strong><small>3 Macs</small></div></div>
+          </section>
+        </div>
+
+        <div class="overview-rows">
+          <section class="rows-head"><h2>All capacity</h2><span>4 tools / 8 windows</span></section>
+          <section class="wide-rows">
+            <article class="wide-row warn-target">
+              <div class="wide-provider"><div class="cell-head"><span class="provider-tile claude"><img src="../../MyUsage/Resources/Icons/ProviderIcon-claude.svg" alt=""></span><strong>Claude</strong><small>Max</small></div><div class="wide-note pressure-copy">weekly may finish 8h early</div><div class="wide-note normal-copy">both windows healthy</div></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>5-hour</span><strong>47%</strong></div><div class="micro-rail" style="--fill:47%"></div><small>resets 2h 14m</small></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>Weekly</span><strong><span class="normal-copy">62%</span><span class="pressure-copy">91%</span></strong></div><div class="micro-rail normal-copy" style="--fill:62%"></div><div class="micro-rail pressure-copy" style="--fill:91%"></div><small>resets Sun</small></div>
+            </article>
+            <article class="wide-row" data-open="codex">
+              <div class="wide-provider"><div class="cell-head"><span class="provider-tile codex"><img src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt=""></span><strong>Codex</strong><small>Plus</small></div><div class="wide-note credit normal-copy">2 credits / Aug 15</div><div class="wide-note credit pressure-copy">2 credits / Jul 20</div></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>5-hour</span><strong>42%</strong></div><div class="micro-rail" style="--fill:42%"></div><small>resets 2h 42m</small></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>Weekly</span><strong><span class="normal-copy">31%</span><span class="pressure-copy">76%</span></strong></div><div class="micro-rail normal-copy" style="--fill:31%"></div><div class="micro-rail pressure-copy" style="--fill:76%"></div><small>resets Tue</small></div>
+            </article>
+            <article class="wide-row">
+              <div class="wide-provider"><div class="cell-head"><span class="provider-tile cursor"><img src="../../MyUsage/Resources/Icons/ProviderIcon-cursor.svg" alt=""></span><strong>Cursor</strong><small>Pro</small></div><div class="wide-note">12 days left</div></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>Included</span><strong>69%</strong></div><div class="micro-rail" style="--fill:69%"></div><small>$13.80 / $20</small></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>On-demand</span><strong>41%</strong></div><div class="micro-rail" style="--fill:41%"></div><small>+$20.70 / $50</small></div>
+            </article>
+            <article class="wide-row">
+              <div class="wide-provider"><div class="cell-head"><span class="provider-tile anti"><img src="../../MyUsage/Resources/Icons/ProviderIcon-antigravity.svg" alt=""></span><strong>Antigravity</strong></div><div class="wide-note">live / resets 3h 18m</div></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>Gemini Pro</span><strong>8%</strong></div><div class="micro-rail" style="--fill:8%"></div><small>model quota</small></div>
+              <div class="wide-metric"><div class="wide-metric-head"><span>Flash</span><strong>23%</strong></div><div class="micro-rail" style="--fill:23%"></div><small>model quota</small></div>
+            </article>
+          </section>
+          <section class="cost-dock"><div class="cost-head"><strong>Estimated cost</strong><span>local logs x price catalog</span></div><div class="cost-body"><div class="spark" aria-label="14 day cost history"><i style="height:28%">&#8203;</i><i style="height:38%">&#8203;</i><i style="height:31%">&#8203;</i><i style="height:50%">&#8203;</i><i style="height:41%">&#8203;</i><i style="height:60%">&#8203;</i><i style="height:52%">&#8203;</i><i style="height:69%">&#8203;</i><i style="height:45%">&#8203;</i><i style="height:57%">&#8203;</i><i style="height:73%">&#8203;</i><i style="height:64%">&#8203;</i><i style="height:82%">&#8203;</i><i style="height:91%">&#8203;</i></div><div class="cost-stat"><label>Today</label><strong>~$6.84</strong><small>+18% vs 7d</small></div><div class="cost-stat"><label>July</label><strong>~$114</strong><small>3 Macs</small></div></div></section>
+        </div>
+      </div>
+
+      <div class="codex-page">
+        <section class="provider-head">
+          <span class="provider-tile codex"><img src="../../MyUsage/Resources/Icons/ProviderIcon-codex.svg" alt=""></span>
+          <strong>Codex</strong><small>Plus</small>
+          <span class="account">dev@example.com</span>
+        </section>
+
+        <section class="detail-summary">
+          <div>
+            <h2 class="normal-copy">Capacity is on pace.</h2>
+            <h2 class="pressure-copy">Weekly pace needs attention.</h2>
+            <p>Current usage compared with elapsed window time</p>
+          </div>
+          <span class="pace-value normal-copy">4 pts under</span>
+          <span class="pace-value pressure-copy" style="color:var(--warn)">12 pts over</span>
+        </section>
+
+        <section class="instrument-pair">
+          <article class="instrument">
+            <div class="instrument-head"><strong>5-hour</strong><small>used</small></div>
+            <div class="instrument-value">42<span>%</span></div>
+            <div class="mini-rail paced" data-fill="8" style="--pace-normal:46%"></div>
+            <div class="axis"><span>0</span><span>pace</span><span>100</span></div>
+            <div class="instrument-foot">resets 18:30 / 2h 42m</div>
+          </article>
+          <article class="instrument warn-target">
+            <div class="instrument-head"><strong>Weekly</strong><small>used</small></div>
+            <div class="instrument-value"><span class="normal-copy">31</span><span class="pressure-copy">76</span><span>%</span></div>
+            <div class="mini-rail paced" data-fill-normal="6" data-fill-pressure="15" style="--pace-normal:35%;--pace-pressure:64%"></div>
+            <div class="axis"><span>0</span><span>pace</span><span>100</span></div>
+            <div class="instrument-foot">resets Tue 09:00 / 3d 16h</div>
+          </article>
+        </section>
+
+        <section class="credits-section">
+          <div class="section-head">
+            <span class="count">2</span>
+            <h3>Limit reset credits</h3>
+            <span class="spacer">&#8203;</span>
+            <button class="icon-button reminder" title="Remind before expiry" aria-label="Remind before expiry">
+              <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+            </button>
+            <div class="next">EARLIEST EXPIRY<strong class="normal-copy">Aug 15 / 09:00</strong><strong class="pressure-copy">Jul 20 / 18:00</strong></div>
+          </div>
+          <div class="credits-list">
+            <div class="credit-row"><span class="credit-index">1</span><span>Available</span><time class="normal-copy">Aug 15, 2026 / 09:00</time><time class="pressure-copy soon">Jul 20, 2026 / 18:00</time></div>
+            <div class="credit-row"><span class="credit-index">2</span><span>Available</span><time>Sep 11, 2026 / 09:00</time></div>
+          </div>
+        </section>
+
+        <section class="detail-cost">
+          <div class="cost-head"><strong>Estimated cost / 14 days</strong><span>~$52.87</span></div>
+          <div class="cost-body">
+            <div class="spark"><i style="height:28%">&#8203;</i><i style="height:38%">&#8203;</i><i style="height:31%">&#8203;</i><i style="height:50%">&#8203;</i><i style="height:41%">&#8203;</i><i style="height:60%">&#8203;</i><i style="height:52%">&#8203;</i><i style="height:69%">&#8203;</i><i style="height:45%">&#8203;</i><i style="height:57%">&#8203;</i><i style="height:73%">&#8203;</i><i style="height:64%">&#8203;</i><i style="height:82%">&#8203;</i><i style="height:91%">&#8203;</i></div>
+            <div class="cost-stat"><label>Today</label><strong>~$3.82</strong><small>estimated</small></div>
+          </div>
+        </section>
+        <div class="source-line"><span>OAuth API / local logs / price catalog</span><span>checked 18s</span></div>
+      </div>
+
+      <footer class="footer">
+        <span id="footer-label">Focus overview / sample data</span>
+        <div class="footer-actions">
+          <button class="icon-button" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>
+          </button>
+          <button class="icon-button" title="More" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg></button>
+        </div>
+      </footer>
+    </section>
+  </main>
+  <div class="toast" role="status">Expiry reminder enabled</div>
+
+<script>
+  const body = document.body;
+  const popover = document.querySelector('#popover');
+  const directionName = document.querySelector('#direction-name');
+  const footerLabel = document.querySelector('#footer-label');
+  const toast = document.querySelector('.toast');
+
+  function buildRails() {
+    document.querySelectorAll('.mini-rail').forEach((rail) => {
+      rail.innerHTML = '';
+      const count = 20;
+      const normal = Number(rail.dataset.fillNormal ?? rail.dataset.fill ?? 0);
+      const pressure = Number(rail.dataset.fillPressure ?? rail.dataset.fill ?? normal);
+      for (let i = 0; i < count; i += 1) {
+        const segment = document.createElement('i');
+        if (i < normal) segment.classList.add('fill-normal');
+        if (i < pressure) segment.classList.add('fill-pressure');
+        rail.append(segment);
+      }
+    });
+  }
+  buildRails();
+
+  document.querySelectorAll('[data-design]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-design]').forEach((item) => item.classList.toggle('active', item === button));
+      const rows = button.dataset.design === 'rows';
+      popover.classList.toggle('rows', rows);
+      popover.classList.toggle('focus', !rows);
+      directionName.textContent = rows ? 'Rows / all windows visible' : 'Focus / priority-led overview';
+      footerLabel.textContent = rows ? 'Rows overview / sample data' : 'Focus overview / sample data';
+    });
+  });
+
+  document.querySelectorAll('[data-state]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-state]').forEach((item) => item.classList.toggle('active', item === button));
+      body.classList.toggle('pressure', button.dataset.state === 'pressure');
+      body.classList.toggle('normal', button.dataset.state === 'normal');
+    });
+  });
+
+  document.querySelector('.theme-button').addEventListener('click', () => body.classList.toggle('light'));
+
+  function selectPage(page) {
+    const target = page === 'codex' ? 'codex' : 'overview';
+    document.querySelector('.overview-page').classList.toggle('active', target === 'overview');
+    document.querySelector('.codex-page').classList.toggle('active', target === 'codex');
+    document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.page === target));
+  }
+  document.querySelectorAll('.nav-item').forEach((button) => button.addEventListener('click', () => selectPage(button.dataset.page)));
+  document.querySelectorAll('[data-open="codex"]').forEach((cell) => cell.addEventListener('click', () => selectPage('codex')));
+  document.querySelectorAll('[data-open="claude"]').forEach((cell) => cell.addEventListener('click', () => selectPage('overview')));
+
+  document.querySelector('.refresh').addEventListener('click', () => {
+    document.querySelector('.fresh').textContent = 'checked now';
+  });
+  document.querySelector('.reminder').addEventListener('click', (event) => {
+    event.currentTarget.style.color = 'var(--blue)';
+    toast.classList.add('show');
+    window.setTimeout(() => toast.classList.remove('show'), 1500);
+  });
+</script>
+</body>
+</html>
