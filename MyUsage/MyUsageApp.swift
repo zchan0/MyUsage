@@ -19,10 +19,25 @@ struct MyUsageApp: App {
 /// `MenuBarExtra`, so the popover panel can be sized to its content exactly.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let usageManager = UsageManager()
+    let usageManager: UsageManager
     let updateChecker = UpdateChecker.shared
 
     private var menuBarCoordinator: MenuBarCoordinator?
+
+    override init() {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["MYUSAGE_PREVIEW_PROVIDERS"],
+           let count = Int(raw),
+           (1...4).contains(count) {
+            usageManager = PreviewFixtures.manager(providerCount: count)
+        } else {
+            usageManager = UsageManager()
+        }
+        #else
+        usageManager = UsageManager()
+        #endif
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuBarCoordinator = MenuBarCoordinator(manager: usageManager, updateChecker: updateChecker)

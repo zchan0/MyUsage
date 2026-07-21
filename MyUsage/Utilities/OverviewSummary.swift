@@ -102,6 +102,16 @@ enum OverviewSummary {
         return sawData ? values : nil
     }
 
+    /// Aggregate all providers into one dense trailing series for Overview.
+    static func trailingDailySeries(
+        dailyCosts: [ProviderKind: [LedgerStore.DailyCost]],
+        days: Int = 14,
+        now: Date = .now
+    ) -> [Double]? {
+        let combined = dailyCosts.values.flatMap { $0 }
+        return trailingDailySeries(series: combined, days: days, now: now)
+    }
+
     // MARK: - Next reset
 
     /// One reset candidate: a provider's window and when it unlocks.

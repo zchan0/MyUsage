@@ -103,7 +103,9 @@ final class UsageManager {
     // MARK: - Init
 
     init(
-        ledger: LedgerSync = LedgerSync()
+        ledger: LedgerSync = LedgerSync(),
+        providers initialProviders: [any UsageProvider]? = nil,
+        startsLedger: Bool = true
     ) {
         let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
@@ -122,10 +124,14 @@ final class UsageManager {
         self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
         self.ledger = ledger
 
-        register(ClaudeProvider(ledger: ledger))
-        register(CodexProvider(ledger: ledger))
-        register(CursorProvider())
-        register(AntigravityProvider())
+        if let initialProviders {
+            initialProviders.forEach(register)
+        } else {
+            register(ClaudeProvider(ledger: ledger))
+            register(CodexProvider(ledger: ledger))
+            register(CursorProvider())
+            register(AntigravityProvider())
+        }
 
         // One-time cleanup: the multi-account registry was removed.
         // Its persisted `accounts.json` is now orphaned — delete it
@@ -144,7 +150,9 @@ final class UsageManager {
             }
         }
 
-        Task { await ledger.start() }
+        if startsLedger {
+            Task { await ledger.start() }
+        }
     }
 
     private var menuBarModeObserver: DefaultsKeyObserver?

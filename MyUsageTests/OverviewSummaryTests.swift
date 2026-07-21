@@ -111,6 +111,17 @@ final class OverviewSummaryTests: XCTestCase {
         XCTAssertNil(OverviewSummary.trailingDailySeries(series: series, days: 14, now: now))
     }
 
+    func testAggregateTrailingSeriesSumsProvidersByDay() {
+        let daily: [ProviderKind: [LedgerStore.DailyCost]] = [
+            .claude: [cost(day(0), 2), cost(day(-1), 1)],
+            .codex: [cost(day(0), 3)],
+        ]
+        XCTAssertEqual(
+            OverviewSummary.trailingDailySeries(dailyCosts: daily, days: 2, now: now),
+            [1, 5]
+        )
+    }
+
     // MARK: - nextReset
 
     func testNextResetPicksSoonestFutureAndSkipsPast() {

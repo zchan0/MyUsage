@@ -14,15 +14,18 @@ import SwiftUI
 struct ProviderCardCostRow: View {
     let kind: ProviderKind
     let snapshot: UsageSnapshot
+    var showsDivider = true
 
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
         if shouldShow {
             VStack(alignment: .leading, spacing: 9) {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.06))
-                    .frame(height: 0.5)
+                if showsDivider {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(height: 0.5)
+                }
 
                 bodyRow
             }

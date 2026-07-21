@@ -16,18 +16,12 @@ struct ProviderPopover: View {
             header
 
             if let provider = manager.orderedProviders.first(where: { $0.kind == kind }) {
-                VStack(spacing: 10) {
-                    // Head hidden: this panel's header already names the
-                    // provider — the card starts straight at the data.
-                    ProviderCard(provider: provider, showsHero: true, showsHead: false)
-                }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
+                ProviderDeck(provider: provider, showsHeader: false)
             }
 
             PopoverFooterBar()
         }
-        .frame(width: 356)
+        .frame(width: 400)
         // Content-sized panel — see UsagePopover for the sizing contract.
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -52,8 +46,10 @@ struct ProviderPopover: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 13)
-        .padding(.bottom, 10)
+        .frame(minHeight: 58)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+        }
     }
 }
 
@@ -75,67 +71,73 @@ struct RelativeTimestampLabel: View {
     }
 }
 
-/// Bottom action menu shared by both popover roots — the CodexBar-style
-/// vertical list that replaces the old lone settings gear. Each action is
-/// a full-width, left-aligned row (icon + label, roomy hit target, row-
-/// hover highlight); hairline separators group them:
-///
-///   ⟳  Refresh
-///   ───────────────
-///   ⚙  Settings…
-///   ↑  Update available          ●     (or  ⓘ  About MyUsage   0.14)
-///   ───────────────
-///   ⏻  Quit MyUsage
-///
-/// Refresh lives here now (removed from the panel header) so every global
-/// action sits in one place, the way a menu-bar dropdown reads.
+/// Compact action rail shared by both popovers. It preserves every command
+/// from the previous vertical menu without spending roughly a quarter of the
+/// panel height on app chrome.
 struct PopoverFooterBar: View {
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
 
     var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.08))
-                .frame(height: 1)
+        HStack(spacing: 2) {
+            Text("v\(AppInfo.version)")
+                .font(.system(size: 8.5, design: .monospaced))
+                .foregroundStyle(.tertiary)
 
-            VStack(spacing: 1) {
-                refreshRow
-                separator
-                settingsRow
-                aboutOrUpdateRow
-                separator
-                FooterMenuRow(icon: "power", label: "Quit MyUsage", tint: .quit) {
-                    NSApp.terminate(nil)
-                }
+            Spacer()
+
+            iconButton(
+                "arrow.clockwise",
+                help: "Refresh",
+                disabled: manager.isRefreshing
+            ) {
+                Task { await manager.refreshAll() }
             }
-            .padding(5)
+
+            settingsButton
+
+            if let update = updateChecker.updateAvailable {
+                iconButton("arrow.up.circle", help: "Update available") {
+                    NSWorkspace.shared.open(update.url)
+                }
+                .foregroundStyle(.orange)
+            }
+
+            Menu {
+                Button("About MyUsage") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+                Divider()
+                Button("Quit MyUsage") { NSApp.terminate(nil) }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More")
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 44)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }
     }
 
-    // MARK: - Rows
-
-    private var refreshRow: some View {
-        FooterMenuRow(
-            icon: "arrow.clockwise",
-            label: "Refresh",
-            spinning: manager.isRefreshing
-        ) {
-            Task { await manager.refreshAll() }
-        }
-        .disabled(manager.isRefreshing)
-    }
-
-    private var settingsRow: some View {
-        // SettingsLink is the only supported way to open the Settings
-        // scene, so the row wraps one. The activation dance (below) is
-        // unchanged from the old gear button — an LSUIElement app opened
-        // from a nonactivating panel lands behind the frontmost app
-        // otherwise.
+    private var settingsButton: some View {
         SettingsLink {
-            FooterMenuRow.Label(icon: "gearshape", label: "Settings…")
+            Image(systemName: "gearshape")
+                .font(.system(size: 12))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(FooterMenuRow.RowStyle(tint: .normal))
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Settings")
         .simultaneousGesture(TapGesture().onEnded {
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -150,34 +152,22 @@ struct PopoverFooterBar: View {
         })
     }
 
-    @ViewBuilder
-    private var aboutOrUpdateRow: some View {
-        if let update = updateChecker.updateAvailable {
-            FooterMenuRow(
-                icon: "arrow.up.circle",
-                label: "Update available",
-                trailing: .dot
-            ) {
-                NSWorkspace.shared.open(update.url)
-            }
-        } else {
-            FooterMenuRow(
-                icon: "info.circle",
-                label: "About MyUsage",
-                trailing: .text(AppInfo.version)
-            ) {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.orderFrontStandardAboutPanel(nil)
-            }
+    private func iconButton(
+        _ icon: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
-    }
-
-    private var separator: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.07))
-            .frame(height: 1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .disabled(disabled)
+        .help(help)
     }
 }
 

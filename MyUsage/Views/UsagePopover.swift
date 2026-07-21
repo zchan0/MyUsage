@@ -2,14 +2,9 @@ import SwiftUI
 
 /// Main popover content shown when clicking the menu bar icon.
 ///
-/// Tabbed layout (CodexBar-lite):
-///   · Header: wordmark · "X ago" (mono) · refresh
-///   · Tab strip: `Overview` + one brand-tile tab per enabled provider
-///   · Overview tab: the full card stack — one ProviderCard per enabled
-///     provider, 7pt gap (each card carries its own border)
-///   · Provider tab: that provider's card expanded with the hero stat
-///     row (big 5h / weekly numbers)
-///   · Footer: settings gear, with a single hairline above
+/// The merged menu-bar popover. Width is stable at 400pt while height remains
+/// content-driven. A single enabled provider opens directly into its Deck;
+/// Overview and navigation exist only when they add value (2+ providers).
 struct UsagePopover: View {
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
@@ -22,15 +17,14 @@ struct UsagePopover: View {
 
             if enabledProviders.isEmpty {
                 emptyState
+            } else if enabledProviders.count == 1, let provider = enabledProviders.first {
+                ProviderDeck(provider: provider)
             } else {
-                if effectiveTab == .overview {
-                    OverviewStatTiles(providers: enabledProviders)
-                }
                 tabBar
 
                 switch effectiveTab {
                 case .overview:
-                    overviewStack
+                    FocusOverview(providers: enabledProviders, selection: $selectedTab)
                 case .provider(let kind):
                     detailPage(kind: kind)
                 }
@@ -38,7 +32,7 @@ struct UsagePopover: View {
 
             PopoverFooterBar()
         }
-        .frame(width: 356)
+        .frame(width: 400)
         // Take the content's ideal height. The hosting panel measures this
         // (via onSizeChange) and resizes its window to match exactly — both
         // growing and shrinking — so there's never a leftover gap. Chrome
@@ -61,8 +55,12 @@ struct UsagePopover: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 13)
-        .padding(.bottom, 10)
+        .frame(minHeight: 56)
+        .overlay(alignment: .bottom) {
+            if enabledProviders.count <= 1 {
+                Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+            }
+        }
     }
 
     private var tabBar: some View {
@@ -75,38 +73,13 @@ struct UsagePopover: View {
             },
             selection: $selectedTab
         )
-        .padding(.horizontal, 14)
-        .padding(.bottom, 11)
-    }
-
-    // MARK: - Pages
-
-    /// Overview: the full card stack.
-    ///
-    /// Plain VStack — NO ScrollView. The popover panel sizes itself to
-    /// this content's intrinsic height, so a ScrollView would have no
-    /// height to fill and collapse to zero (the cards would vanish). A
-    /// plain VStack sizes to its cards and renders reliably; there are
-    /// only ever a handful of provider cards, so scrolling buys nothing.
-    private var overviewStack: some View {
-        VStack(spacing: 10) {
-            ForEach(enabledProviders, id: \.kind) { provider in
-                ProviderCard(provider: provider)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 14)
     }
 
     /// Provider tab: one card, expanded with the hero stat row.
     @ViewBuilder
     private func detailPage(kind: ProviderKind) -> some View {
         if let provider = enabledProviders.first(where: { $0.kind == kind }) {
-            VStack(spacing: 10) {
-                ProviderCard(provider: provider, showsHero: true)
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
+            ProviderDeck(provider: provider)
         }
     }
 
@@ -147,8 +120,18 @@ struct UsagePopover: View {
     }
 }
 
-#Preview {
+#if DEBUG
+#Preview("Focus · 2 providers") {
+    let manager = PreviewFixtures.manager(providerCount: 2)
     UsagePopover()
-        .environment(UsageManager())
+        .environment(manager)
         .environment(UpdateChecker())
 }
+
+#Preview("Deck · 1 provider") {
+    let manager = PreviewFixtures.manager(providerCount: 1)
+    UsagePopover()
+        .environment(manager)
+        .environment(UpdateChecker())
+}
+#endif
