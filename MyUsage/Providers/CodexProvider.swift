@@ -116,6 +116,69 @@ struct CodexCodeReviewLimit: Codable, Sendable {
     }
 }
 
+/// Codex rate-limit reset-credit API response.
+struct CodexResetCreditResponse: Decodable, Sendable {
+    let credits: [CodexResetCreditRecord]
+    let availableCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case credits
+        case availableCount = "available_count"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        credits = try container.decodeIfPresent([CodexResetCreditRecord].self, forKey: .credits) ?? []
+        availableCount = try container.decode(Int.self, forKey: .availableCount)
+        guard availableCount >= 0 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .availableCount,
+                in: container,
+                debugDescription: "available_count must not be negative"
+            )
+        }
+    }
+}
+
+struct CodexResetCreditRecord: Decodable, Sendable {
+    let id: String
+    let status: String
+    let grantedAt: Date?
+    let expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status
+        case grantedAt = "granted_at"
+        case expiresAt = "expires_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        status = try container.decode(String.self, forKey: .status)
+        grantedAt = try Self.decodeDateIfPresent(forKey: .grantedAt, from: container)
+        expiresAt = try Self.decodeDateIfPresent(forKey: .expiresAt, from: container)
+    }
+
+    private static func decodeDateIfPresent(
+        forKey key: CodingKeys,
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> Date? {
+        guard let raw = try container.decodeIfPresent(String.self, forKey: key) else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let basic = ISO8601DateFormatter()
+        guard let date = fractional.date(from: raw) ?? basic.date(from: raw) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "Invalid ISO 8601 date"
+            )
+        }
+        return date
+    }
+}
+
 /// Codex token refresh response.
 struct CodexTokenRefreshResponse: Codable, Sendable {
     let accessToken: String
@@ -147,6 +210,9 @@ final class CodexProvider: UsageProvider {
 
     private static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
     private static let usageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+    nonisolated private static let resetCreditsURL = URL(
+        string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
+    )!
     private static let refreshURL = URL(string: "https://auth.openai.com/oauth/token")!
     private static let keychainService = "Codex Auth"
 
@@ -197,11 +263,14 @@ final class CodexProvider: UsageProvider {
             let sourcePath = loaded.sourcePath
 
             var accessToken = tokens.accessToken
-            var usage: CodexUsageResponse?
+            var usageBundle: (usage: CodexUsageResponse, resetCredits: ResetCreditInventory?)?
 
             // Strategy 1: Try API with existing token first
             do {
-                usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
+                usageBundle = try await fetchUsageBundle(
+                    accessToken: accessToken,
+                    accountId: tokens.accountId
+                )
             } catch ProviderError.apiFailed(let code) where code == 401 || code == 403 {
                 // Token expired — try refresh below
             } catch {
@@ -213,7 +282,7 @@ final class CodexProvider: UsageProvider {
             // pair back to auth.json — otherwise next cycle reuses the
             // now-revoked old refresh_token and the user starts seeing
             // "No credentials" until they re-run `codex` manually.
-            if usage == nil {
+            if usageBundle == nil {
                 let refreshed = try await refreshToken(tokens.refreshToken)
                 accessToken = refreshed.accessToken
 
@@ -242,7 +311,10 @@ final class CodexProvider: UsageProvider {
                     }
                 }
 
-                usage = try await fetchUsage(accessToken: accessToken, accountId: tokens.accountId)
+                usageBundle = try await fetchUsageBundle(
+                    accessToken: accessToken,
+                    accountId: tokens.accountId
+                )
             }
 
             // Derive the account identity from auth.json — it does NOT
@@ -254,8 +326,9 @@ final class CodexProvider: UsageProvider {
             // happened to succeed several refreshes later.
             let identity = currentAccount()
 
-            if let usage {
-                var mapped = Self.mapToSnapshot(usage)
+            if let usageBundle {
+                var mapped = Self.mapToSnapshot(usageBundle.usage)
+                mapped.resetCredits = usageBundle.resetCredits
                 mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
                 snapshot = mapped
             }
@@ -266,7 +339,7 @@ final class CodexProvider: UsageProvider {
 
             // If usage never came back this cycle, keep showing whatever we
             // had — but don't pretend success.
-            guard usage != nil else { return }
+            guard usageBundle != nil else { return }
 
         } catch {
             self.error = error.localizedDescription
@@ -407,6 +480,93 @@ final class CodexProvider: UsageProvider {
         }
 
         return try JSONDecoder().decode(CodexUsageResponse.self, from: data)
+    }
+
+    /// Fetch usage and reset credits together. Usage remains authoritative:
+    /// reset-credit failure is represented as nil and never fails the refresh.
+    private func fetchUsageBundle(
+        accessToken: String,
+        accountId: String?
+    ) async throws -> (usage: CodexUsageResponse, resetCredits: ResetCreditInventory?) {
+        async let resetCredits = fetchResetCredits(accessToken: accessToken, accountId: accountId)
+        let usage = try await fetchUsage(accessToken: accessToken, accountId: accountId)
+        do {
+            return (usage, try await resetCredits)
+        } catch {
+            Logger.codex.info(
+                "Reset-credit inventory unavailable: \(error.localizedDescription, privacy: .public)"
+            )
+            return (usage, nil)
+        }
+    }
+
+    private func fetchResetCredits(
+        accessToken: String,
+        accountId: String?
+    ) async throws -> ResetCreditInventory {
+        let request = Self.makeResetCreditsRequest(accessToken: accessToken, accountId: accountId)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            let http = response as? HTTPURLResponse
+            throw ProviderError.apiFailed(statusCode: http?.statusCode ?? -1)
+        }
+        return try Self.decodeResetCredits(data, now: .now)
+    }
+
+    nonisolated static func makeResetCreditsRequest(
+        accessToken: String,
+        accountId: String?
+    ) -> URLRequest {
+        var request = URLRequest(url: resetCreditsURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 4
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("codex-1", forHTTPHeaderField: "OpenAI-Beta")
+        request.setValue("Codex Desktop", forHTTPHeaderField: "originator")
+        if let accountId {
+            request.setValue(accountId, forHTTPHeaderField: "ChatGPT-Account-Id")
+        }
+        return request
+    }
+
+    nonisolated static func decodeResetCredits(
+        _ data: Data,
+        now: Date
+    ) throws -> ResetCreditInventory {
+        let response = try JSONDecoder().decode(CodexResetCreditResponse.self, from: data)
+        let credits = response.credits
+            .filter { record in
+                guard record.status.lowercased() == "available" else { return false }
+                return record.expiresAt.map { $0 > now } ?? true
+            }
+            .map { ResetCredit(id: $0.id, grantedAt: $0.grantedAt, expiresAt: $0.expiresAt) }
+            .sorted { lhs, rhs in
+                switch (lhs.expiresAt, rhs.expiresAt) {
+                case let (left?, right?):
+                    if left != right { return left < right }
+                    return lhs.id < rhs.id
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): return lhs.id < rhs.id
+                }
+            }
+
+        guard credits.count <= response.availableCount else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: [],
+                    debugDescription: "available_count is smaller than the available credit records"
+                )
+            )
+        }
+
+        return ResetCreditInventory(
+            reportedAvailableCount: response.availableCount,
+            availableCredits: credits,
+            fetchedAt: now
+        )
     }
 
     // MARK: - Snapshot Mapping

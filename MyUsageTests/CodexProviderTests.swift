@@ -138,6 +138,104 @@ struct CodexProviderTests {
         #expect(response.credits == nil)
     }
 
+    // MARK: - Reset Credit Parsing
+
+    @Test("Parse, filter, and sort available reset credits")
+    func parseResetCredits() throws {
+        let now = Date(timeIntervalSince1970: 1_782_000_000)
+        let json = """
+        {
+            "available_count": 2,
+            "credits": [
+                {
+                    "id": "later",
+                    "status": "available",
+                    "granted_at": "2026-06-17T04:00:00.123Z",
+                    "expires_at": "2026-08-05T04:00:00Z"
+                },
+                {
+                    "id": "redeemed",
+                    "status": "redeemed",
+                    "expires_at": "2026-08-01T04:00:00Z"
+                },
+                {
+                    "id": "earlier",
+                    "status": "available",
+                    "expires_at": "2026-08-01T04:00:00.500Z"
+                },
+                {
+                    "id": "expired",
+                    "status": "available",
+                    "expires_at": "2026-01-01T00:00:00Z"
+                }
+            ]
+        }
+        """
+
+        let inventory = try CodexProvider.decodeResetCredits(
+            Data(json.utf8),
+            now: now
+        )
+
+        #expect(inventory.reportedAvailableCount == 2)
+        #expect(inventory.availableCredits.map(\.id) == ["earlier", "later"])
+        #expect(inventory.earliestExpiration == inventory.availableCredits.first?.expiresAt)
+    }
+
+    @Test("Available credit without expiry remains visible after dated credits")
+    func parseResetCreditWithoutExpiry() throws {
+        let json = """
+        {
+            "available_count": 2,
+            "credits": [
+                { "id": "no-expiry", "status": "available", "expires_at": null },
+                { "id": "dated", "status": "AVAILABLE", "expires_at": "2027-01-01T00:00:00Z" }
+            ]
+        }
+        """
+        let inventory = try CodexProvider.decodeResetCredits(Data(json.utf8), now: .distantPast)
+        #expect(inventory.availableCredits.map(\.id) == ["dated", "no-expiry"])
+    }
+
+    @Test("Reject negative reset credit count")
+    func rejectNegativeResetCreditCount() {
+        let json = #"{"available_count":-1,"credits":[]}"#
+        #expect(throws: DecodingError.self) {
+            try CodexProvider.decodeResetCredits(Data(json.utf8), now: .now)
+        }
+    }
+
+    @Test("Reject reset credit inventory whose count contradicts its records")
+    func rejectContradictoryResetCreditCount() {
+        let json = """
+        {
+            "available_count": 1,
+            "credits": [
+                { "id": "one", "status": "available" },
+                { "id": "two", "status": "available" }
+            ]
+        }
+        """
+        #expect(throws: DecodingError.self) {
+            try CodexProvider.decodeResetCredits(Data(json.utf8), now: .now)
+        }
+    }
+
+    @Test("Reset credit request carries Codex headers and bounded timeout")
+    func resetCreditRequest() {
+        let request = CodexProvider.makeResetCreditsRequest(
+            accessToken: "secret",
+            accountId: "account-123"
+        )
+        #expect(request.url?.absoluteString.hasSuffix("rate-limit-reset-credits") == true)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer secret")
+        #expect(request.value(forHTTPHeaderField: "ChatGPT-Account-Id") == "account-123")
+        #expect(request.value(forHTTPHeaderField: "OpenAI-Beta") == "codex-1")
+        #expect(request.value(forHTTPHeaderField: "originator") == "Codex Desktop")
+        #expect(request.timeoutInterval == 4)
+        #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
+    }
+
     // MARK: - Snapshot Mapping
 
     @Test("Map usage response to snapshot")

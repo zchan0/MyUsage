@@ -165,6 +165,28 @@ struct CreditInfo: Sendable {
     }
 }
 
+/// One available Codex rate-limit reset credit. The provider's opaque ID is
+/// retained only as an in-memory identity for SwiftUI; it is never rendered,
+/// logged, or persisted by MyUsage.
+struct ResetCredit: Identifiable, Sendable, Equatable {
+    let id: String
+    let grantedAt: Date?
+    let expiresAt: Date?
+}
+
+/// Inventory returned by Codex's reset-credit endpoint. `reportedAvailableCount`
+/// is the API's authoritative count; `availableCredits` contains the matching
+/// non-expired records for which the API supplied details.
+struct ResetCreditInventory: Sendable, Equatable {
+    let reportedAvailableCount: Int
+    let availableCredits: [ResetCredit]
+    let fetchedAt: Date
+
+    var earliestExpiration: Date? {
+        availableCredits.compactMap(\.expiresAt).min()
+    }
+}
+
 /// Unified usage snapshot from any provider.
 struct UsageSnapshot: Sendable {
     // MARK: - Rolling windows (Claude, Codex)
@@ -187,6 +209,9 @@ struct UsageSnapshot: Sendable {
     var planName: String?
     var email: String?
     var credits: CreditInfo?
+    /// Codex-only rate-limit reset credits. nil means the endpoint did not
+    /// return a trustworthy result; it is distinct from a confirmed count of 0.
+    var resetCredits: ResetCreditInventory?
     var onDemandSpend: CreditInfo?
     var lastRefreshed: Date = .now
 
