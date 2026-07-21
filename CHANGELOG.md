@@ -6,6 +6,55 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.15.0 — 2026-07-22
+
+### Added
+- **Codex reset-credit inventory.** MyUsage now reads Codex's reset-credit
+  endpoint and shows the authoritative available count, the next expiry,
+  and every reported expiry time. Expired or non-available records are
+  filtered; malformed or contradictory responses are shown as unavailable
+  rather than guessed.
+- **Focus Overview.** With two or more providers, Overview promotes one
+  actionable capacity window, keeps the focused provider's other windows
+  in context, and orders the remaining providers by pressure in a compact
+  watchlist. Reliable projected overshoots and high usage outrank routine
+  resets; otherwise the next reset wins.
+
+### Changed
+- **400pt capacity console.** The popover now has a stable, roomier width
+  and content-driven height. One enabled provider skips Overview and tabs
+  entirely; two or more providers get the Focus view and a flat icon rail.
+- **Deck provider detail.** Rolling limits become large side-by-side
+  instruments with full-length segmented rails, pace markers, reset timing,
+  and explicit projection text. Cost and 30-day history remain at the
+  bottom, after capacity and reset credits.
+- **Compact action rail.** Refresh, Settings, Update, About, and Quit remain
+  available in a 44pt footer instead of a tall vertical menu.
+
+### Fixed
+- Claude's legacy CLI Keychain item is recognized correctly when a silent
+  no-UI read is blocked by its ACL; long provider errors remain complete and
+  retry delays use human units.
+- Provider navigation labels and the cost chart's final x-axis label no
+  longer crowd or truncate.
+
+### 中文
+- **Codex reset credit 库存**：读取真实的 reset-credit 接口，显示官方可用
+  次数、最近过期时间与全部已上报的过期时间；已过期/非 available 条目会被
+  过滤，格式错误或相互矛盾的响应只显示 Unavailable，绝不猜数。
+- **Focus Overview**：启用两个及以上 provider 时，突出一个最值得行动的
+  容量窗口，同时保留该 provider 的其他窗口，并把其余 provider 按压力排序
+  成紧凑 watchlist；可靠的超额预测和高占用优先，否则选择最近 reset。
+- **固定 400pt 容量控制台**：宽度更从容、高度随内容变化；单 provider 直接
+  进入详情，不再显示无意义的 Overview/Tab；多 provider 使用扁平图标导航。
+- **Deck 详情页**：滚动额度改为并排大仪表，完整显示刻度、pace、reset 时间
+  与超额预测；成本和 30 天历史统一放到底部，排在容量与 reset credits 之后。
+- **紧凑操作栏**：Refresh / Settings / Update / About / Quit 功能保留，但页脚
+  从高占用的竖排菜单收敛为 44pt 图标操作栏。
+- 修复 Claude 旧 CLI Keychain 条目在静默读取被 ACL 拒绝时无法识别的问题；
+  provider 长错误不再截断，重试时间使用可读单位；导航和成本图表末端标签不再
+  拥挤或裁切。
+
 ## v0.14.0 — 2026-07-17
 
 ### Added
