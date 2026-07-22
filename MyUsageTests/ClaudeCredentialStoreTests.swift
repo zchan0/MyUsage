@@ -48,7 +48,11 @@ final class ClaudeCredentialStoreTests: XCTestCase {
             defaults.removePersistentDomain(forName: defaultsSuite)
         }
 
-        func makeStore(filePath: String = "/nonexistent/credentials.json") -> ClaudeCredentialStore {
+        func makeStore(
+            filePath: String = "/nonexistent/credentials.json",
+            suppressPrompts: Bool = false,
+            manualPromptOverrideAllowed: Bool = true
+        ) -> ClaudeCredentialStore {
             ClaudeCredentialStore(
                 credentialFilePath: filePath,
                 cliKeychainService: "test-cli-service",
@@ -82,7 +86,8 @@ final class ClaudeCredentialStoreTests: XCTestCase {
                 // Tests run inside an .xctest bundle, which the default
                 // policy treats as a dev build and silences — but these
                 // tests exercise the interactive path deliberately.
-                suppressPrompts: false
+                suppressPrompts: suppressPrompts,
+                manualPromptOverrideAllowed: manualPromptOverrideAllowed
             )
         }
     }
@@ -221,6 +226,44 @@ final class ClaudeCredentialStoreTests: XCTestCase {
             now: t0.addingTimeInterval(ClaudeCredentialStore.denialBackoff + 1)
         )
         XCTAssertEqual(h.interactiveReadCount, 2)
+    }
+
+    func testForcedManualAttemptBypassesDevSuppressionAndCooldown() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliNoUIStatus = errSecInteractionNotAllowed
+        h.cliInteractive = (nil, errSecAuthFailed)
+        let store = h.makeStore(suppressPrompts: true)
+        let t0 = Date.now
+
+        XCTAssertNil(store.load(
+            interactive: true,
+            forceInteractive: true,
+            now: t0
+        ))
+        XCTAssertEqual(h.interactiveReadCount, 1)
+
+        h.cliInteractive = (Self.credsJSON(accessToken: "at-manual"), errSecSuccess)
+        let result = store.load(
+            interactive: true,
+            forceInteractive: true,
+            now: t0.addingTimeInterval(60)
+        )
+
+        XCTAssertEqual(h.interactiveReadCount, 2, "each explicit click may retry")
+        XCTAssertEqual(result?.credentials.claudeAiOauth?.accessToken, "at-manual")
+    }
+
+    func testExplicitNoPromptPolicyStillBlocksForcedManualAttempt() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliNoUIStatus = errSecInteractionNotAllowed
+        h.cliInteractive = (Self.credsJSON(), errSecSuccess)
+        let store = h.makeStore(
+            suppressPrompts: true,
+            manualPromptOverrideAllowed: false
+        )
+
+        XCTAssertNil(store.load(interactive: true, forceInteractive: true))
+        XCTAssertEqual(h.interactiveReadCount, 0)
     }
 
     // MARK: - Cache write behavior

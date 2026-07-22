@@ -1,5 +1,13 @@
 import Foundation
 
+/// Why a refresh was started. Providers normally treat both cases the same;
+/// credential-gated providers can reserve interactive authorization for a
+/// deliberate user action.
+enum UsageRefreshTrigger: Sendable, Equatable {
+    case automatic
+    case manual
+}
+
 /// Protocol that all usage providers must conform to.
 @MainActor
 protocol UsageProvider: AnyObject {
@@ -23,4 +31,14 @@ protocol UsageProvider: AnyObject {
 
     /// Fetch/refresh usage data.
     func refresh() async
+
+    /// Refresh with the initiating context. The default implementation keeps
+    /// existing providers source-compatible and delegates to `refresh()`.
+    func refresh(trigger: UsageRefreshTrigger) async
+}
+
+extension UsageProvider {
+    func refresh(trigger: UsageRefreshTrigger) async {
+        await refresh()
+    }
 }

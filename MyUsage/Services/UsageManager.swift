@@ -174,7 +174,7 @@ final class UsageManager {
     // MARK: - Public API
 
     /// Refresh all enabled providers.
-    func refreshAll() async {
+    func refreshAll(trigger: UsageRefreshTrigger = .automatic) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer {
@@ -204,7 +204,9 @@ final class UsageManager {
         // free of non-Sendable captures.
         let enabledIndices = providers.indices.filter { providers[$0].isEnabled }
         let tasks: [Task<Void, Never>] = enabledIndices.map { index in
-            Task { @MainActor in await self.providers[index].refresh() }
+            Task { @MainActor in
+                await self.providers[index].refresh(trigger: trigger)
+            }
         }
         for task in tasks {
             await task.value

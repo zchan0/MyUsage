@@ -16,10 +16,10 @@ import Security
 ///      Every successful read of sources 1–2 refreshes this copy.
 ///   4. Last resort, only when 1–3 produced nothing usable: an
 ///      **interactive** read of the CLI item — the one dialog where the
-///      user should click "Always Allow". Attempts are rate-limited
-///      (`interactiveCooldown`), and an explicit user denial backs off for
-///      `denialBackoff` (persisted) so the refresh timer can never turn
-///      into a prompt storm.
+///      user should click "Always Allow". MyUsage invokes this from an
+///      explicit manual Refresh; background refreshes remain silent. Gated
+///      callers are rate-limited, while a new manual click may retry after
+///      an earlier cancellation.
 ///
 /// The store is read-only towards the CLI: it never writes the CLI's item
 /// and never calls the OAuth refresh endpoint — token rotation stays owned
@@ -89,23 +89,26 @@ final class ClaudeCredentialStore {
         cliKeychainService: String = "Claude Code-credentials",
         io: IO = .live,
         defaults: UserDefaults = .standard,
-        suppressPrompts: Bool = ClaudeCredentialStore.environmentSuppressesPrompts
+        suppressPrompts: Bool = ClaudeCredentialStore.environmentSuppressesPrompts,
+        manualPromptOverrideAllowed: Bool = ClaudeCredentialStore.environmentAllowsManualPromptOverride
     ) {
         self.credentialFilePath = credentialFilePath
         self.cliKeychainService = cliKeychainService
         self.io = io
         self.defaults = defaults
         self.promptSuppressed = suppressPrompts
+        self.manualPromptOverrideAllowed = manualPromptOverrideAllowed
     }
 
-    /// Hard kill-switch for the interactive Keychain prompt. Dev/test runs
+    /// Default safeguard for unsolicited Keychain prompts. Dev/test runs
     /// (`swift run`, autopilot, CI) rebuild the ad-hoc binary constantly —
     /// every rebuild is a new signing identity, every prior "Always Allow"
     /// is void, and each run would throw the password dialog at whoever is
     /// sitting at the machine. Any non-.app invocation is such a build
-    /// (including `.xctest` runners), so only bundled builds may prompt;
-    /// the env vars force silence even there. Injected at init so unit
-    /// tests can exercise the interactive path explicitly.
+    /// (including `.xctest` runners), so only bundled builds prompt by
+    /// default. A deliberate manual Refresh may override the non-.app rule;
+    /// the automation environment variables remain hard kill-switches.
+    /// Injected at init so unit tests can exercise the interactive path.
     ///
     /// `MYUSAGE_FORCE_PROMPT=1` is the developer escape hatch: it re-enables
     /// the prompt on a bare-binary/dev build so the credential-read path can
@@ -121,13 +124,26 @@ final class ClaudeCredentialStore {
         return Bundle.main.bundleURL.pathExtension != "app"
     }
 
+    /// A manual Refresh may override the bare-binary development safeguard,
+    /// but never an explicit automation/CI kill switch.
+    static var environmentAllowsManualPromptOverride: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["MYUSAGE_NO_PROMPT"] != "1" && env["MYUSAGE_AUTOPILOT"] == nil
+    }
+
     private let promptSuppressed: Bool
+    private let manualPromptOverrideAllowed: Bool
 
     /// Walk the source chain. `interactive` gates step 4 only — steps 1–3
     /// are always silent. Returns nil when no source yields credentials
     /// with an OAuth payload.
-    func load(interactive: Bool, now: Date = .now) -> LoadResult? {
-        let interactive = interactive && !promptSuppressed
+    func load(
+        interactive: Bool,
+        forceInteractive: Bool = false,
+        now: Date = .now
+    ) -> LoadResult? {
+        let canOverrideSuppression = forceInteractive && manualPromptOverrideAllowed
+        let interactive = interactive && (!promptSuppressed || canOverrideSuppression)
         // 1) Credentials file — free to read, authoritative when present.
         if let data = io.readFile(credentialFilePath),
            let creds = Self.decode(data) {
@@ -155,12 +171,13 @@ final class ClaudeCredentialStore {
         if probe.status == errSecInteractionNotAllowed,
            interactive,
            cached == nil || cached?.isExpired == true,
-           canAttemptInteractive(now: now) {
+           forceInteractive || canAttemptInteractive(now: now) {
             lastInteractiveAttemptAt = now
             let result = io.readKeychain(cliKeychainService, true)
             lastCLIStatus = result.status
             if let data = result.data, let creds = Self.decode(data) {
                 cacheIfChanged(data)
+                defaults.removeObject(forKey: Self.denialDefaultsKey)
                 return LoadResult(credentials: creds, origin: .cliKeychain)
             }
             if result.status == errSecUserCanceled {

@@ -71,7 +71,7 @@ struct PopoverFooterBar: View {
                 help: "Refresh",
                 disabled: manager.isRefreshing
             ) {
-                Task { await manager.refreshAll() }
+                Task { await manager.refreshAll(trigger: .manual) }
             }
 
             settingsButton

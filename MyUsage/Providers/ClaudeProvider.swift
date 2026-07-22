@@ -264,7 +264,7 @@ final class ClaudeProvider: UsageProvider {
     // MARK: - State
 
     /// Prompt-minimizing credential loader (file → CLI Keychain no-UI →
-    /// own cached copy → one gated interactive read). See
+    /// own cached copy → one manual interactive read). See
     /// `ClaudeCredentialStore` for the full chain.
     private let credentialStore = ClaudeCredentialStore()
 
@@ -315,28 +315,44 @@ final class ClaudeProvider: UsageProvider {
     // MARK: - UsageProvider
 
     func refresh() async {
+        await refresh(trigger: .automatic)
+    }
+
+    func refresh(trigger: UsageRefreshTrigger) async {
         // Re-detect once per refresh so a user who ran `claude login`
         // after the app launched doesn't need to relaunch.
         if !isAvailable { detectAvailability() }
         guard isAvailable else { return }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        // Background refreshes stay silent. A click on Refresh is an explicit
+        // request to recover credential access, so it may show the Keychain
+        // ACL dialog and bypass an earlier prompt cooldown/denial.
+        var manualCredentials: ClaudeCredentials?
+        if trigger == .manual {
+            manualCredentials = loadCredentials(
+                interactive: true,
+                forceInteractive: true
+            )
+            guard manualCredentials != nil else {
+                error = missingCredentialsMessage(afterManualAttempt: true)
+                return
+            }
+        }
 
         // Respect cooldown from a prior 429 — keep stale data + error intact.
         if let until = nextAllowedRefreshAt, until > .now {
             return
         }
 
-        isLoading = true
-        defer { isLoading = false }
         error = nil
 
         do {
-            // Interactive is allowed here (not in detect/account paths): if
-            // the CLI's Keychain item is ACL-blocked and we hold no usable
-            // copy, this is the one place the "Always Allow" dialog may
-            // appear — rate-limited by the store so it can't storm.
-            guard var creds = loadCredentials(interactive: true),
+            guard var creds = manualCredentials ?? loadCredentials(interactive: false),
                   var oauth = creds.claudeAiOauth else {
-                error = "No credentials found"
+                error = missingCredentialsMessage(afterManualAttempt: false)
                 return
             }
 
@@ -641,11 +657,11 @@ final class ClaudeProvider: UsageProvider {
 
         // The silent probe told us the CLI's item exists but is
         // ACL-blocked: definitely a Claude user. Mark available and let
-        // the first refresh run the (rate-limited) interactive bootstrap.
+        // an explicit manual refresh run the interactive bootstrap.
         if credentialStore.lastCLIStatus == errSecInteractionNotAllowed {
             isAvailable = true
             error = nil
-            Logger.claude.info("Claude Keychain item present but ACL-blocked; will bootstrap on refresh")
+            Logger.claude.info("Claude Keychain item present but ACL-blocked; manual refresh can authorize access")
             return
         }
 
@@ -685,16 +701,39 @@ final class ClaudeProvider: UsageProvider {
         loadCredentials(interactive: false)
     }
 
-    /// `interactive: true` permits the store's one gated "Always Allow"
-    /// bootstrap prompt; every other caller stays silent. Falls back to
+    /// `interactive: true` permits the store's "Always Allow" bootstrap
+    /// prompt; every other caller stays silent. Falls back to
     /// the last in-memory copy when the store comes up empty, so a live
     /// session degrades to "token expired" instead of "no credentials".
-    private func loadCredentials(interactive: Bool) -> ClaudeCredentials? {
-        if let result = credentialStore.load(interactive: interactive) {
+    private func loadCredentials(
+        interactive: Bool,
+        forceInteractive: Bool = false
+    ) -> ClaudeCredentials? {
+        if let result = credentialStore.load(
+            interactive: interactive,
+            forceInteractive: forceInteractive
+        ) {
             credentials = result.credentials
             return result.credentials
         }
         return credentials
+    }
+
+    private func missingCredentialsMessage(afterManualAttempt: Bool) -> String {
+        switch credentialStore.lastCLIStatus {
+        case errSecInteractionNotAllowed:
+            return "Claude is signed in, but MyUsage needs Keychain access. Click Refresh, then choose Always Allow."
+        case errSecUserCanceled:
+            return "Keychain access was cancelled. Click Refresh to try again."
+        case errSecItemNotFound:
+            return "Claude Code is installed but no credentials were found. Run `claude login` in a terminal."
+        case let status?:
+            return "Cannot read Claude credentials from Keychain (status \(status)). Click Refresh to try again."
+        case nil:
+            return afterManualAttempt
+                ? "Claude credentials could not be loaded. Click Refresh to try again."
+                : "Claude credentials need access. Click Refresh to continue."
+        }
     }
 
     // MARK: - Plan label

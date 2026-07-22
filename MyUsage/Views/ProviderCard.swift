@@ -84,7 +84,7 @@ struct ProviderCard: View {
             }
 
             if provider.kind == .antigravity, !isAntigravityLive {
-                Button { Task { await provider.refresh() } } label: {
+                Button { Task { await provider.refresh(trigger: .manual) } } label: {
                     Text("Open")
                         .font(.system(size: 11.5, weight: .medium))
                 }
@@ -324,7 +324,7 @@ struct ProviderCard: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 6)
-            Button { Task { await provider.refresh() } } label: {
+            Button { Task { await provider.refresh(trigger: .manual) } } label: {
                 Text("Retry")
                     .font(.system(size: 11, weight: .medium))
             }
@@ -355,7 +355,7 @@ struct ProviderCard: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 6)
-            Button { Task { await provider.refresh() } } label: {
+            Button { Task { await provider.refresh(trigger: .manual) } } label: {
                 Image(systemName: "arrow.clockwise").font(.system(size: 11))
             }
             .buttonStyle(.plain)

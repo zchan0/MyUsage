@@ -194,7 +194,9 @@ struct ProviderDeck: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button("Retry") { Task { await provider.refresh() } }
+            Button("Retry") {
+                Task { await provider.refresh(trigger: .manual) }
+            }
                 .buttonStyle(.plain)
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(.tint)
@@ -219,7 +221,9 @@ struct ProviderDeck: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             if !loading {
-                Button { Task { await provider.refresh() } } label: {
+                Button {
+                    Task { await provider.refresh(trigger: .manual) }
+                } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
