@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SQLite3
 @testable import MyUsage
 
 @Suite("LedgerStore Tests")
@@ -7,6 +8,44 @@ struct LedgerStoreTests {
 
     private func makeStore() throws -> LedgerStore {
         try LedgerStore(path: LedgerStore.inMemoryPath)
+    }
+
+    @Test("Opening a v2 database adds token_usage without losing rows")
+    func migratesV2TokenColumn() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ledger-v2-\(UUID().uuidString).sqlite3")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var db: OpaquePointer?
+        #expect(sqlite3_open(url.path, &db) == SQLITE_OK)
+        defer { sqlite3_close(db) }
+        let sql = """
+        CREATE TABLE schema_meta (version INTEGER NOT NULL);
+        INSERT INTO schema_meta (version) VALUES (2);
+        CREATE TABLE ledger_entries (
+          device_id TEXT NOT NULL, account_id TEXT NOT NULL, provider TEXT NOT NULL,
+          day TEXT NOT NULL, cost_usd REAL NOT NULL, cost_by_model TEXT,
+          source_hash TEXT NOT NULL, schema_ver INTEGER NOT NULL DEFAULT 1,
+          recorded_at INTEGER NOT NULL,
+          PRIMARY KEY (device_id, account_id, provider, source_hash)
+        );
+        INSERT INTO ledger_entries VALUES
+          ('old','default','claude','2026-04-01',1.0,NULL,'2026-04-01',2,1000);
+        """
+        #expect(sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(db)
+        db = nil
+
+        let store = try LedgerStore(path: url.path)
+        let updated = LedgerEntry(
+            deviceId: "old", provider: .claude, day: "2026-04-01", costUSD: 1,
+            tokenUsage: TokenUsage(input: 42),
+            recordedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        #expect(try store.upsert([updated]).count == 1)
+        #expect(try store.monthlyTotal(provider: .claude, monthKey: "2026-04") == 1)
+        #expect(try store.tokenUsage(provider: .claude, fromDay: "2026-04-01")
+            == TokenUsage(input: 42))
     }
 
     @Test("Upsert inserts new rows and reports them as applied")
@@ -249,5 +288,50 @@ struct LedgerStoreTests {
         let days = try store.dailyCosts(provider: .claude, fromDay: "2026-04-01")
         #expect(days[0].totalUSD == 4.0)
         #expect(days[0].byModel.isEmpty)
+    }
+
+    @Test("tokenUsage aggregates v3 buckets across devices and ignores older rows")
+    func tokenUsageAggregates() throws {
+        let store = try makeStore()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        _ = try store.upsert([
+            LedgerEntry(
+                deviceId: "A", provider: .claude, day: "2026-04-01", costUSD: 1,
+                tokenUsage: TokenUsage(input: 10, output: 2, cacheRead: 30), recordedAt: now
+            ),
+            LedgerEntry(
+                deviceId: "B", provider: .claude, day: "2026-04-02", costUSD: 2,
+                tokenUsage: TokenUsage(input: 20, output: 3, cacheWrite: 4), recordedAt: now
+            ),
+            LedgerEntry(deviceId: "legacy", provider: .claude, day: "2026-04-02", costUSD: 3, recordedAt: now),
+            LedgerEntry(
+                deviceId: "C", provider: .codex, day: "2026-04-02", costUSD: 4,
+                tokenUsage: TokenUsage(input: 999), recordedAt: now
+            ),
+        ])
+
+        let usage = try store.tokenUsage(provider: .claude, fromDay: "2026-04-01")
+        #expect(usage == TokenUsage(input: 30, output: 5, cacheWrite: 4, cacheRead: 30))
+        #expect(try store.tokenUsage(provider: .claude, fromDay: "2026-05-01") == nil)
+    }
+
+    @Test("token-only change replaces an otherwise identical ledger row")
+    func tokenChangeReplacesRow() throws {
+        let store = try makeStore()
+        let first = LedgerEntry(
+            deviceId: "A", provider: .codex, day: "2026-04-01", costUSD: 1,
+            tokenUsage: TokenUsage(input: 10),
+            recordedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let replacement = LedgerEntry(
+            deviceId: "A", provider: .codex, day: "2026-04-01", costUSD: 1,
+            tokenUsage: TokenUsage(input: 25, cachedInput: 50),
+            recordedAt: Date(timeIntervalSince1970: 2_000)
+        )
+
+        _ = try store.upsert([first])
+        #expect(try store.upsert([replacement]).count == 1)
+        #expect(try store.tokenUsage(provider: .codex, fromDay: "2026-04-01")
+            == TokenUsage(input: 25, cachedInput: 50))
     }
 }

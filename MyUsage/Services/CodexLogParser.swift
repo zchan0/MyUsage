@@ -107,6 +107,7 @@ enum CodexLogParser {
     struct DailyBreakdown: Sendable, Equatable {
         var total: [String: Double] = [:]
         var byModel: [String: [String: Double]] = [:]
+        var tokensByDay: [String: TokenUsage] = [:]
     }
 
     /// Normalise a raw Codex model identifier into a display family:
@@ -239,7 +240,8 @@ enum CodexLogParser {
                     output: output,
                     cachedInput: cached
                 )
-                guard tokens.input + tokens.output + tokens.cachedInput > 0 else { return }
+                guard !tokens.isEmpty else { return }
+                acc.tokensByDay[lastDay, default: .zero] += tokens
                 let usd = CostCalculator.cost(
                     usage: tokens,
                     model: model,

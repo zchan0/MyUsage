@@ -10,10 +10,9 @@ import Foundation
 /// kept in sync by the `Codable` keys below.
 struct LedgerEntry: Sendable, Equatable, Codable {
 
-    /// Schema version for the JSONL line itself. Bumped to 2 when
-    /// `costByModel` was added. Readers tolerant: missing field decodes
-    /// to nil, older `v: 1` lines parse cleanly; new lines write `v: 2`.
-    static let wireVersion = 2
+    /// Schema version for the JSONL line itself. v2 added `costByModel`;
+    /// v3 adds daily token buckets. Readers remain tolerant of older lines.
+    static let wireVersion = 3
 
     /// Author device UUID. Constant per (install, Mac).
     let deviceId: String
@@ -43,6 +42,10 @@ struct LedgerEntry: Sendable, Equatable, Codable {
     /// `ClaudeLogParser.normalizeModelFamily`.
     let costByModel: [String: Double]?
 
+    /// Daily token buckets for this device + account. nil means the row was
+    /// authored by a pre-v3 client or the provider cannot report tokens.
+    let tokenUsage: TokenUsage?
+
     /// Dedup key for this row. v1: equals `day`. Future (per-message)
     /// granularity can put a real hash here without touching the schema.
     let sourceHash: String
@@ -62,6 +65,7 @@ struct LedgerEntry: Sendable, Equatable, Codable {
         day: String,
         costUSD: Double,
         costByModel: [String: Double]? = nil,
+        tokenUsage: TokenUsage? = nil,
         sourceHash: String? = nil,
         recordedAt: Date = .now,
         v: Int = LedgerEntry.wireVersion
@@ -72,6 +76,7 @@ struct LedgerEntry: Sendable, Equatable, Codable {
         self.day = day
         self.costUSD = costUSD
         self.costByModel = costByModel
+        self.tokenUsage = tokenUsage
         self.sourceHash = sourceHash ?? day
         self.recordedAt = Int64(recordedAt.timeIntervalSince1970)
         self.v = v
@@ -87,6 +92,7 @@ struct LedgerEntry: Sendable, Equatable, Codable {
         case day
         case costUSD
         case costByModel
+        case tokenUsage
         case sourceHash
         case recordedAt
     }
@@ -116,6 +122,7 @@ struct LedgerEntry: Sendable, Equatable, Codable {
             ?? legacy.decodeIfPresent(Double.self, forKey: .costUsd)
             ?? legacy.decode(Double.self, forKey: .cost_usd)
         self.costByModel = try current.decodeIfPresent([String: Double].self, forKey: .costByModel)
+        self.tokenUsage = try current.decodeIfPresent(TokenUsage.self, forKey: .tokenUsage)
         self.sourceHash = try current.decodeIfPresent(String.self, forKey: .sourceHash)
             ?? legacy.decodeIfPresent(String.self, forKey: .source_hash)
             ?? self.day
@@ -130,6 +137,7 @@ struct LedgerEntry: Sendable, Equatable, Codable {
         day: String,
         costUSD: Double,
         costByModel: [String: Double]? = nil,
+        tokenUsage: TokenUsage? = nil,
         sourceHash: String,
         recordedAt: Int64,
         v: Int = LedgerEntry.wireVersion
@@ -140,6 +148,7 @@ struct LedgerEntry: Sendable, Equatable, Codable {
         self.day = day
         self.costUSD = costUSD
         self.costByModel = costByModel
+        self.tokenUsage = tokenUsage
         self.sourceHash = sourceHash
         self.recordedAt = recordedAt
         self.v = v

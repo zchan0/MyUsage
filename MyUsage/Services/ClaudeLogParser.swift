@@ -188,6 +188,7 @@ enum ClaudeLogParser {
     struct DailyBreakdown: Sendable, Equatable {
         var total: [String: Double] = [:]
         var byModel: [String: [String: Double]] = [:]
+        var tokensByDay: [String: TokenUsage] = [:]
     }
 
     /// Scan default roots, producing a per-day cost + per-model breakdown
@@ -299,22 +300,25 @@ enum ClaudeLogParser {
                 .flatMap(Self.parseTimestamp)
                 .map(LedgerCalendar.dayKey) ?? fallbackDay
 
-            // Server-provided costUSD: rolls into total but skips per-model
-            // attribution (we don't have token counts to ratio it). The
-            // mixed-attribution case is documented on `DailyBreakdown`.
-            if let cost = row.costUSD, cost > 0 {
-                acc.total[day, default: 0] += cost
-                return
-            }
-
             let tokens = TokenUsage(
                 input: usage.inputTokens ?? 0,
                 output: usage.outputTokens ?? 0,
                 cacheWrite: usage.cacheCreationInputTokens ?? 0,
                 cacheRead: usage.cacheReadInputTokens ?? 0
             )
-            let total = tokens.input + tokens.output + tokens.cacheWrite + tokens.cacheRead
-            guard total > 0 else { return }
+            if !tokens.isEmpty {
+                acc.tokensByDay[day, default: .zero] += tokens
+            }
+
+            // Server-provided costUSD is authoritative for cost. Token
+            // buckets are still recorded above; only model-cost attribution
+            // is unavailable because the row's price cannot be decomposed.
+            if let cost = row.costUSD, cost > 0 {
+                acc.total[day, default: 0] += cost
+                return
+            }
+
+            guard !tokens.isEmpty else { return }
 
             let usd = CostCalculator.cost(
                 usage: tokens,

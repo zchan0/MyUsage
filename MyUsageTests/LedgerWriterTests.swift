@@ -61,7 +61,8 @@ struct LedgerWriterTests {
 
         let applied = await h.writer.recordDailyCosts(
             provider: .claude,
-            dailyCostsByDay: [dayA: 1.23, dayB: 4.56]
+            dailyCostsByDay: [dayA: 1.23, dayB: 4.56],
+            tokensByDay: [dayA: TokenUsage(input: 100, output: 20, cacheRead: 400)]
         )
         #expect(applied.applied.count == 2)
         #expect(applied.issue == nil)
@@ -70,12 +71,38 @@ struct LedgerWriterTests {
         let lines = String(data: ledgerData, encoding: .utf8)!
             .split(separator: "\n", omittingEmptySubsequences: true)
         #expect(lines.count == 2)
+        let decoded = try lines.map {
+            try JSONDecoder().decode(LedgerEntry.self, from: Data($0.utf8))
+        }
+        #expect(decoded.first { $0.day == dayA }?.tokenUsage
+            == TokenUsage(input: 100, output: 20, cacheRead: 400))
 
         let manifest = LedgerManifestCodec.read(from: h.manifestFile())
         #expect(manifest != nil)
         #expect(manifest?.deviceId == h.deviceID)
         #expect(manifest?.rowCount == 2)
         #expect(manifest?.monthlyTotals["claude"]?[month] == 1.23 + 4.56)
+    }
+
+    @Test("recordDailyCosts preserves token-only days")
+    func recordDailyCostsPreservesTokenOnlyDays() async throws {
+        let (h, tmp) = try makeHarness()
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        let (_, dayA, _) = Self.currentMonthDayKeys()
+
+        let usage = TokenUsage(input: 100, output: 20, cachedInput: 80)
+        let result = await h.writer.recordDailyCosts(
+            provider: .codex,
+            dailyCostsByDay: [:],
+            tokensByDay: [dayA: usage]
+        )
+
+        #expect(result.applied.count == 1)
+        #expect(try h.store.tokenUsage(provider: .codex, fromDay: dayA) == usage)
+        #expect(try h.store.monthlyTotal(
+            provider: .codex,
+            monthKey: LedgerCalendar.monthPrefix(of: dayA)
+        ) == 0)
     }
 
     @Test("JSONL append does not duplicate on re-entry with same costs")

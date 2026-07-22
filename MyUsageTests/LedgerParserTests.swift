@@ -28,6 +28,25 @@ struct LedgerParserTests {
         #expect(abs((result["2026-04-18"] ?? 0) - 2.00) < 1e-9)
     }
 
+    @Test("Claude daily breakdown retains tokens even for server-priced rows")
+    func claudeDailyTokensWithServerCost() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory
+            .appendingPathComponent("claude-daily-tokens-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let file = root.appendingPathComponent("session.jsonl")
+        let jsonl = """
+        {"type":"assistant","timestamp":"2026-04-17T10:00:00Z","costUSD":1.0,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":20,"cache_creation_input_tokens":30,"cache_read_input_tokens":400}}}
+        """
+        try jsonl.write(to: file, atomically: true, encoding: .utf8)
+
+        let breakdown = ClaudeLogParser.scanDailyBreakdown(roots: [root], since: .distantPast)
+        #expect(breakdown.tokensByDay["2026-04-17"]
+            == TokenUsage(input: 100, output: 20, cacheWrite: 30, cacheRead: 400))
+    }
+
     @Test("Claude scanDailyCost prices token rows when costUSD is missing")
     func claudePricesTokens() throws {
         let fm = FileManager.default

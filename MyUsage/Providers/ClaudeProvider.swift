@@ -409,7 +409,9 @@ final class ClaudeProvider: UsageProvider {
                 )
             }
 
+            let identity = currentAccount()
             var mapped = Self.mapToSnapshot(usage, plan: planLabel(creds: creds), fetchedAt: .now)
+            mapped.email = identity?.email
             mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
             snapshot = mapped
             nextAllowedRefreshAt = nil
@@ -419,8 +421,6 @@ final class ClaudeProvider: UsageProvider {
             // cross-device aggregates stay attributable (spec 13). The
             // account_id is invisible in the UI — the cost row sums across
             // all of them — but it keeps each device's rows distinct.
-            let identity = currentAccount()
-
             // Write per-day totals into the multi-device ledger (spec 12).
             // Off the hot path of the user-visible snapshot so a slow scan
             // never blocks the card update.
@@ -604,11 +604,12 @@ final class ClaudeProvider: UsageProvider {
                 since: Date.ledgerBackfillStart()
             )
         }.value
-        guard !breakdown.total.isEmpty else { return }
+        guard !breakdown.total.isEmpty || !breakdown.tokensByDay.isEmpty else { return }
         await ledger.recordDailyCosts(
             provider: .claude,
             byDay: breakdown.total,
             perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel,
+            tokensByDay: breakdown.tokensByDay.isEmpty ? nil : breakdown.tokensByDay,
             accountID: accountID
         )
     }

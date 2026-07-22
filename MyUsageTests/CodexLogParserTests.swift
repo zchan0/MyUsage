@@ -183,5 +183,6 @@ struct CodexLogParserTests {
         #expect(abs((breakdown.total[day] ?? 0) - 3.0) < 1e-9)
         #expect(abs((breakdown.byModel[day]?["GPT-5 Codex"] ?? 0) - 1.25) < 1e-9)
         #expect(abs((breakdown.byModel[day]?["GPT-5.2 Codex"] ?? 0) - 1.75) < 1e-9)
+        #expect(breakdown.tokensByDay[day] == TokenUsage(input: 2_000_000))
     }
 }

@@ -27,6 +27,10 @@ final class LedgerSync {
     /// the daily-cost chart. Refreshed together with the monthly totals.
     private(set) var dailyCosts: [ProviderKind: [LedgerStore.DailyCost]] = [:]
 
+    /// Trailing-30-day token totals across every synced device + account.
+    /// Missing entries mean no v3 ledger row has token attribution yet.
+    private(set) var tokenUsage30Days: [ProviderKind: TokenUsage] = [:]
+
     /// The current device's UUID — "Mine" in UI rows.
     let selfDeviceID: String
 
@@ -188,12 +192,14 @@ final class LedgerSync {
         provider: ProviderKind,
         byDay: [String: Double],
         perModelByDay: [String: [String: Double]]? = nil,
+        tokensByDay: [String: TokenUsage]? = nil,
         accountID: String = "default"
     ) async {
         let result = await writer.recordDailyCosts(
             provider: provider,
             dailyCostsByDay: byDay,
             perModelByDay: perModelByDay,
+            tokensByDay: tokensByDay,
             accountID: accountID
         )
         lastWriteIssue = result.issue
@@ -327,6 +333,11 @@ final class LedgerSync {
                 provider: provider,
                 fromDay: chartFromDay
             )) ?? []
+            if let usage = try? store.tokenUsage(provider: provider, fromDay: chartFromDay) {
+                tokenUsage30Days[provider] = usage
+            } else {
+                tokenUsage30Days.removeValue(forKey: provider)
+            }
             let sum = (try? store.monthlyTotal(
                 provider: provider,
                 monthKey: monthKey
@@ -351,6 +362,14 @@ final class LedgerSync {
         monthlyTotals[monthKey] = totals
         monthlyByDevice[monthKey] = byDevice
     }
+
+    #if DEBUG
+    /// Synchronous aggregate refresh for SwiftUI fixtures after they seed an
+    /// in-memory store. Production continues to refresh through the actor flow.
+    func reloadForPreview() {
+        reloadAggregates()
+    }
+    #endif
 
     // MARK: - Peer manifest names
 

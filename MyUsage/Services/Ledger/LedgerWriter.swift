@@ -64,17 +64,24 @@ actor LedgerWriter {
         provider: ProviderKind,
         dailyCostsByDay: [String: Double],
         perModelByDay: [String: [String: Double]]? = nil,
+        tokensByDay: [String: TokenUsage]? = nil,
         accountID: String = "default",
         now: Date = .now
     ) async -> WriteResult {
-        let entries = dailyCostsByDay.map { (day, cost) in
+        // Token collection is independent from pricing. Preserve a token-only
+        // day even when its model is absent from the local pricing catalog.
+        let days = Set(dailyCostsByDay.keys)
+            .union(perModelByDay?.keys ?? Dictionary<String, [String: Double]>().keys)
+            .union(tokensByDay?.keys ?? Dictionary<String, TokenUsage>().keys)
+        let entries = days.map { day in
             LedgerEntry(
                 deviceId: deviceID,
                 accountId: accountID,
                 provider: provider,
                 day: day,
-                costUSD: cost,
+                costUSD: dailyCostsByDay[day] ?? 0,
                 costByModel: perModelByDay?[day],
+                tokenUsage: tokensByDay?[day],
                 recordedAt: now
             )
         }

@@ -328,6 +328,7 @@ final class CodexProvider: UsageProvider {
 
             if let usageBundle {
                 var mapped = Self.mapToSnapshot(usageBundle.usage)
+                mapped.email = identity?.email
                 mapped.resetCredits = usageBundle.resetCredits
                 mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
                 snapshot = mapped
@@ -354,11 +355,12 @@ final class CodexProvider: UsageProvider {
                 since: Date.ledgerBackfillStart()
             )
         }.value
-        guard !breakdown.total.isEmpty else { return }
+        guard !breakdown.total.isEmpty || !breakdown.tokensByDay.isEmpty else { return }
         await ledger.recordDailyCosts(
             provider: .codex,
             byDay: breakdown.total,
             perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel,
+            tokensByDay: breakdown.tokensByDay.isEmpty ? nil : breakdown.tokensByDay,
             accountID: accountID
         )
     }

@@ -12,6 +12,8 @@ struct LedgerEntryTests {
             provider: .claude,
             day: "2026-04-17",
             costUSD: 1.25,
+            costByModel: ["Sonnet": 1.25],
+            tokenUsage: TokenUsage(input: 100, output: 20, cacheRead: 400),
             recordedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
         let data = try JSONEncoder().encode(entry)
@@ -32,6 +34,7 @@ struct LedgerEntryTests {
         #expect(decoded.costUSD == 1.25)
         #expect(decoded.sourceHash == "2026-04-17")
         #expect(decoded.recordedAt == 1_700_000_000)
+        #expect(decoded.tokenUsage == nil)
     }
 
     @Test("LedgerEntry accepts costUsd from older camel-case encoders")
@@ -84,4 +87,3 @@ struct LedgerEntryTests {
         #expect(LedgerCalendar.monthKey(for: date) == "2026-04")
     }
 }
-

@@ -5,7 +5,7 @@ import Foundation
 /// Fields are named to cover both Anthropic and OpenAI billing breakdowns.
 /// Parsers are responsible for splitting totals into the correct buckets
 /// before handing the struct to `CostCalculator`.
-struct TokenUsage: Sendable, Equatable {
+struct TokenUsage: Sendable, Equatable, Codable {
     /// Non-cached input tokens.
     /// - Anthropic: the raw `input_tokens` field.
     /// - OpenAI: `input_tokens − cached_input_tokens`.
@@ -25,6 +25,16 @@ struct TokenUsage: Sendable, Equatable {
     var cachedInput: Int = 0
 
     static let zero = TokenUsage()
+
+    /// Every cache bucket normalised into the one number the UI presents.
+    /// Claude contributes cache reads + writes; Codex contributes cached
+    /// input. Keeping the wire fields separate preserves pricing semantics.
+    var cache: Int { cacheWrite + cacheRead + cachedInput }
+
+    /// Total processed tokens across input, output, and all cache buckets.
+    var total: Int { input + output + cache }
+
+    var isEmpty: Bool { total == 0 }
 
     static func + (lhs: Self, rhs: Self) -> Self {
         TokenUsage(

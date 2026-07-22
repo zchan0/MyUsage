@@ -15,8 +15,8 @@ private let SQLITE_TRANSIENT_DEST = unsafeBitCast(
 final class LedgerStore: @unchecked Sendable {
 
     /// Schema version stored in `schema_meta`. Bump on `CREATE TABLE` changes.
-    /// v1 → v2: added `cost_by_model` JSON column to `ledger_entries`.
-    static let schemaVersion = 2
+    /// v1 → v2: model cost JSON. v2 → v3: daily token buckets.
+    static let schemaVersion = 3
 
     private let path: String
     private var db: OpaquePointer?
@@ -126,6 +126,7 @@ final class LedgerStore: @unchecked Sendable {
                 day           TEXT    NOT NULL,
                 cost_usd      REAL    NOT NULL,
                 cost_by_model TEXT,
+                token_usage   TEXT,
                 source_hash   TEXT    NOT NULL,
                 schema_ver    INTEGER NOT NULL DEFAULT 1,
                 recorded_at   INTEGER NOT NULL,
@@ -143,6 +144,17 @@ final class LedgerStore: @unchecked Sendable {
             } catch {
                 // Column may already exist on some replays — that's fine.
                 // Any other failure surfaces below in the schema_meta update.
+            }
+            try exec("UPDATE schema_meta SET version = \(Self.schemaVersion);")
+        }
+
+        // v2 → v3: optional Codable `TokenUsage` JSON. Existing rows stay
+        // NULL and remain distinguishable from a genuine zero-token day.
+        if let current, current < 3 {
+            do {
+                try exec("ALTER TABLE ledger_entries ADD COLUMN token_usage TEXT;")
+            } catch {
+                // Fresh/replayed schemas may already contain the column.
             }
             try exec("UPDATE schema_meta SET version = \(Self.schemaVersion);")
         }
@@ -178,17 +190,19 @@ final class LedgerStore: @unchecked Sendable {
         let sql = """
             INSERT INTO ledger_entries
                 (device_id, account_id, provider, day, cost_usd,
-                 cost_by_model, source_hash, schema_ver, recorded_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 cost_by_model, token_usage, source_hash, schema_ver, recorded_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(device_id, account_id, provider, source_hash)
             DO UPDATE SET
                 cost_usd      = excluded.cost_usd,
                 cost_by_model = excluded.cost_by_model,
+                token_usage   = excluded.token_usage,
                 day           = excluded.day,
                 recorded_at   = excluded.recorded_at
             WHERE excluded.recorded_at >= ledger_entries.recorded_at
                AND (excluded.cost_usd      <> ledger_entries.cost_usd
-                 OR COALESCE(excluded.cost_by_model, '') <> COALESCE(ledger_entries.cost_by_model, ''));
+                 OR COALESCE(excluded.cost_by_model, '') <> COALESCE(ledger_entries.cost_by_model, '')
+                 OR COALESCE(excluded.token_usage, '') <> COALESCE(ledger_entries.token_usage, ''));
         """
 
         var stmt: OpaquePointer?
@@ -224,9 +238,16 @@ final class LedgerStore: @unchecked Sendable {
             } else {
                 sqlite3_bind_null(stmt, 6)
             }
-            sqlite3_bind_text(stmt, 7, entry.sourceHash, -1, SQLITE_TRANSIENT_DEST)
-            sqlite3_bind_int(stmt, 8, Int32(Self.schemaVersion))
-            sqlite3_bind_int64(stmt, 9, entry.recordedAt)
+            if let usage = entry.tokenUsage,
+               let data = try? JSONEncoder().encode(usage),
+               let str = String(data: data, encoding: .utf8) {
+                sqlite3_bind_text(stmt, 7, str, -1, SQLITE_TRANSIENT_DEST)
+            } else {
+                sqlite3_bind_null(stmt, 7)
+            }
+            sqlite3_bind_text(stmt, 8, entry.sourceHash, -1, SQLITE_TRANSIENT_DEST)
+            sqlite3_bind_int(stmt, 9, Int32(Self.schemaVersion))
+            sqlite3_bind_int64(stmt, 10, entry.recordedAt)
 
             let rc = sqlite3_step(stmt)
             guard rc == SQLITE_DONE else {
@@ -278,8 +299,8 @@ final class LedgerStore: @unchecked Sendable {
     /// `YYYY-MM` month, **across all devices**. Returns `[modelFamily: USD]`.
     /// Rows with NULL `cost_by_model` are silently dropped; consequently the
     /// returned breakdown can sum to less than `monthlyTotal()` (the
-    /// difference is from days where Anthropic gave us a server-computed
-    /// cost without token attribution — see `ClaudeLogParser.DailyBreakdown`).
+    /// difference is from days where the authoritative cost cannot be split
+    /// by model — see `ClaudeLogParser.DailyBreakdown`).
     func monthlyByModel(provider: ProviderKind, monthKey: String) throws -> [String: Double] {
         let sql = """
             SELECT cost_by_model
@@ -379,6 +400,41 @@ final class LedgerStore: @unchecked Sendable {
                 byModel: byModel[day] ?? [:]
             )
         }
+    }
+
+    /// Aggregate token buckets for a provider from `fromDay` onward across
+    /// every synced device and account. nil means no v3-attributed row exists.
+    func tokenUsage(provider: ProviderKind, fromDay: String) throws -> TokenUsage? {
+        let sql = """
+            SELECT token_usage
+            FROM ledger_entries
+            WHERE provider = ?1 AND day >= ?2 AND token_usage IS NOT NULL;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw StoreError.prepare(
+                sql: sql,
+                code: sqlite3_errcode(db),
+                message: String(cString: sqlite3_errmsg(db))
+            )
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_bind_text(stmt, 1, provider.rawValue, -1, SQLITE_TRANSIENT_DEST)
+        sqlite3_bind_text(stmt, 2, fromDay, -1, SQLITE_TRANSIENT_DEST)
+
+        var total = TokenUsage.zero
+        var sawData = false
+        let decoder = JSONDecoder()
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let jsonCStr = sqlite3_column_text(stmt, 0),
+                  let data = String(cString: jsonCStr).data(using: .utf8),
+                  let usage = try? decoder.decode(TokenUsage.self, from: data)
+            else { continue }
+            total += usage
+            sawData = true
+        }
+        return sawData ? total : nil
     }
 
     /// Per-device subtotal for a given (provider, month). Used by the
@@ -526,7 +582,7 @@ final class LedgerStore: @unchecked Sendable {
     func entries(forDevice deviceID: String) throws -> [LedgerEntry] {
         let sql = """
             SELECT device_id, account_id, provider, day, cost_usd,
-                   cost_by_model, source_hash, recorded_at, schema_ver
+                   cost_by_model, token_usage, source_hash, recorded_at, schema_ver
             FROM ledger_entries
             WHERE device_id = ?1
             ORDER BY provider, account_id, day, source_hash;
@@ -549,7 +605,7 @@ final class LedgerStore: @unchecked Sendable {
                   let accountCStr = sqlite3_column_text(stmt, 1),
                   let providerCStr = sqlite3_column_text(stmt, 2),
                   let dayCStr = sqlite3_column_text(stmt, 3),
-                  let sourceCStr = sqlite3_column_text(stmt, 6)
+                  let sourceCStr = sqlite3_column_text(stmt, 7)
             else { continue }
 
             // cost_by_model column (idx 5) — JSON-decoded, nil if SQL NULL
@@ -564,6 +620,13 @@ final class LedgerStore: @unchecked Sendable {
                 }
             }
 
+            var tokenUsage: TokenUsage? = nil
+            if sqlite3_column_type(stmt, 6) != SQLITE_NULL,
+               let tokenCStr = sqlite3_column_text(stmt, 6),
+               let data = String(cString: tokenCStr).data(using: .utf8) {
+                tokenUsage = try? JSONDecoder().decode(TokenUsage.self, from: data)
+            }
+
             entries.append(LedgerEntry(
                 deviceId: String(cString: deviceCStr),
                 accountId: String(cString: accountCStr),
@@ -571,9 +634,10 @@ final class LedgerStore: @unchecked Sendable {
                 day: String(cString: dayCStr),
                 costUSD: sqlite3_column_double(stmt, 4),
                 costByModel: costByModel,
+                tokenUsage: tokenUsage,
                 sourceHash: String(cString: sourceCStr),
-                recordedAt: sqlite3_column_int64(stmt, 7),
-                v: Int(sqlite3_column_int64(stmt, 8))
+                recordedAt: sqlite3_column_int64(stmt, 8),
+                v: Int(sqlite3_column_int64(stmt, 9))
             ))
         }
         return entries
