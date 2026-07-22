@@ -31,7 +31,7 @@ struct ProviderTabBar: View {
         HStack(spacing: 0) {
             segment(tab: .overview) {
                 Text("Overview")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(
                         selection == .overview ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
                     )
@@ -40,13 +40,20 @@ struct ProviderTabBar: View {
             ForEach(items) { item in
                 let selected = selection == .provider(item.kind)
                 segment(tab: .provider(item.kind)) {
-                    HStack(spacing: 6) {
-                        ProviderIconTile(kind: item.kind, size: 16, glyph: 9.5)
+                    if usesIconOnlyProviderTabs {
+                        ProviderIconTile(kind: item.kind, size: 18, glyph: 10.5)
                             .opacity(selected ? 1.0 : 0.72)
-                        Text(item.kind.shortName)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                            .lineLimit(1)
+                            .accessibilityLabel(item.kind.displayName)
+                    } else {
+                        HStack(spacing: 6) {
+                            ProviderIconTile(kind: item.kind, size: 18, glyph: 10.5)
+                                .opacity(selected ? 1.0 : 0.72)
+                            Text(item.kind.shortName)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
                     }
                 }
                 .help(item.kind.displayName)
@@ -56,6 +63,11 @@ struct ProviderTabBar: View {
             Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }
     }
+
+    /// Four provider names plus Overview become cramped at the compact panel
+    /// width. Their brand glyphs remain distinct, and the detail header names
+    /// the selected provider immediately after navigation.
+    private var usesIconOnlyProviderTabs: Bool { items.count >= 4 }
 
     private func segment(tab: PopoverTab, @ViewBuilder content: () -> some View) -> some View {
         Button {
@@ -92,7 +104,7 @@ struct ProviderTabBar: View {
                 selection: $selection
             )
             .padding(12)
-            .frame(width: 340)
+            .frame(width: PopoverLayout.width)
         }
     }
     return Host()

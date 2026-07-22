@@ -50,7 +50,7 @@ struct LimitBar: View {
     var expired: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 7) {
             // Row 1 — name (left) + pct (right).
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 nameView
@@ -84,7 +84,7 @@ struct LimitBar: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let reset {
                     Text(reset)
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .font(.system(size: 10.5, weight: .regular, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.secondary.opacity(0.7))
                 }
@@ -94,12 +94,12 @@ struct LimitBar: View {
                 // and the alarm already implies "you're over pace".
                 if let note {
                     Text(note)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10.5, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(Self.warnAccent)
                 } else if let pace {
                     Text(pace)
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .font(.system(size: 10.5, weight: .regular, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.secondary.opacity(0.55))
                 }
@@ -117,11 +117,11 @@ struct LimitBar: View {
     private var nameView: some View {
         if monoName {
             Text(name)
-                .font(.system(size: 10.5, weight: .regular, design: .monospaced))
+                .font(.system(size: 11.5, weight: .regular, design: .monospaced))
                 .foregroundStyle(.primary.opacity(0.85))
         } else {
             Text(name)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(.secondary.opacity(0.95))
         }
     }
@@ -135,7 +135,7 @@ struct LimitBar: View {
     /// crosses the warn threshold.
     private var pctView: some View {
         Text(expired ? "—" : "\(Int(percent.rounded()))%")
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .font(.system(size: 13, weight: .bold, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(expired ? AnyShapeStyle(.secondary.opacity(0.5)) : AnyShapeStyle(.primary))
             .padding(.horizontal, 6)
@@ -260,10 +260,10 @@ struct ProgressTrack: View {
         if let pace = pacePercent {
             GeometryReader { geo in
                 RoundedRectangle(cornerRadius: 0.75)
-                    .fill(Color.primary.opacity(0.32))
-                    .frame(width: 1.5, height: height + Self.markerOverhang * 2)
+                    .fill(Color.primary.opacity(0.50))
+                    .frame(width: 2, height: height + Self.markerOverhang * 2)
                     .offset(
-                        x: geo.size.width * min(max(pace, 0), 100) / 100 - 0.75,
+                        x: geo.size.width * min(max(pace, 0), 100) / 100 - 1,
                         y: -Self.markerOverhang
                     )
             }

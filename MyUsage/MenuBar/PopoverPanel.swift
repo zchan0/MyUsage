@@ -56,7 +56,7 @@ final class PopoverPanel: NSPanel {
         self.hostingView = NSHostingView(rootView: AnyView(EmptyView()))
 
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 340, height: 200),
+            contentRect: NSRect(x: 0, y: 0, width: PopoverLayout.width, height: 200),
             styleMask: [.titled, .nonactivatingPanel, .utilityWindow, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -75,7 +75,7 @@ final class PopoverPanel: NSPanel {
         hidesOnDeactivate = false
         // Floor the content size so a transient zero/tiny height measurement
         // (e.g. during the first layout pass) can't collapse the panel.
-        contentMinSize = NSSize(width: 340, height: 80)
+        contentMinSize = NSSize(width: PopoverLayout.width, height: 80)
 
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -155,7 +155,7 @@ final class PopoverPanel: NSPanel {
 
     private static func sanitized(_ size: CGSize) -> CGSize {
         var out = size
-        if out.width <= 0 { out.width = 340 }
+        if out.width <= 0 { out.width = PopoverLayout.width }
         // A real popover is never this short; a placeholder height gets
         // corrected by the first onContentResize once SwiftUI lays out
         // inside a non-zero window.

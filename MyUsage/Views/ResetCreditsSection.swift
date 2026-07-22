@@ -10,12 +10,12 @@ struct ResetCreditsSection: View {
 
             if inventory.reportedAvailableCount == 0 {
                 Text("No reset credits available")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(.secondary.opacity(0.75))
                     .padding(.top, 10)
             } else if inventory.availableCredits.isEmpty {
                 Text("Expiry details were not reported")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(.secondary.opacity(0.75))
                     .padding(.top, 10)
             } else {
@@ -24,13 +24,13 @@ struct ResetCreditsSection: View {
                         creditRow(index: index, credit: credit)
                     }
                 }
-                .padding(.top, 10)
+                .padding(.top, 12)
             }
 
             let undisclosed = inventory.reportedAvailableCount - inventory.availableCredits.count
             if undisclosed > 0 {
                 Text("\(undisclosed) additional credit\(undisclosed == 1 ? "" : "s") without expiry details")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
                     .padding(.top, 7)
             }
@@ -42,11 +42,11 @@ struct ResetCreditsSection: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Text("RESET CREDITS")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.secondary.opacity(0.72))
 
             Text("\(inventory.reportedAvailableCount)")
-                .font(.system(size: 19, weight: .semibold, design: .monospaced))
+                .font(.system(size: 21, weight: .semibold, design: .monospaced))
                 .monospacedDigit()
 
             Spacer(minLength: 8)
@@ -54,10 +54,10 @@ struct ResetCreditsSection: View {
             if let expiration = inventory.earliestExpiration {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("NEXT EXPIRY")
-                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundStyle(.tertiary)
                     Text("in \(OverviewSummary.shortCountdown(until: expiration))")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(expiryColor(expiration))
                 }
@@ -68,29 +68,29 @@ struct ResetCreditsSection: View {
     private func creditRow(index: Int, credit: ResetCredit) -> some View {
         HStack(spacing: 9) {
             Text("\(index + 1)")
-                .font(.system(size: 8, weight: .medium, design: .monospaced))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
-                .frame(width: 19, height: 19)
+                .frame(width: 21, height: 21)
                 .background(Color.primary.opacity(0.06), in: Circle())
 
             Text("Rate-limit reset")
-                .font(.system(size: 10.5, weight: .medium))
+                .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 8)
 
             if let expiresAt = credit.expiresAt {
                 Text(expiresAt, format: .dateTime.month(.abbreviated).day().hour().minute())
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(expiryColor(expiresAt))
             } else {
                 Text("No expiry reported")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
         }
-        .frame(minHeight: 36)
+        .frame(minHeight: 42)
         .overlay(alignment: .top) {
             if index > 0 {
                 Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 0.5)

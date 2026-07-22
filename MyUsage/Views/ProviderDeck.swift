@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Provider detail page for the 400pt capacity console. Rolling limits become
-/// two large side-by-side instruments; provider-specific billing and history
-/// stay below them so cost never competes with capacity for first attention.
+/// Provider detail page for the compact capacity console. Rolling limits use
+/// full-width rows so their pace markers and reset context stay legible even
+/// in the narrower popover; billing and history remain below them.
 struct ProviderDeck: View {
     let provider: any UsageProvider
     var showsHeader = true
@@ -18,15 +18,13 @@ struct ProviderDeck: View {
 
     private var providerHeader: some View {
         HStack(spacing: 9) {
-            ProviderIconTile(kind: provider.kind, size: 27, glyph: 16)
+            ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
 
-            VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Text(provider.kind.displayName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                 if let plan = provider.snapshot?.planName {
-                    Text(plan)
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundStyle(.secondary.opacity(0.72))
+                    PlanPill(text: plan)
                 }
             }
 
@@ -41,8 +39,8 @@ struct ProviderDeck: View {
                     .frame(maxWidth: 150)
             }
         }
-        .padding(.horizontal, 18)
-        .frame(minHeight: 62)
+        .padding(.horizontal, 16)
+        .frame(minHeight: 54)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }
@@ -63,14 +61,22 @@ struct ProviderDeck: View {
 
     private func snapshotContent(_ snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            if !showsHeader {
+                compactContext(snapshot)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+            }
+
             if provider.kind == .claude || provider.kind == .codex {
                 rollingInstruments(snapshot)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 18)
+                    .padding(.horizontal, 16)
+                    .padding(.top, showsHeader ? 22 : 14)
+                    .padding(.bottom, 22)
             } else {
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 18)
+                    .padding(.horizontal, 16)
+                    .padding(.top, showsHeader ? 22 : 14)
+                    .padding(.bottom, 22)
             }
 
             if provider.kind == .codex {
@@ -90,8 +96,8 @@ struct ProviderDeck: View {
                         .help("Codex did not return reset-credit inventory. No count is assumed.")
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 17)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 21)
             }
 
             if manager.showEstimatedCost {
@@ -114,20 +120,24 @@ struct ProviderDeck: View {
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.tint)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 13)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
             }
+        }
+    }
 
-            HStack {
-                Text("Updated")
-                Spacer()
-                Text(snapshot.lastRefreshed, style: .relative)
+    private func compactContext(_ snapshot: UsageSnapshot) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text("\(provider.kind.displayName.uppercased()) LIMITS")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(0.35)
+                .foregroundStyle(.secondary.opacity(0.82))
+
+            Spacer(minLength: 8)
+
+            if let plan = snapshot.planName {
+                PlanPill(text: plan)
             }
-            .font(.system(size: 8.5, design: .monospaced))
-            .foregroundStyle(.tertiary)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 11)
-            .overlay(alignment: .top) { sectionDivider }
         }
     }
 
@@ -139,17 +149,16 @@ struct ProviderDeck: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         } else {
-            HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
                     DeckLimitInstrument(metric: metric)
-                        .padding(.leading, index == 0 ? 0 : 16)
-                        .padding(.trailing, index == metrics.count - 1 ? 0 : 16)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     if index < metrics.count - 1 {
                         Rectangle()
                             .fill(Color.primary.opacity(0.08))
-                            .frame(width: 0.5, height: 126)
+                            .frame(height: 0.5)
+                            .padding(.vertical, 17)
                     }
                 }
             }
@@ -168,8 +177,8 @@ struct ProviderDeck: View {
                     DailyCostChart(series: series)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
         }
     }
 
@@ -199,7 +208,7 @@ struct ProviderDeck: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding(18)
+        .padding(20)
     }
 }
 
@@ -208,61 +217,49 @@ private struct DeckLimitInstrument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
                 Text(metric.label)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 12.5, weight: .semibold))
                     .lineLimit(1)
-                Spacer(minLength: 4)
-                if let pace = metric.pacePercent {
-                    Text("pace \(Int(pace.rounded()))%")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text("\(Int(metric.percentUsed.rounded()))%")
+                            .font(.system(size: 18.5, weight: .semibold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(LimitSafety.level(for: metric.percentUsed).accent)
+                        Text("used")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary.opacity(0.72))
+                    }
+
+                    if let pace = metric.pacePercent {
+                        PaceReadout(percentUsed: metric.percentUsed, pacePercent: pace)
+                    }
+
+                    if let projected = metric.projectedFinalPercent, projected > 100 {
+                        Text("Projected \(Int(projected.rounded()))% at reset")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(LimitBar.warnAccent)
+                    }
                 }
             }
-
-            Text("\(Int(metric.percentUsed.rounded()))%")
-                .font(.system(size: 30, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(LimitSafety.level(for: metric.percentUsed).accent)
-                .padding(.top, 8)
 
             ProgressTrack(
                 percent: metric.percentUsed,
                 pacePercent: metric.pacePercent,
                 level: LimitSafety.level(for: metric.percentUsed),
-                height: 7
+                height: 6
             )
-            .padding(.top, 11)
+            .padding(.top, 12)
 
-            HStack {
-                Text("0")
-                Spacer()
-                Text("50")
-                Spacer()
-                Text("100")
-            }
-            .font(.system(size: 7.5, design: .monospaced))
-            .foregroundStyle(.tertiary)
-            .padding(.top, 4)
-
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(resetText)
-                Spacer(minLength: 4)
-                if let projected = metric.projectedFinalPercent, projected > 100 {
-                    Text("projected \(Int(projected.rounded()))%")
-                        .foregroundStyle(LimitBar.warnAccent)
-                }
-            }
-            .font(.system(size: 8.5, design: .monospaced))
-            .foregroundStyle(.secondary.opacity(0.72))
-            .lineLimit(1)
-            .padding(.top, 8)
+            ResetCountdownReadout(resetsAt: metric.resetsAt)
+                .padding(.top, 12)
         }
-    }
-
-    private var resetText: String {
-        guard let reset = metric.resetsAt else { return "Reset not reported" }
-        return "resets in \(OverviewSummary.shortCountdown(until: reset))"
     }
 }
 
@@ -271,6 +268,6 @@ private struct DeckLimitInstrument: View {
     let manager = PreviewFixtures.manager(providerCount: 2)
     ProviderDeck(provider: manager.orderedProviders.first { $0.kind == .codex }!)
         .environment(manager)
-        .frame(width: 400)
+        .frame(width: PopoverLayout.width)
 }
 #endif

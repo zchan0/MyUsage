@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Main popover content shown when clicking the menu bar icon.
 ///
-/// The merged menu-bar popover. Width is stable at 400pt while height remains
+/// The merged menu-bar popover. Width is stable at 348pt while height remains
 /// content-driven. A single enabled provider opens directly into its Deck;
 /// Overview and navigation exist only when they add value (2+ providers).
 struct UsagePopover: View {
@@ -32,7 +32,8 @@ struct UsagePopover: View {
 
             PopoverFooterBar()
         }
-        .frame(width: 400)
+        .frame(width: PopoverLayout.width)
+        .background { PopoverGlassSurface() }
         // Take the content's ideal height. The hosting panel measures this
         // (via onSizeChange) and resizes its window to match exactly — both
         // growing and shrinking — so there's never a leftover gap. Chrome
@@ -45,7 +46,7 @@ struct UsagePopover: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("MyUsage")
-                .font(.system(size: 13.5, weight: .semibold))
+                .font(.system(size: 14.5, weight: .semibold))
                 .tracking(-0.2)
 
             Spacer()
@@ -55,7 +56,7 @@ struct UsagePopover: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 56)
+        .frame(minHeight: 60)
         .overlay(alignment: .bottom) {
             if enabledProviders.count <= 1 {
                 Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
@@ -79,7 +80,10 @@ struct UsagePopover: View {
     @ViewBuilder
     private func detailPage(kind: ProviderKind) -> some View {
         if let provider = enabledProviders.first(where: { $0.kind == kind }) {
-            ProviderDeck(provider: provider)
+            // The selected tab already establishes provider identity. Keep
+            // only a compact context line in the page instead of repeating a
+            // large title block below the navigation.
+            ProviderDeck(provider: provider, showsHeader: false)
         }
     }
 

@@ -19,7 +19,7 @@ struct ProviderCardLimits: View {
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: 15) {
             switch kind {
             case .claude, .codex:
                 if let session = snapshot.sessionUsage {

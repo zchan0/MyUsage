@@ -21,22 +21,25 @@ struct ProviderPopover: View {
 
             PopoverFooterBar()
         }
-        .frame(width: 400)
+        .frame(width: PopoverLayout.width)
+        .background { PopoverGlassSurface() }
         // Content-sized panel — see UsagePopover for the sizing contract.
         .fixedSize(horizontal: false, vertical: true)
     }
 
     private var header: some View {
         HStack(spacing: 7) {
-            ProviderIconTile(kind: kind, size: 18, glyph: 11)
+            ProviderIconTile(kind: kind, size: 20, glyph: 12)
 
-            Text(kind.displayName)
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(-0.2)
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Text(kind.displayName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .tracking(-0.2)
 
-            if let plan = manager.orderedProviders
-                .first(where: { $0.kind == kind })?.snapshot?.planName {
-                PlanPill(text: plan)
+                if let plan = manager.orderedProviders
+                    .first(where: { $0.kind == kind })?.snapshot?.planName {
+                    PlanPill(text: plan)
+                }
             }
 
             Spacer()
@@ -46,7 +49,7 @@ struct ProviderPopover: View {
             }
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 58)
+        .frame(minHeight: 62)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }
@@ -62,10 +65,10 @@ struct RelativeTimestampLabel: View {
     var body: some View {
         (
             Text(date, style: .relative)
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(.system(size: 10.5, weight: .regular, design: .monospaced))
                 .monospacedDigit()
             + Text(" ago")
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(.system(size: 10.5, weight: .regular, design: .monospaced))
         )
         .foregroundStyle(.secondary.opacity(0.7))
     }

@@ -17,11 +17,11 @@ struct AggregateMonthlyCostRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
             Text("This month")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(.secondary)
 
             Text(ProviderCardCostRow.formatCost(displayed))
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(.primary.opacity(0.95))
 
