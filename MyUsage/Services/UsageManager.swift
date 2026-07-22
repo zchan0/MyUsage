@@ -125,7 +125,9 @@ final class UsageManager {
         self.ledger = ledger
 
         if let initialProviders {
-            initialProviders.forEach(register)
+            for provider in initialProviders {
+                register(provider)
+            }
         } else {
             register(ClaudeProvider(ledger: ledger))
             register(CodexProvider(ledger: ledger))
