@@ -1,49 +1,14 @@
 import SwiftUI
 
-/// Provider detail page for the compact capacity console. Rolling limits use
-/// full-width rows so their pace markers and reset context stay legible even
-/// in the narrower popover; billing and history remain below them.
+/// Provider detail follows one stable axis: account identity, provider limits,
+/// provider-specific inventory, then cost/model history and token totals.
 struct ProviderDeck: View {
     let provider: any UsageProvider
-    var showsHeader = true
 
     @Environment(UsageManager.self) private var manager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if showsHeader { providerHeader }
-            content
-        }
-    }
-
-    private var providerHeader: some View {
-        HStack(spacing: 9) {
-            ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
-
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text(provider.kind.displayName)
-                    .font(.system(size: 13.5, weight: .semibold))
-                if let plan = provider.snapshot?.planName {
-                    PlanPill(text: plan)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            if let email = provider.snapshot?.email {
-                Text(email)
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 150)
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(minHeight: 54)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-        }
+        content
     }
 
     @ViewBuilder
@@ -61,77 +26,44 @@ struct ProviderDeck: View {
 
     private func snapshotContent(_ snapshot: UsageSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !showsHeader {
-                compactContext(snapshot)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-            }
+            accountHeader(snapshot)
 
             if provider.kind == .claude || provider.kind == .codex {
                 rollingInstruments(snapshot)
-                    .padding(.horizontal, 16)
-                    .padding(.top, showsHeader ? 22 : 14)
-                    .padding(.bottom, 22)
             } else {
                 ProviderCardLimits(kind: provider.kind, snapshot: snapshot)
                     .padding(.horizontal, 16)
-                    .padding(.top, showsHeader ? 22 : 14)
-                    .padding(.bottom, 22)
+                    .padding(.vertical, 18)
+                    .overlay(alignment: .bottom) { sectionDivider }
             }
 
             if provider.kind == .codex {
-                sectionDivider
-                Group {
-                    if let inventory = snapshot.resetCredits {
-                        ResetCreditsSection(inventory: inventory)
-                    } else {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("RESET CREDITS")
-                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            Spacer()
-                            Text("Unavailable")
-                                .font(.system(size: 10, design: .monospaced))
-                        }
-                        .foregroundStyle(.secondary.opacity(0.72))
-                        .help("Codex did not return reset-credit inventory. No count is assumed.")
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 21)
+                resetCredits(snapshot)
             }
 
-            if manager.showEstimatedCost {
-                detailCost(snapshot)
-            }
+            history(snapshot)
 
             if let error = provider.error {
-                sectionDivider
-                HStack(alignment: .top, spacing: 7) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.orange)
-                    Text(error)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
-                    Button("Retry") { Task { await provider.refresh() } }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(.tint)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
+                errorRow(error)
             }
         }
     }
 
-    private func compactContext(_ snapshot: UsageSnapshot) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Text("\(provider.kind.displayName.uppercased()) LIMITS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(0.35)
-                .foregroundStyle(.secondary.opacity(0.82))
+    // MARK: - Account identity
+
+    private func accountHeader(_ snapshot: UsageSnapshot) -> some View {
+        HStack(spacing: 9) {
+            AccountAvatar(email: snapshot.email)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(snapshot.email ?? "Account unavailable")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(accountCaption)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+            }
 
             Spacer(minLength: 8)
 
@@ -139,51 +71,137 @@ struct ProviderDeck: View {
                 PlanPill(text: plan)
             }
         }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 54)
+        .overlay(alignment: .bottom) { sectionDivider }
     }
+
+    private var accountCaption: String {
+        switch provider.kind {
+        case .claude, .codex: "OAuth account"
+        case .cursor: "Cursor account · billing cycle"
+        case .antigravity: "Google account"
+        }
+    }
+
+    // MARK: - Limits
 
     @ViewBuilder
     private func rollingInstruments(_ snapshot: UsageSnapshot) -> some View {
         let metrics = CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
+            .sorted { $0.riskScore > $1.riskScore }
         if metrics.isEmpty {
             Text("No rolling limits reported")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .bottom) { sectionDivider }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                ForEach(metrics) { metric in
                     DeckLimitInstrument(metric: metric)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if index < metrics.count - 1 {
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(height: 0.5)
-                            .padding(.vertical, 17)
-                    }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 17)
+                        .overlay(alignment: .bottom) { sectionDivider }
                 }
             }
         }
     }
+
+    private func resetCredits(_ snapshot: UsageSnapshot) -> some View {
+        Group {
+            if let inventory = snapshot.resetCredits {
+                ResetCreditsSection(inventory: inventory)
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Reset credits")
+                        .font(.system(size: 10.5, weight: .semibold))
+                    Spacer()
+                    Text("Unavailable")
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+                .help("Codex did not return reset-credit inventory. No count is assumed.")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+        .overlay(alignment: .bottom) { sectionDivider }
+    }
+
+    // MARK: - Cost and tokens
 
     @ViewBuilder
-    private func detailCost(_ snapshot: UsageSnapshot) -> some View {
-        let series = manager.ledger.dailyCosts[provider.kind]
-        let hasChart = series?.isEmpty == false
-        if snapshot.monthlyEstimatedCost != nil || hasChart || provider.kind == .cursor {
-            sectionDivider
-            VStack(alignment: .leading, spacing: 12) {
-                ProviderCardCostRow(kind: provider.kind, snapshot: snapshot, showsDivider: false)
-                if let series, !series.isEmpty {
-                    DailyCostChart(series: series)
+    private func history(_ snapshot: UsageSnapshot) -> some View {
+        let series = manager.ledger.dailyCosts[provider.kind] ?? []
+        let tokens = manager.ledger.tokenUsage30Days[provider.kind]
+        let showCost = manager.showEstimatedCost && hasCost(snapshot, series: series)
+
+        if showCost || tokens != nil {
+            VStack(alignment: .leading, spacing: 0) {
+                if showCost {
+                    ProviderCardCostRow(
+                        kind: provider.kind,
+                        snapshot: snapshot,
+                        showsDivider: false
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                    if !series.isEmpty {
+                        sectionDivider
+                        DailyCostChart(kind: provider.kind, series: series)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                    }
+                }
+
+                if let tokens {
+                    sectionDivider
+                    TokenUsageSummary(usage: tokens)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
+            .overlay(alignment: .bottom) { sectionDivider }
         }
     }
 
-    private var sectionDivider: some View {
-        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+    private func hasCost(_ snapshot: UsageSnapshot, series: [LedgerStore.DailyCost]) -> Bool {
+        if !series.isEmpty { return true }
+        switch provider.kind {
+        case .claude, .codex:
+            let monthKey = LedgerCalendar.monthKey(for: .now)
+            return (manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0) > 0
+                || snapshot.monthlyEstimatedCost != nil
+        case .cursor:
+            return snapshot.monthlyEstimatedCost != nil || snapshot.spentAmount != nil
+        case .antigravity:
+            return false
+        }
+    }
+
+    // MARK: - States
+
+    private func errorRow(_ error: String) -> some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 10))
+                .foregroundStyle(.orange)
+            Text(error)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Retry") { Task { await provider.refresh() } }
+                .buttonStyle(.plain)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.tint)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .overlay(alignment: .bottom) { sectionDivider }
     }
 
     private func stateRow(icon: String?, text: String, loading: Bool = false) -> some View {
@@ -210,6 +228,41 @@ struct ProviderDeck: View {
         }
         .padding(20)
     }
+
+    private var sectionDivider: some View {
+        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+    }
+}
+
+private struct AccountAvatar: View {
+    let email: String?
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(
+                    colors: [Color.secondary.opacity(0.82), Color.secondary.opacity(0.58)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ))
+            if initials.isEmpty {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 10, weight: .medium))
+            } else {
+                Text(initials)
+                    .font(.system(size: 9.5, weight: .semibold))
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(width: 27, height: 27)
+        .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
+    }
+
+    private var initials: String {
+        guard let local = email?.split(separator: "@").first else { return "" }
+        return String(local.prefix(2)).uppercased()
+    }
 }
 
 private struct DeckLimitInstrument: View {
@@ -217,55 +270,133 @@ private struct DeckLimitInstrument: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(metric.label)
                     .font(.system(size: 12.5, weight: .semibold))
-                    .lineLimit(1)
-                    .padding(.top, 2)
-
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("\(Int(metric.percentUsed.rounded()))%")
-                            .font(.system(size: 18.5, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(LimitSafety.level(for: metric.percentUsed).accent)
-                        Text("used")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary.opacity(0.72))
-                    }
-
-                    if let pace = metric.pacePercent {
-                        PaceReadout(percentUsed: metric.percentUsed, pacePercent: pace)
-                    }
-
-                    if let projected = metric.projectedFinalPercent, projected > 100 {
-                        Text("Projected \(Int(projected.rounded()))% at reset")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(LimitBar.warnAccent)
-                    }
-                }
+                Text("\(Int(metric.percentUsed.rounded()))%")
+                    .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(metric.needsAttention
+                        ? AnyShapeStyle(LimitBar.warnAccent)
+                        : AnyShapeStyle(.primary))
+                Text("used")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
 
             ProgressTrack(
                 percent: metric.percentUsed,
                 pacePercent: metric.pacePercent,
                 level: LimitSafety.level(for: metric.percentUsed),
-                height: 6
+                height: 6,
+                tint: metric.providerKind.usageTint
             )
-            .padding(.top, 12)
+            .padding(.top, 10)
 
-            ResetCountdownReadout(resetsAt: metric.resetsAt)
-                .padding(.top, 12)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(resetCaption)
+                    .font(.system(size: 9.5, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 8)
+                if let projected = alarmingProjection {
+                    Text("Projected \(Int(projected.rounded()))% at reset")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(LimitBar.warnAccent)
+                } else {
+                    Text("On track")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    private var alarmingProjection: Double? {
+        guard let projected = metric.projectedFinalPercent, projected > 100 else { return nil }
+        return projected
+    }
+
+    private var resetCaption: String {
+        guard let resetsAt = metric.resetsAt else { return "Reset not reported" }
+        return "Resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
+    }
+}
+
+struct TokenUsageSummary: View {
+    let usage: TokenUsage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Token usage")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("30 days · all accounts")
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack(spacing: 0) {
+                tokenStat("Total", usage.total)
+                tokenStat("Input", usage.input)
+                tokenStat("Output", usage.output)
+                tokenStat("Cache", usage.cache)
+            }
+        }
+    }
+
+    private func tokenStat(_ label: String, _ value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(TokenCountFormatter.string(value))
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+            Text(label)
+                .font(.system(size: 8.5))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.leading, label == "Total" ? 0 : 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .leading) {
+            if label != "Total" {
+                Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 0.5)
+            }
         }
     }
 }
 
+enum TokenCountFormatter {
+    static func string(_ value: Int) -> String {
+        let count = Double(max(0, value))
+        switch count {
+        case 1_000_000_000...: return compact(count / 1_000_000_000, suffix: "B")
+        case 1_000_000...: return compact(count / 1_000_000, suffix: "M")
+        case 1_000...: return compact(count / 1_000, suffix: "K")
+        default: return String(Int(count))
+        }
+    }
+
+    private static func compact(_ value: Double, suffix: String) -> String {
+        let digits = value >= 100 ? 0 : 1
+        return String(format: "%.*f%@", digits, value, suffix)
+    }
+}
+
 #if DEBUG
-#Preview("Codex Deck") {
-    let manager = PreviewFixtures.manager(providerCount: 2)
+#Preview("Claude Detail") {
+    let manager = PreviewFixtures.manager(providerCount: 4)
+    ProviderDeck(provider: manager.orderedProviders.first { $0.kind == .claude }!)
+        .environment(manager)
+        .frame(width: PopoverLayout.width)
+}
+
+#Preview("Codex Detail") {
+    let manager = PreviewFixtures.manager(providerCount: 4)
     ProviderDeck(provider: manager.orderedProviders.first { $0.kind == .codex }!)
         .environment(manager)
         .frame(width: PopoverLayout.width)

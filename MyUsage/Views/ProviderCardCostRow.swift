@@ -71,10 +71,7 @@ struct ProviderCardCostRow: View {
                 providerKind: kind,
                 displayed: displayed,
                 peerCount: max(0, contributions.count - 1),
-                contributions: contributions,
-                sparkValues: manager.ledger.dailyCosts[kind].flatMap {
-                    OverviewSummary.trailingDailySeries(series: $0)
-                }
+                contributions: contributions
             )
         }
     }

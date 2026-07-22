@@ -9,15 +9,11 @@ import SwiftUI
 /// - At most **4** named families (ranked by 30-day total); everything
 ///   else — plus the unattributed remainder of days whose ledger rows
 ///   carry no per-model breakdown — folds into a gray "Other".
-/// - Categorical hues come from a CVD-validated fixed-order palette
-///   (validated against the popover's light & dark surfaces; the two
-///   low-contrast light slots are mitigated by the always-on legend
-///   and the hover readout, per the relief rule).
-/// - One y-axis; recessive grid; legend chips wear text tokens, color
-///   only lives in the dot.
+/// - Model families share one muted provider hue and differ by opacity.
 /// - Hover (chartXSelection) swaps the header line to the hovered day's
 ///   date + total — the tooltip equivalent for a 316pt-wide popover.
 struct DailyCostChart: View {
+    let kind: ProviderKind
     let series: [LedgerStore.DailyCost]
 
     @Environment(\.colorScheme) private var colorScheme
@@ -46,10 +42,15 @@ struct DailyCostChart: View {
     /// contrast-relief rule.
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(selectedDay.map { Self.dayLabel($0.day) } ?? "LAST 30 DAYS")
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(.secondary.opacity(0.75))
+            Text(selectedDay.map { Self.dayLabel($0.day) } ?? "30-day model cost")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            if selectedDay == nil {
+                Text("all accounts")
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(.tertiary)
+            }
 
             Spacer(minLength: 6)
 
@@ -81,8 +82,7 @@ struct DailyCostChart: View {
         // rendered as two enormous bars filling the plot.
         .chartXScale(domain: xDomain)
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: 7)) { value in
-                AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
+            AxisMarks(values: xAxisDates) { value in
                 // Closure form + fixedSize: Charts width-limits a *centered*
                 // boundary label to twice its distance from the plot edge, so
                 // the last tick renders as "J…". fixedSize makes the text lay
@@ -94,31 +94,18 @@ struct DailyCostChart: View {
                             .font(.system(size: 8.5, design: .monospaced))
                             .foregroundStyle(Color.secondary.opacity(0.65))
                             .fixedSize()
+                            .offset(x: axisLabelOffset(for: date))
                     }
                 }
             }
         }
-        .chartYAxis {
-            // Leading (not trailing): a right-side value axis crowds the last
-            // x-axis label into the corner, clipping "Jul 17" to "J…". On the
-            // left the value labels sit clear of the first x label (~a quarter
-            // of the way in), so both axes read in full.
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
-                AxisValueLabel {
-                    if let usd = value.as(Double.self) {
-                        // Adaptive precision: "$1", "$0.50" — never a
-                        // rounded-to-zero duplicate tick.
-                        Text(Self.axisLabel(usd))
-                            .font(.system(size: 8.5, design: .monospaced))
-                            .foregroundStyle(Color.secondary.opacity(0.65))
-                    }
-                }
-            }
+        .chartYAxis(.hidden)
+        // Boundary labels are centred on the first/last tick. Give them enough
+        // plot inset to render their full localized date without clipping.
+        .chartPlotStyle {
+            $0.padding(.leading, 18)
+                .padding(.trailing, 30)
         }
-        // Small trailing inset gives the fixedSize last x-label ("Jul 17")
-        // room to overflow into instead of running to the card edge.
-        .chartPlotStyle { $0.padding(.trailing, 12) }
         .frame(height: 96)
     }
 
@@ -129,13 +116,22 @@ struct DailyCostChart: View {
         return end.addingTimeInterval(-30 * 86_400)...end
     }
 
-    /// "$1" for whole dollars, "$0.50" below — duplicate "$0 / $0" ticks
-    /// came from forcing zero fraction digits on sub-dollar scales.
-    static func axisLabel(_ usd: Double) -> String {
-        if usd == usd.rounded() {
-            return "$\(Int(usd))"
-        }
-        return String(format: "$%.2f", usd)
+    private var xAxisDates: [Date] {
+        let start = xDomain.lowerBound
+        return [
+            start,
+            start.addingTimeInterval(14 * 86_400),
+            xDomain.upperBound.addingTimeInterval(-86_400),
+        ]
+    }
+
+    /// Charts centres boundary labels on their ticks, then clips them to the
+    /// axis lane. Pull the two boundary labels inward by half a short date.
+    private func axisLabelOffset(for date: Date) -> CGFloat {
+        guard let first = xAxisDates.first, let last = xAxisDates.last else { return 0 }
+        if abs(date.timeIntervalSince(first)) < 1 { return 14 }
+        if abs(date.timeIntervalSince(last)) < 1 { return -14 }
+        return 0
     }
 
     /// Compact legend chips: color dot + family name in secondary text.
@@ -199,30 +195,33 @@ struct DailyCostChart: View {
         return result
     }
 
-    /// Fixed-order categorical palette (dataviz reference slots 1–4),
-    /// validated for both popover surfaces; "Other" is a neutral gray,
-    /// never a series hue.
+    /// One muted provider hue, layered by opacity. Model composition remains
+    /// legible without turning a utility chart into the page's focal point.
     private var familyColors: [Color] {
-        let slots: [Color] = colorScheme == .dark
-            ? [
-                Color(red: 0x39/255.0, green: 0x87/255.0, blue: 0xE5/255.0),
-                Color(red: 0x00/255.0, green: 0x83/255.0, blue: 0x00/255.0),
-                Color(red: 0xD5/255.0, green: 0x51/255.0, blue: 0x81/255.0),
-                Color(red: 0xC9/255.0, green: 0x85/255.0, blue: 0x00/255.0),
-            ]
-            : [
-                Color(red: 0x2A/255.0, green: 0x78/255.0, blue: 0xD6/255.0),
-                Color(red: 0x00/255.0, green: 0x83/255.0, blue: 0x00/255.0),
-                Color(red: 0xE8/255.0, green: 0x7B/255.0, blue: 0xA4/255.0),
-                Color(red: 0xED/255.0, green: 0xA1/255.0, blue: 0x00/255.0),
-            ]
+        let base: Color = switch kind {
+        case .claude:
+            colorScheme == .dark
+                ? Color(red: 0.86, green: 0.56, blue: 0.42)
+                : Color(red: 0.68, green: 0.39, blue: 0.27)
+        case .codex:
+            colorScheme == .dark
+                ? Color(red: 0.66, green: 0.69, blue: 0.73)
+                : Color(red: 0.36, green: 0.39, blue: 0.43)
+        case .cursor:
+            colorScheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.66)
+        case .antigravity:
+            colorScheme == .dark
+                ? Color(red: 0.66, green: 0.53, blue: 0.86)
+                : Color(red: 0.46, green: 0.34, blue: 0.65)
+        }
+        let opacities = [0.68, 0.46, 0.31, 0.21]
 
         return familyOrder.map { family in
             if family == Self.otherLabel {
-                return Color.primary.opacity(0.25)
+                return Color.primary.opacity(0.18)
             }
             let index = familyOrder.firstIndex(of: family) ?? 0
-            return slots[min(index, slots.count - 1)]
+            return base.opacity(opacities[min(index, opacities.count - 1)])
         }
     }
 
@@ -283,7 +282,7 @@ struct DailyCostChart: View {
     }
     .reversed()
 
-    return DailyCostChart(series: Array(series))
+    return DailyCostChart(kind: .claude, series: Array(series))
         .padding(16)
         .frame(width: 340)
 }

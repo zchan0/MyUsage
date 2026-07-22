@@ -8,28 +8,21 @@ struct AggregateMonthlyCostRow: View {
     let displayed: Double
     let peerCount: Int
     let contributions: [LedgerSync.DeviceContribution]
-    /// Dense 14-day series for the trend miniature; nil hides it (no
-    /// ledger history yet).
-    var sparkValues: [Double]? = nil
 
     @State private var isPopoverShown = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 6) {
-            Text("This month")
-                .font(.system(size: 12.5, weight: .medium))
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Provider total · this month")
+                .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.secondary)
-
-            Text(ProviderCardCostRow.formatCost(displayed))
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.primary.opacity(0.95))
 
             Spacer(minLength: 6)
 
-            if let sparkValues {
-                CostSparkline(values: sparkValues)
-            }
+            Text(ProviderCardCostRow.formatCost(displayed))
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.primary.opacity(0.95))
 
             if peerCount > 0 {
                 Button { isPopoverShown.toggle() } label: { devicesPill }

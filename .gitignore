@@ -3,6 +3,7 @@ specs/*
 !specs/12a-sync-folder.md
 !specs/13-devices-sync-ui.md
 !specs/14-stable-device-id.md
+!specs/16-v15-popover.md
 
 # Xcode
 *.xcodeproj/project.xcworkspace/

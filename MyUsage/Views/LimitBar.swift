@@ -1,29 +1,8 @@
 import SwiftUI
 
-/// A single limit row. v0.14 "instrument" shape:
-///
-///     5-hour                                                47%   ← name (L) + pct (R)
-///     ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮│▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯▯  ← segmented tick rail
-///                     └ solid on-pace notch                        + pace notch
-///     resets 2h 14m · 16:30                       pace 43%        ← reset (L) + pace
-///                                                                   text (R); an
-///                                                                   overshoot alarm
-///                                                                   ("projected 118%")
-///                                                                   takes the R slot
-///                                                                   when predicted
-///
-/// Three rows. Splitting pct (top-right) from reset (bottom-left)
-/// gives each its own visual lane, instead of crowding both onto a
-/// shared meta line — the user can scan "where am I" (top) and "when
-/// does it reset" (bottom) without re-parsing a packed strip.
-///
-/// The bar is the slim 4pt rail. The dashed projection marker rides as
-/// an .overlay on it, but only when projection actually crosses 100%
-/// (see `alarmingProjection`). Healthy projections stay silent.
-///
-/// Pct gets a tinted Capsule **only** in warn / crit — healthy rows
-/// just show bold mono text. Most of the popover is healthy at any
-/// given moment; a coloured chip on every row would be visual noise.
+/// A single limit row: label/value, continuous provider-tinted rail, then
+/// reset and pace metadata. Forecasting stays quiet unless usage is projected
+/// to cross 100%, keeping routine states calm and comparable.
 struct LimitBar: View {
     let name: String
     let percent: Double
@@ -48,6 +27,9 @@ struct LimitBar: View {
     /// fetch the live one, so render an empty muted rail with "—" instead
     /// of a stale number. See `ProviderCardLimits`.
     var expired: Bool = false
+    /// Optional provider-brand fill. Severity still lives in the percent and
+    /// forecast text; the rail stays visually consistent within a provider.
+    var tint: Color? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -66,7 +48,8 @@ struct LimitBar: View {
                 percent: expired ? 0 : percent,
                 projectedPercent: alarmingProjection,
                 pacePercent: expired ? nil : pacePercent,
-                level: expired ? .healthy : level
+                level: expired ? .healthy : level,
+                tint: tint
             )
 
             // Row 3 — reset (left, with absolute time appended) +
@@ -216,6 +199,7 @@ struct ProgressTrack: View {
     var pacePercent: Double? = nil
     var level: LimitSafety.Level = .healthy
     var height: CGFloat = 6
+    var tint: Color? = nil
 
     /// 3pt overhang each side gives the marker enough vertical presence
     /// to read against a thin 4pt bar — total marker = 10pt.
@@ -232,25 +216,12 @@ struct ProgressTrack: View {
         GeometryReader { geo in
             let fillWidth = max(0, geo.size.width * min(percent, 100) / 100)
 
-            // Segmented tick rail (v0.14 "instrument" pass): the same
-            // fill-fraction reading as the old continuous capsule, drawn
-            // as 3pt ticks on a 5pt pitch. The deliberately low visual
-            // resolution matches what the number actually is — a quota
-            // gauge — and the tick texture is the popover's visual
-            // signature. Fill = the track pattern re-tinted and masked to
-            // the exact percent width, so a partial tick at the boundary
-            // stays pixel-accurate.
             ZStack(alignment: .leading) {
-                TickPattern()
-                    .fill(Color.primary.opacity(0.08))
-
-                TickPattern()
+                Capsule().fill(Color.primary.opacity(0.08))
+                Capsule()
                     .fill(fillColor)
-                    .mask(alignment: .leading) {
-                        Rectangle()
-                            .frame(width: fillWidth)
-                            .animation(.easeInOut(duration: 0.4), value: percent)
-                    }
+                    .frame(width: fillWidth)
+                    .animation(.easeInOut(duration: 0.4), value: percent)
             }
         }
     }
@@ -291,31 +262,7 @@ struct ProgressTrack: View {
         }
     }
 
-    private var fillColor: Color { level.accent }
-}
-
-/// The tick texture both rail layers share: 3pt-wide rounded ticks on a
-/// 5pt pitch, spanning the full height of whatever rect they're given.
-/// A `Shape` (not a repeating gradient) so the rounded tick corners stay
-/// crisp at any backing scale and the final partial tick clips exactly
-/// at the rail's right edge.
-private struct TickPattern: Shape {
-    var tickWidth: CGFloat = 3
-    var gap: CGFloat = 2
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        var x: CGFloat = 0
-        while x < rect.width {
-            let width = min(tickWidth, rect.width - x)
-            path.addRoundedRect(
-                in: CGRect(x: x, y: 0, width: width, height: rect.height),
-                cornerSize: CGSize(width: 1, height: 1)
-            )
-            x += tickWidth + gap
-        }
-        return path
-    }
+    private var fillColor: Color { tint ?? level.accent }
 }
 
 extension LimitSafety.Level {

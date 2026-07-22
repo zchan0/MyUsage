@@ -13,8 +13,6 @@ struct UsagePopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
             if enabledProviders.isEmpty {
                 emptyState
             } else if enabledProviders.count == 1, let provider = enabledProviders.first {
@@ -43,34 +41,10 @@ struct UsagePopover: View {
 
     // MARK: - Subviews
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text("MyUsage")
-                .font(.system(size: 14.5, weight: .semibold))
-                .tracking(-0.2)
-
-            Spacer()
-
-            if let lastRefreshed = manager.lastRefreshed {
-                RelativeTimestampLabel(date: lastRefreshed)
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(minHeight: 60)
-        .overlay(alignment: .bottom) {
-            if enabledProviders.count <= 1 {
-                Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-            }
-        }
-    }
-
     private var tabBar: some View {
         ProviderTabBar(
             items: enabledProviders.map { provider in
-                .init(
-                    kind: provider.kind,
-                    worstPercent: provider.snapshot.map(\.worstUsagePercent)
-                )
+                .init(kind: provider.kind)
             },
             selection: $selectedTab
         )
@@ -80,10 +54,7 @@ struct UsagePopover: View {
     @ViewBuilder
     private func detailPage(kind: ProviderKind) -> some View {
         if let provider = enabledProviders.first(where: { $0.kind == kind }) {
-            // The selected tab already establishes provider identity. Keep
-            // only a compact context line in the page instead of repeating a
-            // large title block below the navigation.
-            ProviderDeck(provider: provider, showsHeader: false)
+            ProviderDeck(provider: provider)
         }
     }
 

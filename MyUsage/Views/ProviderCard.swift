@@ -149,7 +149,7 @@ struct ProviderCard: View {
                 Rectangle()
                     .fill(Color.primary.opacity(0.06))
                     .frame(height: 0.5)
-                DailyCostChart(series: series)
+                DailyCostChart(kind: provider.kind, series: series)
             }
         }
     }

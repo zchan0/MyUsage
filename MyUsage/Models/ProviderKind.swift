@@ -52,6 +52,18 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
         case .antigravity: Color(hue: 257.0/360.0, saturation: 0.50, brightness: 0.72) // periwinkle
         }
     }
+
+    /// Low-saturation rail tint used consistently in Overview and Detail.
+    /// Risk remains encoded by the percent/forecast copy, so a provider does
+    /// not switch visual identity when a limit crosses a threshold.
+    var usageTint: Color {
+        switch self {
+        case .claude:      Color(red: 0.79, green: 0.43, blue: 0.29).opacity(0.82)
+        case .codex:       Color(red: 0.48, green: 0.51, blue: 0.55).opacity(0.72)
+        case .cursor:      Color(red: 0.31, green: 0.33, blue: 0.36).opacity(0.76)
+        case .antigravity: Color(red: 0.50, green: 0.37, blue: 0.72).opacity(0.72)
+        }
+    }
 }
 
 /// Safety thresholds for limit pressure across all providers. Same scale used

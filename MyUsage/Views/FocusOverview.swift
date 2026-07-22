@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Priority-led overview for two or more enabled providers. One window gets
-/// the visual emphasis; every other provider remains one-click reachable in a
-/// compact watchlist. Cost is deliberately last because it is context, not a
-/// capacity alarm.
+/// Comparable, pressure-ordered provider overview. Every provider uses the
+/// same reading axis: identity, primary constraint, brand rail, reset/context,
+/// and (when available) that provider's own cost scope.
 struct FocusOverview: View {
     let providers: [any UsageProvider]
     @Binding var selection: PopoverTab
@@ -12,313 +11,239 @@ struct FocusOverview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let focusMetric {
-                focusInstrument(focusMetric)
-                    .padding(.horizontal, 16)
-            } else {
-                Text("Waiting for usage data")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 18)
-            }
+            statusSummary
 
-            if !watchProviders.isEmpty {
-                watchlist
-            }
-
-            if manager.showEstimatedCost {
-                costDock
-            }
-        }
-    }
-
-    private func focusInstrument(_ metric: CapacityFocus.Metric) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 8) {
-                ProviderIconTile(kind: metric.providerKind, size: 23, glyph: 13.5)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(metric.providerKind.displayName)
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(metric.label)
-                        .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundStyle(.secondary.opacity(0.72))
-                }
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("\(Int(metric.percentUsed.rounded()))%")
-                            .font(.system(size: 18.5, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(LimitSafety.level(for: metric.percentUsed).accent)
-                        Text("used")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary.opacity(0.72))
-                    }
-
-                    if let pace = metric.pacePercent {
-                        PaceReadout(percentUsed: metric.percentUsed, pacePercent: pace)
-                    }
-
-                    if let projected = metric.projectedFinalPercent, projected > 100 {
-                        Text("Projected \(Int(projected.rounded()))% at reset")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(LimitBar.warnAccent)
-                    }
-                }
-            }
-
-            ProgressTrack(
-                percent: metric.percentUsed,
-                pacePercent: metric.pacePercent,
-                level: LimitSafety.level(for: metric.percentUsed),
-                height: 6
-            )
-            .padding(.top, 12)
-
-            ResetCountdownReadout(resetsAt: metric.resetsAt)
-                .padding(.top, 12)
-
-            let siblings = allMetrics.filter {
-                $0.providerKind == metric.providerKind && $0.id != metric.id
-            }
-            if !siblings.isEmpty {
-                ForEach(Array(siblings.prefix(2))) { sibling in
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.07))
-                        .frame(height: 0.5)
-                        .padding(.top, 14)
-
-                    secondaryInstrument(sibling)
-                        .padding(.top, 14)
-                }
-            }
-
-            if let inventory = resetInventory(for: metric.providerKind) {
-                Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 0.5)
-                    .padding(.top, 12)
-                ResetCreditsInlineSummary(inventory: inventory)
-                    .padding(.top, 10)
-            } else if metric.providerKind == .codex {
-                Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 0.5)
-                    .padding(.top, 12)
-                HStack {
-                    Text("Reset credits")
-                    Spacer()
-                    Text("Unavailable")
-                }
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.tertiary)
-                .padding(.top, 10)
-            }
-        }
-        .padding(.vertical, 20)
-        .overlay(alignment: .top) { divider }
-        .overlay(alignment: .bottom) { divider }
-        .contentShape(Rectangle())
-        .onTapGesture { selection = .provider(metric.providerKind) }
-        .help("Open \(metric.providerKind.displayName)")
-    }
-
-    private func secondaryInstrument(_ metric: CapacityFocus.Metric) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                Text(metric.label)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary.opacity(0.92))
-                    .padding(.top, 2)
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("\(Int(metric.percentUsed.rounded()))%")
-                            .font(.system(size: 15.5, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(LimitSafety.level(for: metric.percentUsed).accent)
-                        Text("used")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary.opacity(0.72))
-                    }
-
-                    if let pace = metric.pacePercent {
-                        PaceReadout(percentUsed: metric.percentUsed, pacePercent: pace)
-                    }
-                }
-            }
-
-            ProgressTrack(
-                percent: metric.percentUsed,
-                pacePercent: metric.pacePercent,
-                level: LimitSafety.level(for: metric.percentUsed),
-                height: 5
-            )
-            .padding(.top, 10)
-
-            ResetCountdownReadout(resetsAt: metric.resetsAt)
-                .padding(.top, 10)
-        }
-    }
-
-    private var watchlist: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("WATCHLIST")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                Spacer()
-                Text("ORDERED BY PRESSURE")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.secondary.opacity(0.58))
-            }
-            .foregroundStyle(.secondary.opacity(0.82))
-            .padding(.bottom, 9)
-
-            ForEach(watchProviders, id: \.kind) { provider in
+            ForEach(orderedProviders, id: \.kind) { provider in
                 Button {
                     selection = .provider(provider.kind)
                 } label: {
-                    watchRow(provider)
+                    providerRow(provider)
                 }
                 .buttonStyle(.plain)
+                .help("Open \(provider.kind.displayName)")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 18)
     }
 
-    private func watchRow(_ provider: any UsageProvider) -> some View {
-        let metrics = provider.snapshot.map {
-            Array(CapacityFocus.metrics(providerKind: provider.kind, snapshot: $0).prefix(2))
-        } ?? []
+    private var statusSummary: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(attentionCount > 0 ? LimitBar.warnAccent : LimitSafety.Level.healthy.accent)
+                .frame(width: 5, height: 5)
 
-        return VStack(alignment: .leading, spacing: 11) {
-            HStack(spacing: 8) {
-                ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
-                VStack(alignment: .leading, spacing: 2) {
+            Text(attentionCount == 1 ? "1 needs attention" : "\(attentionCount) need attention")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 8)
+
+            Text("\(onTrackCount) on track · pressure order")
+                .font(.system(size: 9.5))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 34)
+        .overlay(alignment: .bottom) { divider }
+    }
+
+    private func providerRow(_ provider: any UsageProvider) -> some View {
+        let metric = primaryMetric(for: provider)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                ProviderIconTile(kind: provider.kind, size: 25, glyph: 14)
+
+                VStack(alignment: .leading, spacing: 1) {
                     Text(provider.kind.shortName)
                         .font(.system(size: 12.5, weight: .semibold))
-                        .lineLimit(1)
-                    Text(watchCaption(provider))
-                        .font(.system(size: 10))
-                        .foregroundStyle(
-                            provider.snapshot?.resetCredits == nil
-                                ? AnyShapeStyle(.tertiary)
-                                : AnyShapeStyle(Color.accentColor.opacity(0.82))
-                        )
+                    Text(metric.map(statusLabel) ?? unavailableLabel(provider))
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
 
-            if metrics.isEmpty {
-                Text(provider.error == nil ? "Waiting for data" : "Unavailable")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack(alignment: .top, spacing: 18) {
-                    ForEach(metrics) { metric in
-                        WatchMetric(metric: metric)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 8)
+
+                if let metric {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text("\(Int(metric.percentUsed.rounded()))%")
+                            .font(.system(size: 14.5, weight: .semibold, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(requiresAttention(metric)
+                                ? AnyShapeStyle(LimitBar.warnAccent)
+                                : AnyShapeStyle(.primary))
+                        Text("used")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
-        }
-        .padding(.vertical, 14)
-        .overlay(alignment: .top) { divider }
-        .contentShape(Rectangle())
-    }
 
-    private var costDock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("ESTIMATED COST")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.secondary.opacity(0.78))
-                Spacer()
-                if let delta = OverviewSummary.deltaCaption(
-                    today: todayCost,
-                    average: OverviewSummary.trailingDailyAverage(dailyCosts: manager.ledger.dailyCosts)
-                ) {
-                    Text(delta)
-                        .font(.system(size: 9.5, design: .monospaced))
+            if let metric {
+                ProgressTrack(
+                    percent: metric.percentUsed,
+                    pacePercent: metric.pacePercent,
+                    level: LimitSafety.level(for: metric.percentUsed),
+                    height: 4,
+                    tint: provider.kind.usageTint
+                )
+                .padding(.top, 9)
+
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(resetCaption(metric.resetsAt))
+                        .font(.system(size: 9, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(.tertiary)
-                }
-            }
 
-            HStack(alignment: .bottom, spacing: 12) {
-                if let series = OverviewSummary.trailingDailySeries(dailyCosts: manager.ledger.dailyCosts) {
-                    CostSparkline(values: series, width: 106, height: 36)
-                } else {
-                    Rectangle()
-                        .fill(Color.primary.opacity(0.05))
-                        .frame(width: 106, height: 1)
+                    if let projected = metric.projectedFinalPercent, projected > 100 {
+                        Text("\(Int(projected.rounded()))% projected")
+                            .font(.system(size: 9, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(LimitBar.warnAccent)
+                    } else if let secondary = secondaryCaption(provider, excluding: metric) {
+                        Text(secondary)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    if let spend = spendCaption(provider) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(spend.amount)
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                            Text(spend.scope)
+                                .font(.system(size: 8.5))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .fixedSize()
+                    }
                 }
-                Spacer(minLength: 0)
-                CostDockStat(label: "TODAY", value: ProviderCardCostRow.formatCost(todayCost))
-                CostDockStat(label: "THIS MONTH", value: ProviderCardCostRow.formatCost(monthCost))
+                .padding(.top, 7)
+            } else {
+                Text(provider.error == nil ? "Waiting for usage data" : "Usage unavailable")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 20)
-        .padding(.bottom, 22)
-        .overlay(alignment: .top) { divider }
-    }
-
-    private var allMetrics: [CapacityFocus.Metric] {
-        providers.flatMap { provider in
-            provider.snapshot.map {
-                CapacityFocus.metrics(providerKind: provider.kind, snapshot: $0)
-            } ?? []
+        .padding(.vertical, 13)
+        .background {
+            if metric.map(requiresAttention) == true {
+                LinearGradient(
+                    colors: [provider.kind.usageTint.opacity(0.07), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            }
         }
+        .overlay(alignment: .bottom) { divider }
+        .contentShape(Rectangle())
     }
 
-    private var focusMetric: CapacityFocus.Metric? {
-        CapacityFocus.select(from: allMetrics)
+    // MARK: - Ordering and labels
+
+    private var orderedProviders: [any UsageProvider] {
+        providers.sorted { pressure(of: $0) > pressure(of: $1) }
     }
 
-    private var watchProviders: [any UsageProvider] {
-        providers
-            .filter { $0.kind != focusMetric?.providerKind }
-            .sorted { pressure(of: $0) > pressure(of: $1) }
+    private var attentionCount: Int {
+        providers.compactMap(primaryMetric).filter(requiresAttention).count
+    }
+
+    private var onTrackCount: Int {
+        providers.compactMap(primaryMetric).filter { !requiresAttention($0) }.count
+    }
+
+    private func primaryMetric(for provider: any UsageProvider) -> CapacityFocus.Metric? {
+        guard let snapshot = provider.snapshot else { return nil }
+        return CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
+            .max { lhs, rhs in
+                if lhs.riskScore != rhs.riskScore { return lhs.riskScore < rhs.riskScore }
+                return lhs.percentUsed < rhs.percentUsed
+            }
     }
 
     private func pressure(of provider: any UsageProvider) -> Double {
-        guard let snapshot = provider.snapshot else { return -1 }
-        return CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
-            .map(\.riskScore).max() ?? -1
+        primaryMetric(for: provider)?.riskScore ?? -1
     }
 
-    private func resetInventory(for kind: ProviderKind) -> ResetCreditInventory? {
-        providers.first { $0.kind == kind }?.snapshot?.resetCredits
+    /// Overview reserves "needs attention" for an imminent or predicted
+    /// breach. The 75% warning band remains visible inside provider Detail,
+    /// but does not make a long billing cycle look urgent by percentage alone.
+    private func requiresAttention(_ metric: CapacityFocus.Metric) -> Bool {
+        (metric.projectedFinalPercent ?? 0) > 100 || metric.percentUsed >= 90
     }
 
-    private func watchCaption(_ provider: any UsageProvider) -> String {
-        if let count = provider.snapshot?.resetCredits?.reportedAvailableCount {
-            return "\(count) reset credit\(count == 1 ? "" : "s")"
+    private func statusLabel(_ metric: CapacityFocus.Metric) -> String {
+        switch metric.label {
+        case "Weekly": "Weekly limit"
+        case "5-hour": "5-hour limit"
+        case "Included": "Included usage"
+        case "On-demand": "On-demand usage"
+        default: "\(metric.label) quota"
         }
-        return provider.snapshot?.planName ?? ""
     }
 
-    private var todayCost: Double {
-        OverviewSummary.todayTotal(dailyCosts: manager.ledger.dailyCosts)
+    private func unavailableLabel(_ provider: any UsageProvider) -> String {
+        provider.snapshot?.planName ?? "Not reported"
     }
 
-    private var monthCost: Double {
-        let monthKey = LedgerCalendar.monthKey(for: .now)
-        if let ledgerTotal = OverviewSummary.monthTotal(
-            monthlyTotals: manager.ledger.monthlyTotals,
-            monthKey: monthKey
-        ) {
-            return ledgerTotal
+    private func resetCaption(_ resetsAt: Date?) -> String {
+        guard let resetsAt else { return "Reset not reported" }
+        return "Resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
+    }
+
+    private func secondaryCaption(
+        _ provider: any UsageProvider,
+        excluding primary: CapacityFocus.Metric
+    ) -> String? {
+        guard let snapshot = provider.snapshot else { return nil }
+        var pieces: [String] = []
+        if let secondary = CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
+            .filter({ $0.id != primary.id })
+            .max(by: { $0.riskScore < $1.riskScore }) {
+            pieces.append("\(secondary.label) \(Int(secondary.percentUsed.rounded()))%")
         }
-        return providers.compactMap { $0.snapshot?.monthlyEstimatedCost }.reduce(0, +)
+        if let credits = snapshot.resetCredits?.reportedAvailableCount {
+            pieces.append("\(credits) credit\(credits == 1 ? "" : "s")")
+        }
+        return pieces.isEmpty ? nil : pieces.joined(separator: " · ")
+    }
+
+    private struct SpendCaption {
+        let amount: String
+        let scope: String
+    }
+
+    private func spendCaption(_ provider: any UsageProvider) -> SpendCaption? {
+        guard manager.showEstimatedCost, let snapshot = provider.snapshot else { return nil }
+
+        switch provider.kind {
+        case .claude, .codex:
+            let monthKey = LedgerCalendar.monthKey(for: .now)
+            let aggregate = manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0
+            let displayed = aggregate > 0 ? aggregate : (snapshot.monthlyEstimatedCost ?? 0)
+            guard displayed > 0 else { return nil }
+            return SpendCaption(
+                amount: ProviderCardCostRow.formatCost(displayed),
+                scope: "month"
+            )
+        case .cursor:
+            let cycle = (snapshot.spentAmount?.amount ?? 0) + (snapshot.onDemandSpend?.amount ?? 0)
+            let displayed = cycle > 0 ? cycle : (snapshot.monthlyEstimatedCost ?? 0)
+            guard displayed > 0 else { return nil }
+            return SpendCaption(
+                amount: ProviderCardCostRow.formatCost(displayed, estimated: false),
+                scope: "cycle"
+            )
+        case .antigravity:
+            return nil
+        }
     }
 
     private var divider: some View {
@@ -326,57 +251,8 @@ struct FocusOverview: View {
     }
 }
 
-private struct WatchMetric: View {
-    let metric: CapacityFocus.Metric
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(Int(metric.percentUsed.rounded()))%")
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-                Text(metric.label)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-            ProgressTrack(
-                percent: metric.percentUsed,
-                pacePercent: metric.pacePercent,
-                level: LimitSafety.level(for: metric.percentUsed),
-                height: 5
-            )
-            if let reset = metric.resetsAt {
-                Text("\(OverviewSummary.shortCountdown(until: reset)) to reset")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-        }
-    }
-}
-
-private struct CostDockStat: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(.tertiary)
-            Text(value)
-                .font(.system(size: 15.5, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(width: 76, alignment: .leading)
-    }
-}
-
 #if DEBUG
-#Preview("Focus Overview") {
+#Preview("Comparable Overview") {
     struct Host: View {
         let manager = PreviewFixtures.manager(providerCount: 4)
         @State var selection = PopoverTab.overview

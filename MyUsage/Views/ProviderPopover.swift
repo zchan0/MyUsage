@@ -1,10 +1,7 @@
 import SwiftUI
 
-/// Panel content for one provider in separate-icons mode: header with the
-/// provider's name, the full detail card (hero tiles + bars + cost +
-/// chart), and the standard footer. Deliberately no Overview and no tab
-/// strip — per the CodexBar model, those exist only in merged mode; a
-/// provider's own menu-bar icon opens that provider and nothing else.
+/// Panel content for one provider in separate-icons mode. The same account-
+/// first Detail used by merged mode opens directly, without Overview or tabs.
 struct ProviderPopover: View {
     let kind: ProviderKind
 
@@ -13,10 +10,8 @@ struct ProviderPopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
             if let provider = manager.orderedProviders.first(where: { $0.kind == kind }) {
-                ProviderDeck(provider: provider, showsHeader: false)
+                ProviderDeck(provider: provider)
             }
 
             PopoverFooterBar()
@@ -27,38 +22,11 @@ struct ProviderPopover: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var header: some View {
-        HStack(spacing: 7) {
-            ProviderIconTile(kind: kind, size: 20, glyph: 12)
-
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text(kind.displayName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .tracking(-0.2)
-
-                if let plan = manager.orderedProviders
-                    .first(where: { $0.kind == kind })?.snapshot?.planName {
-                    PlanPill(text: plan)
-                }
-            }
-
-            Spacer()
-
-            if let lastRefreshed = manager.lastRefreshed {
-                RelativeTimestampLabel(date: lastRefreshed)
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(minHeight: 62)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-        }
-    }
 }
 
 // MARK: - Shared popover chrome
 
-/// "N min ago" mono label used in both popover headers.
+/// "N min ago" mono label used by the compact footer.
 struct RelativeTimestampLabel: View {
     let date: Date
 
@@ -83,9 +51,18 @@ struct PopoverFooterBar: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Text("v\(AppInfo.version)")
-                .font(.system(size: 8.5, design: .monospaced))
+            if let lastRefreshed = manager.lastRefreshed {
+                HStack(spacing: 3) {
+                    Text("Updated")
+                    RelativeTimestampLabel(date: lastRefreshed)
+                }
+                .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
+            } else {
+                Text("Not refreshed")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+            }
 
             Spacer()
 
@@ -126,6 +103,7 @@ struct PopoverFooterBar: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 44)
+        .help("MyUsage v\(AppInfo.version)")
         .overlay(alignment: .top) {
             Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }

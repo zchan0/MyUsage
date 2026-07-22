@@ -122,6 +122,8 @@ struct CostCalculatorTests {
         let b = TokenUsage(input: 1,  output: 2,  cacheWrite: 3,  cacheRead: 4,  cachedInput: 5)
         let sum = a + b
         #expect(sum == TokenUsage(input: 11, output: 22, cacheWrite: 33, cacheRead: 44, cachedInput: 55))
+        #expect(sum.cache == 132)
+        #expect(sum.total == 165)
     }
 
     @Test("Dictionary.add merges into existing key")
@@ -130,5 +132,13 @@ struct CostCalculatorTests {
         byModel.add(TokenUsage(input: 100), for: "claude-sonnet-4-5")
         byModel.add(TokenUsage(input: 50, output: 5), for: "claude-sonnet-4-5")
         #expect(byModel["claude-sonnet-4-5"] == TokenUsage(input: 150, output: 5))
+    }
+
+    @Test("Token count formatter stays compact without hiding scale")
+    func tokenCountFormatting() {
+        #expect(TokenCountFormatter.string(999) == "999")
+        #expect(TokenCountFormatter.string(1_500) == "1.5K")
+        #expect(TokenCountFormatter.string(12_400_000) == "12.4M")
+        #expect(TokenCountFormatter.string(218_000_000) == "218M")
     }
 }

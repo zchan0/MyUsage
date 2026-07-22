@@ -29,7 +29,8 @@ struct ProviderCardLimits: View {
                         reset: cached ? nil : session.resetCountdown.map { "resets \($0)" },
                         projectedPercent: session.projectedFinalPercent(),
                         pacePercent: cached ? nil : session.onPacePercent(),
-                        expired: isExpired(session)
+                        expired: isExpired(session),
+                        tint: kind.usageTint
                     )
                 }
                 if let weekly = snapshot.weeklyUsage {
@@ -39,7 +40,8 @@ struct ProviderCardLimits: View {
                         reset: cached ? nil : weekly.resetCountdown.map { "resets \($0)" },
                         projectedPercent: weekly.projectedFinalPercent(),
                         pacePercent: cached ? nil : weekly.onPacePercent(),
-                        expired: isExpired(weekly)
+                        expired: isExpired(weekly),
+                        tint: kind.usageTint
                     )
                     // Per-bucket caps render as peers of the Weekly bar,
                     // not as sub-rows under it. Each row is one model's
@@ -50,7 +52,7 @@ struct ProviderCardLimits: View {
                     // stale as the parent.
                     if manager.showPerModelBars, !isExpired(weekly) {
                         ForEach(snapshot.weeklyByModel) { row in
-                            LimitBar(name: row.label, percent: row.percent)
+                            LimitBar(name: row.label, percent: row.percent, tint: kind.usageTint)
                         }
                     }
                 }
@@ -64,7 +66,8 @@ struct ProviderCardLimits: View {
                     LimitBar(
                         name: quota.label,
                         percent: quota.percentUsed,
-                        monoName: true
+                        monoName: true,
+                        tint: kind.usageTint
                     )
                 }
             }
@@ -115,7 +118,8 @@ struct CursorLimits: View {
                 LimitBar(
                     name: "Included",
                     percent: snapshot.totalUsagePercent ?? 0,
-                    reset: spent.formatted
+                    reset: spent.formatted,
+                    tint: ProviderKind.cursor.usageTint
                 )
             }
             if let onDemand = snapshot.onDemandSpend {
@@ -124,7 +128,8 @@ struct CursorLimits: View {
                     LimitBar(
                         name: "On-demand",
                         percent: pct,
-                        reset: "+\(onDemand.formatted)"
+                        reset: "+\(onDemand.formatted)",
+                        tint: ProviderKind.cursor.usageTint
                     )
                 } else {
                     // No on-demand cap reported — show the spend as a

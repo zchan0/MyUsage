@@ -40,6 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MYUSAGE_APPEARANCE"] == "dark" {
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+        #endif
+
         menuBarCoordinator = MenuBarCoordinator(manager: usageManager, updateChecker: updateChecker)
         usageManager.startTimer()
 
