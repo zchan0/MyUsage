@@ -11,9 +11,9 @@
 	<key>CFBundleName</key>
 	<string>MyUsage</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.15.0</string>
+	<string>0.15.1</string>
 	<key>CFBundleVersion</key>
-	<string>32</string>
+	<string>33</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

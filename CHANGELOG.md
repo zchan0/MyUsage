@@ -6,7 +6,7 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## v0.15.0 — 2026-07-22
+## v0.15.1 — 2026-07-22
 
 ### Added
 - **Codex reset-credit inventory.** MyUsage now reads Codex's reset-credit
@@ -32,6 +32,7 @@ the 中文 half lives here only.
   available in a 44pt footer instead of a tall vertical menu.
 
 ### Fixed
+- Xcode 16 CI compatibility for the DEBUG preview-provider injection path.
 - Claude's legacy CLI Keychain item is recognized correctly when a silent
   no-UI read is blocked by its ACL; long provider errors remain complete and
   retry delays use human units.
@@ -39,6 +40,7 @@ the 中文 half lives here only.
   longer crowd or truncate.
 
 ### 中文
+- 修复 DEBUG Preview provider 注入路径在 Xcode 16 CI 上的编译兼容性。
 - **Codex reset credit 库存**：读取真实的 reset-credit 接口，显示官方可用
   次数、最近过期时间与全部已上报的过期时间；已过期/非 available 条目会被
   过滤，格式错误或相互矛盾的响应只显示 Unavailable，绝不猜数。
