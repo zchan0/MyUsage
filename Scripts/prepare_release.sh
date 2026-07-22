@@ -83,7 +83,10 @@ ZIP_PATH="${PROJECT_DIR}/${ZIP_NAME}"
 echo "==> Creating zip archive"
 rm -f "$ZIP_PATH" "${ZIP_PATH}.sha256"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "${PROJECT_DIR}/${APP_NAME}.app" "$ZIP_PATH"
-shasum -a 256 "$ZIP_PATH" > "${ZIP_PATH}.sha256"
+(
+    cd "$PROJECT_DIR"
+    shasum -a 256 "$ZIP_NAME" > "${ZIP_NAME}.sha256"
+)
 
 echo "==> Release artifacts ready:"
 echo "    ${ZIP_PATH}"
