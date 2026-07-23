@@ -25,7 +25,7 @@ struct LimitBar: View {
     /// reset (an inactive multi-account snapshot viewed past its
     /// `resetsAt`). The percentage is no longer meaningful and we can't
     /// fetch the live one, so render an empty muted rail with "—" instead
-    /// of a stale number. See `ProviderCardLimits`.
+    /// of a stale number.
     var expired: Bool = false
     /// Optional provider-brand fill. Severity still lives in the percent and
     /// forecast text; the rail stays visually consistent within a provider.

@@ -121,32 +121,6 @@ struct ResetCreditsSection: View {
     }
 }
 
-/// Compact inventory signal embedded in the Focus Overview.
-struct ResetCreditsInlineSummary: View {
-    let inventory: ResetCreditInventory
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: "arrow.counterclockwise.circle")
-                .font(.system(size: 10))
-            Text("Reset credits")
-                .font(.system(size: 10, weight: .medium))
-            Text("\(inventory.reportedAvailableCount)")
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
-            Spacer(minLength: 8)
-            if let expiration = inventory.earliestExpiration {
-                Text("next expires in \(OverviewSummary.shortCountdown(until: expiration))")
-                    .font(.system(size: 8.5, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary.opacity(0.72))
-            }
-        }
-        .foregroundStyle(Color.accentColor)
-    }
-}
-
 #Preview("Reset credits") {
     ResetCreditsSection(
         inventory: ResetCreditInventory(

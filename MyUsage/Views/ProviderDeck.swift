@@ -32,7 +32,7 @@ struct ProviderDeck: View {
             if provider.kind == .claude || provider.kind == .codex {
                 rollingInstruments(snapshot)
             } else {
-                ProviderCardLimits(kind: provider.kind, snapshot: snapshot)
+                ProviderQuotaInstruments(kind: provider.kind, snapshot: snapshot)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 18)
                     .overlay(alignment: .bottom) { sectionDivider }

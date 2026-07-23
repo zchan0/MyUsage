@@ -1,75 +1,19 @@
 import SwiftUI
 
-/// Limit-bar block in a ProviderCard. Encapsulates the per-kind switch
-/// over how a provider expresses limits (rolling windows for Claude /
-/// Codex, included + on-demand budgets for Cursor, per-model quotas for
-/// Antigravity) so the parent card stays an orchestrator instead of
-/// branching on every detail.
-struct ProviderCardLimits: View {
+/// Limit-bar block for providers that do not use rolling instruments in
+/// `ProviderDeck`. Cursor expresses included + on-demand budgets, while
+/// Antigravity reports per-model quotas.
+struct ProviderQuotaInstruments: View {
     let kind: ProviderKind
     let snapshot: UsageSnapshot
-    /// True when `snapshot` is an inactive account's cached snapshot
-    /// (not live data). Drives the "window reset since snapshot" handling:
-    /// a cached window whose `resetsAt` is in the past no longer reflects
-    /// reality, and we can't fetch the live value (no token for a non-
-    /// active account), so we render an empty muted rail + a refresh hint
-    /// instead of a stale percentage.
-    var cached: Bool = false
 
-    @Environment(UsageManager.self) private var manager
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             switch kind {
             case .claude, .codex:
-                if let session = snapshot.sessionUsage {
-                    LimitBar(
-                        name: "5-hour",
-                        percent: session.percentUsed,
-                        reset: cached ? nil : session.resetCountdown.map { "resets \($0)" },
-                        projectedPercent: session.projectedFinalPercent(),
-                        pacePercent: cached ? nil : session.onPacePercent(),
-                        expired: isExpired(session),
-                        tint: kind.usageTint(for: colorScheme)
-                    )
-                }
-                if let weekly = snapshot.weeklyUsage {
-                    LimitBar(
-                        name: "Weekly",
-                        percent: weekly.percentUsed,
-                        reset: cached ? nil : weekly.resetCountdown.map { "resets \($0)" },
-                        projectedPercent: weekly.projectedFinalPercent(),
-                        pacePercent: cached ? nil : weekly.onPacePercent(),
-                        expired: isExpired(weekly),
-                        tint: kind.usageTint(for: colorScheme)
-                    )
-                    // Per-bucket caps render as peers of the Weekly bar,
-                    // not as sub-rows under it. Each row is one model's
-                    // separate weekly cap — Anthropic tracks them
-                    // independently, so the visual treatment matches 5h /
-                    // Weekly exactly. Hidden when the weekly window has
-                    // reset on a cached card — the breakdown is just as
-                    // stale as the parent.
-                    if manager.showPerModelBars, !isExpired(weekly) {
-                        ForEach(snapshot.weeklyByModel) { row in
-                            LimitBar(
-                                name: row.label,
-                                percent: row.percent,
-                                tint: kind.usageTint(for: colorScheme)
-                            )
-                        }
-                    }
-                }
-                if kind == .claude, let extra = snapshot.onDemandSpend {
-                    ExtraUsageInstrument(
-                        spend: extra,
-                        tint: kind.usageTint(for: colorScheme)
-                    )
-                }
-                if anyWindowExpired {
-                    refreshHint
-                }
+                EmptyView()
             case .cursor:
                 CursorLimits(snapshot: snapshot)
             case .antigravity:
@@ -83,29 +27,6 @@ struct ProviderCardLimits: View {
                 }
             }
         }
-    }
-
-    /// A cached window is "expired" when its reset time has already
-    /// passed — the window rolled over since we captured the snapshot,
-    /// so the cached percentage is meaningless. Live (non-cached) cards
-    /// never treat a window as expired; their data is current and a
-    /// past reset just means a refresh is imminent.
-    private func isExpired(_ window: UsageWindow) -> Bool {
-        guard cached, let resetsAt = window.resetsAt else { return false }
-        return resetsAt < .now
-    }
-
-    private var anyWindowExpired: Bool {
-        guard cached else { return false }
-        if let s = snapshot.sessionUsage, isExpired(s) { return true }
-        if let w = snapshot.weeklyUsage, isExpired(w) { return true }
-        return false
-    }
-
-    private var refreshHint: some View {
-        Text("Sign in to this account to refresh")
-            .font(.system(size: 10, weight: .regular, design: .monospaced))
-            .foregroundStyle(.secondary.opacity(0.7))
     }
 }
 
