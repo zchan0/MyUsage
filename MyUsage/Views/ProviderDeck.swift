@@ -317,26 +317,23 @@ private struct DeckLimitInstrument: View {
         }
     }
 
-    @ViewBuilder
     private var paceFooter: some View {
-        if let summary = CapacityPaceText.detailSummary(for: metric) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    resetText
-                        .fixedSize()
-                    Spacer(minLength: 28)
-                    paceText(summary)
-                        .fixedSize()
-                }
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                resetText
+                    .fixedSize()
 
-                VStack(alignment: .leading, spacing: 3) {
-                    resetText
-                    paceText(summary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                if let balance = CapacityPaceText.balanceLabel(for: metric) {
+                    Spacer(minLength: 28)
+                    paceText(balance)
+                        .fixedSize()
                 }
             }
-        } else {
-            resetText
+
+            if let outcome = CapacityPaceText.outcomeLabel(for: metric) {
+                paceText(outcome)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
     }
 
