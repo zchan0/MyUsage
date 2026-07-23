@@ -6,6 +6,64 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.16.0 — 2026-07-23
+
+### Added
+- **Synced 30-day token usage.** Claude and Codex Detail now show
+  Total / Input / Output / Cache tokens across all ledger accounts and
+  synced Macs. The v3 ledger wire format carries daily token buckets while
+  remaining compatible with existing v1/v2 data.
+- **Per-model cost inspection.** The 30-day chart now pairs its stable model
+  colors with a vertical cost breakdown. The default state shows each
+  model's rolling total; hovering a day swaps the header to that day's total
+  and the same rows to daily model costs without shifting the layout.
+
+### Changed
+- **Clean-glass popover refresh.** Provider comparison and Detail use a
+  quieter translucent surface, restrained provider color, tighter
+  navigation, clearer account identity, and a more balanced information
+  hierarchy. The previous card-view implementation and its unused visual
+  components have been removed.
+- **Actionable capacity pace.** Rolling limits now describe distance from
+  the pace marker as a familiar **reserve** or **deficit**, then add the
+  concrete outcome — **Runs out in…** or **Lasts until reset** — once the
+  projection is reliable.
+- **More compact provider detail.** Codex reset credits collapse to one
+  summary row with expandable expiry details. Cost scopes, chart spacing,
+  usage typography, provider identity, Overview alignment, row hover
+  feedback, and refresh progress have all been refined.
+
+### Fixed
+- Early in a rolling window, clearly accelerated usage no longer falls
+  through the projection reliability gate and incorrectly reports
+  **On track**. Detail, Overview attention counts, and provider ordering now
+  share the same pace-risk fallback.
+- Claude retains an explicit credential-recovery path when automatic account
+  discovery cannot read the CLI credential, and release checksums now use
+  portable relative paths.
+
+### 中文
+- **同步的 30 天 Token 用量**：Claude / Codex 详情页新增
+  Total / Input / Output / Cache，汇总所有 ledger 账户与同步 Mac；v3
+  ledger 传输每日 token bucket，同时继续兼容 v1/v2 数据。
+- **按模型查看成本**：30 天图表下方改为稳定的纵向 model cost 明细；默认
+  显示各模型滚动 30 天成本，悬停某天时，header 切换为当天总成本，同一组
+  行原位切换为当天各模型成本，不换序、不跳高。
+- **Clean Glass 弹窗刷新**：Overview 与 Detail 使用更克制的半透明层次、
+  provider 色、紧凑导航、清晰账户身份和更平衡的信息结构；旧卡片视图及未使用
+  的视觉组件已删除。
+- **可行动的容量 pace**：滚动额度用 **reserve / deficit** 表达与 pace
+  刻度的距离；投影可靠后，再补充 **Runs out in… / Lasts until reset**
+  的具体结果。
+- **更紧凑的 provider 详情**：Codex reset credits 收成一行摘要，点击可展开
+  过期明细；同时优化成本 scope、图表间距、usage 字号、provider 身份、
+  Overview 对齐、行 hover 与刷新反馈。
+- 修复滚动窗口早期的告警盲区：明显超速不再因投影可靠性门控而误报
+  **On track**；Detail、Overview attention 数量和 provider 排序现在共用
+  同一套 pace-risk 兜底逻辑。
+- Claude 在自动账户发现读不到 CLI 凭据时仍提供明确的手动恢复入口；发布
+  checksum 改用可移植的相对路径。
+
 ## v0.15.1 — 2026-07-22
 
 ### Added
