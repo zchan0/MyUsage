@@ -20,6 +20,11 @@
   <strong>项目站点：</strong><a href="https://zchan0.github.io/MyUsage/">zchan0.github.io/MyUsage</a>——介绍页、安装指南、多设备同步深度文档、blog。
 </p>
 
+<p align="center">
+  <img src="docs/screenshot.png" width="390" alt="MyUsage Overview：provider 压力、pace、reset 与成本">
+  <img src="docs/screenshots/codex-detail.png" width="390" alt="MyUsage Codex 详情：额度、reset credits、模型成本与 token 用量">
+</p>
+
 ## 为什么需要 MyUsage
 
 如果你用 **Claude Code、Codex、Cursor 或 Antigravity**——尤其是同时用**多台 Mac**——官方 UI 只显示当前这台机器上的状态。结果就是：周五下午突然命中 weekly limit，因为笔记本一上午都在烧 token，桌面机器上显示的"剩余额度"完全是假的。
@@ -28,7 +33,7 @@ MyUsage 是一个原生的 macOS 菜单栏小应用，解决方式是：
 
 - 同时对接四个 provider，一个 popover 看完，不用在四个 UI 之间切。
 - **跨所有 Mac 聚合**——每台机器把一个 JSONL 快照写到你**已经在同步**的目录里（iCloud Drive、Syncthing、Dropbox、NFS 挂载点都行），完全不依赖 MyUsage 的服务器（也不存在这种东西）。
-- 提前告诉你"快烧完了"——当按当前速度 reset 时会冲破 100%，bar 右边会出一根虚线 marker（溢出右边缘）+ 下方一行 `projected 118%` 的 amber 文字提醒。安全范围内（projected ≤ 100%）保持安静，bar 本身就告诉你还有余地。
+- 把消耗速度说成人能直接行动的信息：当前比 pace 多出多少 `deficit`、还留有多少 `reserve`，以及最终会 `Runs out in 3h` 还是 `Lasts until reset`。
 
 免费、MIT、不发任何 telemetry，纯 Swift / SwiftUI 实现，零第三方依赖。
 
@@ -36,7 +41,11 @@ MyUsage 是一个原生的 macOS 菜单栏小应用，解决方式是：
 
 - **跨设备聚合 + 自带同步通道**：每台 Mac 把 per-device 的 JSONL 快照写进 `<sync-folder>/devices/<id>/`。同步通道随你选——iCloud、Syncthing、Dropbox、NAS 都可以。Settings → Devices 可以"忘记"已退役的旧设备。
 - **四个 provider 一个弹层**：Claude Code、Codex、Cursor、Antigravity。Settings 里可以拖拽排序、启用/禁用。
-- **Burn-rate 预测——只在要超时报警**：当按当前速度到 reset 会突破 100%，bar 右边会出一根 amber 虚线 marker（溢出右边缘）+ 下方 `projected 118%` 的 amber 加粗文字。projected ≤ 100% 时全部静默——bar 本身的留白已经告诉你还有余地，再画一根「会落在 31%」的小竖线只会变噪音。窗口需要至少走过 20% 才会开始预测，避免单次大请求把信号炸出来。
+- **压力排序 Overview + Clean Glass 详情**：Overview 把最需要注意的 limit 提到前面，并让所有 provider 使用同一条阅读轴；点进 provider 后查看账户身份、容量、reset credits、成本和 tokens。
+- **可行动的 pace 表达**：每个滚动额度都会显示 `N% in reserve`、`N% in deficit` 或 `On pace`；投影可靠后再补充 `Runs out in…` / `Lasts until reset`。窗口早期有保守兜底，能抓住明显超速，又不会被单次大请求误触发。
+- **30 天模型成本 + hover 明细**：Claude / Codex 使用按模型堆叠的每日图表和稳定的纵向成本明细；默认看各模型 30 天成本，悬停某天即可原位切换为当天 total 和各模型 cost。
+- **跨设备 Token 汇总**：Claude / Codex 详情独立显示 30 天 Total / Input / Output / Cache，汇总所有 ledger 账户和同步 Mac，不与 cost 图表混在一起。
+- **Codex reset-credit 库存**：一行查看官方 available 数量和最近过期时间，展开后查看全部已上报的 reset-credit expiry。
 - **Claude weekly 子配额拆分**：Anthropic `/api/oauth/usage` 暴露多种 plan-dependent 子配额——model 系列（Opus / Sonnet / Haiku）+ 产品线（Claude Design / Cowork / OAuth apps）。MyUsage 把每个非零子桶在 weekly 主条下方独占一行，按消耗量降序，看到是哪个模型/产品在吃额度。Plan 没有独立子配额（如 Max 5x，所有用量共享一个 weekly 总额）时不显示子行。
 - **Limit 压力通知**：任意 limit 跨过 warn / crit 阈值（默认 80% / 95%，可调）会立即弹 macOS 系统通知。带幂等：同一档不会重复弹；用量回落后状态自动 reset，下次再升能再触发。
 - **应用内升级**：启动时检查 GitHub Releases，发现新版本时菜单栏图标和 Settings → About 都会有提示。banner 上的 Download 按钮可以一键下载新版的 .zip 并在 Finder 里高亮，离"拖到 /Applications"只差一拖。

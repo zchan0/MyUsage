@@ -61,7 +61,7 @@ import Layout from '../layouts/Layout.astro';
         <div class="num"></div>
         <div>
           <h4>Per-provider auth.</h4>
-          <p>Once running, click the menu bar icon and you'll see cards for each provider. The status of each card depends on whether that provider's auth artifact is present on this Mac:</p>
+          <p>Once running, click the menu bar icon for the provider Overview, then open a provider for full Detail. Availability depends on whether that provider's auth artifact is present on this Mac:</p>
           <ul>
             <li><strong>Claude Code</strong> reads <code>~/.claude/.credentials.json</code></li>
             <li><strong>Codex</strong> reads <code>~/.codex/auth.json</code></li>
@@ -75,7 +75,7 @@ import Layout from '../layouts/Layout.astro';
         <div class="num"></div>
         <div>
           <h4>Optional — multi-device sync.</h4>
-          <p>Open <strong>Settings → General</strong>, click <strong>Choose…</strong> next to "Sync folder", and pick a folder that's already syncing across your Macs (iCloud Drive's <code>Mobile Documents</code> folder works out of the box). Repeat the same selection on every Mac. Within one refresh cycle, each Mac's monthly cost row will show the aggregate.</p>
+          <p>Open <strong>Settings → General</strong>, click <strong>Choose…</strong> next to "Sync folder", and pick a folder that's already syncing across your Macs (iCloud Drive's <code>Mobile Documents</code> folder works out of the box). Repeat the same selection on every Mac. Each Mac then aggregates monthly cost, the rolling model-cost chart, and 30-day token totals from the shared ledger.</p>
           <p>Full design — including the device-ID derivation and how to forget retired peers — is in the <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/docs/multi-device-sync`}>multi-device sync doc</a>.</p>
         </div>
       </div>

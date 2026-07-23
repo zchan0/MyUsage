@@ -20,7 +20,10 @@
   <strong>Project site:</strong> <a href="https://zchan0.github.io/MyUsage/">zchan0.github.io/MyUsage</a> — landing, install guide, multi-device sync deep dive, blog.
 </p>
 
-![MyUsage Screenshot](docs/screenshot.png)
+<p align="center">
+  <img src="docs/screenshot.png" width="390" alt="MyUsage Overview showing provider pressure, pace, resets, and cost">
+  <img src="docs/screenshots/codex-detail.png" width="390" alt="MyUsage Codex detail showing limits, reset credits, model costs, and token usage">
+</p>
 
 ## Why MyUsage
 
@@ -30,7 +33,7 @@ MyUsage fixes this with a small native menu bar app that:
 
 - Talks to all four providers and shows them in one popover, so you don't have to flip between four UIs.
 - **Aggregates across every Mac you own** by writing tiny snapshots into a folder you already sync (iCloud Drive, Syncthing, Dropbox, an NFS mount — your call). No MyUsage backend exists; the sync transport is yours.
-- Tells you when you're about to run out — when current burn rate would push a limit past 100% before reset, the bar gets a dashed projection marker overflowing past the right edge and a `projected 118%` note in the footer. Healthy projections stay silent.
+- Tells you whether your current pace leaves capacity in reserve or creates a deficit, then turns that into an actionable outcome: `Runs out in 3h` or `Lasts until reset`.
 
 It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dependencies.
 
@@ -38,7 +41,11 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 
 - **Multi-device aggregation, BYO sync transport.** Each Mac drops a per-device JSONL snapshot into `<sync-folder>/devices/<id>/`. Use iCloud, Syncthing, Dropbox, NAS, or anything else that keeps a folder in sync. The Devices tab in Settings lets you forget retired peers.
 - **Four providers in one popover** — Claude Code, Codex, Cursor, Antigravity. Reorder and enable/disable per provider in Settings.
-- **Burn-rate projection — alarm-only.** When the projected end-of-window usage would exceed 100%, the rolling-window bar surfaces a dashed marker overflowing past the right edge and a `projected 118%` footer note in warn-amber. Healthy projections are intentionally silent — the bar fill alone tells you you have headroom; an extra "you'll land at 31%" marker would just be noise. The math waits for at least 20% of the window to elapse before computing anything, so a single early prompt can't false-trigger the alarm.
+- **Pressure-ordered Overview + clean provider detail.** Overview promotes the limit that needs attention and keeps every provider comparable on one reading axis. Open a provider for account identity, capacity, reset credits, costs, and tokens in a compact clean-glass layout.
+- **Actionable pace, in familiar units.** Every rolling limit compares usage with its pace marker as `N% in reserve`, `N% in deficit`, or `On pace`. Once the projection is reliable, MyUsage adds `Runs out in…` or `Lasts until reset`. A conservative early-window fallback catches obvious acceleration without letting one large prompt create a false alarm.
+- **30-day model costs with hover inspection.** Claude and Codex get a stacked daily chart plus a stable vertical model-cost breakdown. By default it shows each model's rolling cost; hover a day to see that day's total and per-model costs without the legend changing order.
+- **Synced token totals.** Claude and Codex Detail shows 30-day Total / Input / Output / Cache tokens across all ledger accounts and synced Macs, separately from the cost chart.
+- **Codex reset-credit inventory.** See the authoritative available count and nearest expiry in one row, then expand it for every reported reset-credit expiry.
 - **Per-bucket weekly breakdown for Claude.** Anthropic's `/api/oauth/usage` exposes plan-dependent sub-caps — model families (Opus, Sonnet, Haiku) and product lines (Design, Cowork, OAuth-apps). MyUsage surfaces every non-zero bucket as an indented row under the weekly bar. Plans without separate sub-caps (e.g. Max 5x, where everything pools into the unified weekly total) show none.
 - **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
 - **In-app update channel.** On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The Settings → About banner can download the next release and reveal it in Finder one drag away from /Applications.
@@ -49,8 +56,8 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 
 | Provider | Data Source | What You See |
 | --- | --- | --- |
-| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) + `/api/oauth/profile` for plan label | 5h session + weekly bars · per-bucket breakdown (model + product caps when plan exposes them) · burn-rate projection · monthly cost (multi-device) |
-| Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h session + weekly bars · burn-rate projection · monthly cost (multi-device) · credits |
+| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) + `/api/oauth/profile` for plan label | 5h + weekly limits · reserve/deficit outcome · per-bucket caps · 30-day model cost + token totals · monthly cost |
+| Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h + weekly limits · reserve/deficit outcome · reset-credit inventory · 30-day model cost + token totals · monthly cost |
 | Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota + on-demand budget bars · billing-cycle countdown |
 | Antigravity | Local language server process probe | Per-model quota bars · IDE running indicator |
 
@@ -77,8 +84,8 @@ Each release includes a `.sha256` file for checksum verification.
 ## Quick Usage
 
 1. Launch MyUsage from `/Applications`.
-2. Click the menu bar icon to open the usage popover.
-3. Use the refresh button for manual sync.
+2. Click the menu bar icon for the pressure-ordered Overview, then open a provider for full Detail.
+3. Hover a cost-chart day to inspect its total and per-model costs; use the refresh button for manual sync.
 4. Open Settings for:
    - `General`: refresh interval, menu bar tracking, estimated cost toggle, sync folder, launch at login
    - `Providers`: reorder providers and toggle each provider on/off
@@ -108,7 +115,7 @@ open .swiftpm/xcode/package.xcworkspace
 
 - `UsageManager` drives refresh orchestration and UI state.
 - Provider adapters normalize external/local data into a shared snapshot model.
-- Device sync writes each Mac's monthly totals into its own subfolder in the selected sync directory.
+- Device sync writes each Mac's daily cost/model/token ledger into its own subfolder in the selected sync directory.
 
 More details: [docs/architecture.md](docs/architecture.md)
 

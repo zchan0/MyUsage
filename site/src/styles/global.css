@@ -509,8 +509,28 @@ main { display: block; }
     grid-template-columns: 1fr;
     gap: var(--s-7);
     padding: var(--s-7) var(--s-6);
+    min-width: 0;
   }
-  .hero-pop { display: flex; justify-content: center; }
+  .hero-text { min-width: 0; }
+  .hero-pop {
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+    max-width: 100%;
+    padding: var(--s-3);
+  }
+  .hero-shot { max-width: 100%; }
+}
+@media (max-width: 520px) {
+  .site-header {
+    padding: var(--s-4);
+    flex-wrap: nowrap;
+  }
+  .site-nav { gap: var(--s-4); }
+  .site-nav .ext { display: none; }
+  .hero {
+    padding: var(--s-7) var(--s-4);
+  }
 }
 
 .hero-text h1 {
@@ -601,6 +621,26 @@ main { display: block; }
   filter: blur(40px);
   z-index: -1;
 }
+.native-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 0.5px solid hsl(220 8% 13% / 0.12);
+  border-radius: 16px;
+  box-shadow:
+    0 30px 70px hsl(220 18% 14% / 0.14),
+    0 1px 0 hsl(0 0% 100% / 0.8) inset;
+}
+.hero-shot {
+  width: 348px;
+  max-width: min(348px, 82vw);
+}
+@media (prefers-color-scheme: dark) {
+  .native-shot {
+    border-color: hsl(0 0% 100% / 0.12);
+    box-shadow: 0 30px 70px hsl(0 0% 0% / 0.42);
+  }
+}
 
 /* ============================================================
    SECTIONS — clean, no numbering, no marginalia
@@ -634,6 +674,50 @@ main { display: block; }
 .section-prose p { margin-bottom: var(--s-4); }
 .section-prose strong { color: var(--ink); font-weight: 600; }
 .section-prose em { color: var(--sage-deep); font-style: normal; font-weight: 500; }
+
+/* ============================================================
+   PRODUCT SHOTS — native app captures, not reconstructed HTML
+   ============================================================ */
+.product-shots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5);
+  align-items: start;
+}
+.product-shot {
+  min-width: 0;
+  padding: var(--s-6);
+  border: 0.5px solid var(--rule);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 10%, hsl(145 35% 55% / 0.12), transparent 58%),
+    var(--paper-warm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.product-shot .native-shot {
+  width: 348px;
+  max-width: 100%;
+}
+.product-shot figcaption {
+  align-self: stretch;
+  display: grid;
+  gap: 4px;
+  padding-top: var(--s-5);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+}
+.product-shot figcaption strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+@media (max-width: 780px) {
+  .product-shots { grid-template-columns: 1fr; }
+  .product-shot { padding: var(--s-5); }
+}
 
 /* ============================================================
    FEATURE GRID — card-based, modern
@@ -726,6 +810,30 @@ main { display: block; }
   line-height: 1.5;
 }
 .providers .feats { color: var(--ink-mute); line-height: 1.55; }
+@media (max-width: 720px) {
+  .providers,
+  .providers tbody,
+  .providers tr,
+  .providers td {
+    display: block;
+    width: 100%;
+  }
+  .providers thead { display: none; }
+  .providers tr {
+    padding: var(--s-4) 0;
+    border-bottom: 0.5px solid var(--rule);
+  }
+  .providers td {
+    padding: 3px 0;
+    border: 0;
+  }
+  .providers .name { white-space: normal; }
+  .providers .source { padding-left: 32px; }
+  .providers .feats {
+    padding-left: 32px;
+    padding-top: var(--s-2);
+  }
+}
 
 .sync-diagram {
   background: var(--paper-warm);

@@ -12,7 +12,9 @@ Core design tenets:
 
 - **No MyUsage backend exists.** The sync transport is whatever you already use; the app never phones home.
 - **One menu bar, four providers.** Glance-able status without opening four apps.
-- **Burn-rate projection.** Each rolling-window bar shows a dashed marker at the projected end-of-window position (alarm-only — silent when on track).
+- **Actionable capacity pace.** Each rolling limit compares usage with its pace marker as reserve or deficit, then reports whether it runs out early or lasts until reset.
+- **30-day model costs and token totals.** Claude and Codex show a hoverable daily cost chart, stable per-model cost rows, and a separate Total / Input / Output / Cache summary across synced Macs.
+- **Pressure-ordered Overview.** The provider with the most actionable capacity risk is promoted while every provider stays comparable on the same reading axis.
 - **Privacy-respecting device identity.** Multi-device sync uses a salted SHA-256 of `IOPlatformUUID`; raw hardware UUID never leaves the process.
 
 ## Links
@@ -44,4 +46,5 @@ Core design tenets:
 - **Language:** Swift 6 / SwiftUI
 - **Dependencies:** zero third-party (built-in SQLite3, Security.framework, Foundation only)
 - **Distribution:** ad-hoc signed (no paid Apple Developer cert yet)
+- **Test suite:** 278 tests across parsing, capacity pace, ledger sync, credentials, pricing, and notifications
 - **Latest version:** see [GitHub Releases](https://github.com/zchan0/MyUsage/releases/latest)

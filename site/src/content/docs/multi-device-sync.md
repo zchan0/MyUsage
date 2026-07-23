@@ -47,18 +47,26 @@ A small structured summary written every refresh cycle:
 }
 ```
 
-The popover's monthly cost row reads the manifests from every peer and sums them. The full ledger isn't needed for the aggregate — that's why the manifest exists separately, so a freshly-installed Mac doesn't have to download every peer's full history just to show "this month: $X across all your Macs".
+The popover's monthly cost row can read the manifests from every peer and sum
+them immediately. The full ledger is imported incrementally for the rolling
+30-day chart, per-model cost rows, and token totals. Keeping the manifest
+separate still gives a freshly installed Mac a cheap summary before all peer
+history has arrived.
 
 ### `ledger.jsonl`
 
-The raw daily-cost log, one JSON object per line:
+The raw daily usage ledger, one JSON object per device / provider / account /
+UTC day. Wire v3 carries cost, model attribution, and token buckets:
 
 ```jsonl
-{"deviceId":"7f3c...","provider":"claude","day":"2026-05-04","costUSD":4.23,"recordedAt":"..."}
-{"deviceId":"7f3c...","provider":"codex", "day":"2026-05-04","costUSD":1.18,"recordedAt":"..."}
+{"v":3,"deviceId":"7f3c...","accountId":"alex@example.com","provider":"claude","day":"2026-05-04","costUSD":4.23,"costByModel":{"Opus":3.10,"Sonnet":1.13},"tokenUsage":{"input":410000,"output":102000,"cacheWrite":0,"cacheRead":6750000,"cachedInput":0},"sourceHash":"2026-05-04","recordedAt":1777885200}
 ```
 
 The local SQLite mirror (in `~/Library/Application Support/MyUsage/ledger.db`) is the source of truth on each Mac; the JSONL is the published-to-peers form. JSONL was chosen over JSON-array because append-only files diff much more cleanly through sync transports — most of them (iCloud, Syncthing) handle a one-line append far better than a rewritten JSON array.
+
+Older v1/v2 rows remain readable. They simply have no token bucket (and, for
+v1, no model breakdown), so upgraded Macs can mix old and new peers without a
+flag day.
 
 ## Device identity — why this is hard
 
@@ -88,15 +96,19 @@ The raw `IOPlatformUUID` is read once per launch into a stack-local string, hash
 MyUsage's sync folder contains only the artifacts above:
 
 - **`manifest.json`** per device — small structured summary
-- **`ledger.jsonl`** per device — daily cost log
+- **`ledger.jsonl`** per device — daily cost, model attribution, and aggregate token buckets
 
 What is **not** in the sync folder:
 
 - **Auth tokens or credentials.** Each Mac reads its own `~/.claude/.credentials.json` or `~/.codex/auth.json`. These never leave the device that owns them.
 - **Live usage windows** (5 h sessions, weekly windows). Those are read from each provider's API in real time, per-device. The sync folder is for the *history* (cost ledger), not the *current state* (live API responses).
-- **Prompts, code, or any conversation content.** MyUsage doesn't see those — it only reads aggregate token / cost numbers from each provider's billing APIs.
+- **Prompts, code, or any conversation content.** MyUsage doesn't sync those —
+  ledger token buckets are aggregate counts only.
 
-So the worst outcome of a leaked sync folder is "an adversary can see how many dollars you spent on Claude per day for the last few months." Not great, but not catastrophic — and that's the threshold MyUsage was designed against.
+So the worst outcome of a leaked sync folder is "an adversary can see daily
+estimated cost, model-family attribution, and aggregate token counts." It
+contains no credentials or content, but it is still usage metadata and should
+live only in a sync folder you trust.
 
 ## Conflict resolution
 
@@ -116,7 +128,10 @@ The peer being forgotten could itself be running and re-publishing. That's not a
 
 A few realities you might hit:
 
-- **Empty popover on a freshly-installed Mac.** First launch reads the sync folder and finds N peer manifests but no local ledger yet. The aggregate row shows N peers' contributions; the local Mac contributes $0 until its first refresh cycle completes.
+- **Freshly-installed Mac.** First launch can show peer monthly contributions
+  from manifests immediately, then fills the 30-day model chart and token
+  totals as peer JSONL rows import. The local Mac contributes its own history
+  after the first scan completes.
 - **Sync transport offline.** If iCloud is unreachable, the app keeps running, just doesn't see new peer data until iCloud comes back. The local manifest is still updated locally; it'll publish when iCloud reconnects.
 - **iCloud's "evict" feature.** macOS may evict files from a synced folder to save disk space. MyUsage uses `URLSession.startAccessingSecurityScopedResource` and `NSFileCoordinator` paths so iCloud will rehydrate evicted files transparently.
 - **Different Macs, different time zones.** All `day` keys in the ledger are computed in UTC, so cross-time-zone aggregation works without surprise. The "today" the popover shows on each Mac follows that Mac's local clock for display purposes only.

@@ -1,15 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Popover from '../components/Popover.astro';
-import ProviderCard from '../components/ProviderCard.astro';
-import LimitBar from '../components/LimitBar.astro';
 import ProviderTile from '../components/ProviderTile.astro';
 import SyncDiagram from '../components/SyncDiagram.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <Layout
   title="MyUsage — One menu bar for every AI coding tool, across every Mac"
-  description="Native macOS menu bar app that tracks Claude Code, Codex, Cursor, and Antigravity usage across multiple Macs. No backend, MIT, zero third-party dependencies."
+  description="Native macOS menu bar app for Claude Code, Codex, Cursor, and Antigravity: actionable capacity pace, model costs, token usage, and multi-Mac aggregation."
 >
 
   <!-- HERO ----------------------------------------------------- -->
@@ -19,8 +18,9 @@ import SyncDiagram from '../components/SyncDiagram.astro';
       <h1>One menu bar for every <span class="accent">AI coding tool</span>, across every Mac.</h1>
       <p class="lede">
         MyUsage talks to Claude Code, Codex, Cursor, and Antigravity, and
-        aggregates usage across every Mac you own — through a folder you
-        already sync. No backend. Free, MIT, zero third-party dependencies.
+        turns limits, pace, model costs, and tokens into one readable
+        popover — aggregated across every Mac you own through a folder you
+        already sync.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="https://github.com/zchan0/MyUsage/releases/latest">
@@ -34,24 +34,19 @@ import SyncDiagram from '../components/SyncDiagram.astro';
         <span>macOS 14+</span>
         <span>~8 MB binary</span>
         <span>0 dependencies</span>
-        <span>227 tests</span>
+        <span>278 tests</span>
       </div>
     </div>
 
     <div class="hero-pop">
-      <Popover>
-        <ProviderCard kind="claude" name="Claude Code" plan="Max">
-          <LimitBar name="5-hour" percent={47} reset="resets 2h 14m · 16:30" />
-          <LimitBar name="Weekly" percent={62} reset="resets 5d 12h · Tue 09:00" />
-          <div class="cost-row">
-            <span class="lbl">This month</span>
-            <span class="amount">~$543.57<span class="devices-pill">⊕ 3</span></span>
-          </div>
-        </ProviderCard>
-        <ProviderCard kind="codex" name="Codex" plan="Plus">
-          <LimitBar name="5-hour" percent={6} reset="resets 4h 46m · 19:00" />
-        </ProviderCard>
-      </Popover>
+      <img
+        class="native-shot hero-shot"
+        src={`${base}/screenshots/overview.png`}
+        alt="MyUsage Overview showing four providers ordered by capacity pressure"
+        width="348"
+        height="466"
+        loading="eager"
+      />
     </div>
   </section>
 
@@ -65,85 +60,94 @@ import SyncDiagram from '../components/SyncDiagram.astro';
     </div>
   </section>
 
+  <!-- PRODUCT TOUR -------------------------------------------- -->
+  <section class="section">
+    <span class="eyebrow section-eyebrow">The actual app</span>
+    <h2 class="section-title">Overview for the decision. Detail for the evidence.</h2>
+    <div class="product-shots">
+      <figure class="product-shot">
+        <img
+          class="native-shot"
+          src={`${base}/screenshots/overview.png`}
+          alt="Pressure-ordered provider Overview"
+          width="348"
+          height="466"
+          loading="lazy"
+        />
+        <figcaption>
+          <strong>Pressure-ordered Overview</strong>
+          <span>One provider needs attention; healthy providers stay comparable without competing for focus.</span>
+        </figcaption>
+      </figure>
+      <figure class="product-shot detail">
+        <img
+          class="native-shot"
+          src={`${base}/screenshots/codex-detail.png`}
+          alt="Codex Detail with capacity, reset credits, model costs, and token totals"
+          width="348"
+          height="670"
+          loading="lazy"
+        />
+        <figcaption>
+          <strong>Evidence-rich Detail</strong>
+          <span>Capacity outcome, reset credits, 30-day model costs, and token totals keep their own clear scopes.</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
   <!-- FEATURES ------------------------------------------------- -->
   <section class="section">
     <span class="eyebrow section-eyebrow">What you get</span>
-    <h2 class="section-title">A small surface that does one thing well.</h2>
+    <h2 class="section-title">A small surface that answers the next question.</h2>
 
     <div class="features">
       <div class="feature-card">
         <div class="feature-card-head">
+          <h3>Actionable capacity pace</h3>
+          <p>The fill and pace marker become a familiar <code>reserve</code> or <code>deficit</code>. Once enough data exists, MyUsage adds the outcome: <code>Runs out in…</code> or <code>Lasts until reset</code>.</p>
+        </div>
+        <p class="feature-card-note">early-window fallback · shared Detail / Overview risk signal</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-head">
+          <h3>Model costs you can inspect</h3>
+          <p>Claude and Codex get a 30-day stacked chart and stable model-cost rows. Hover any day to replace the header with its total and the same rows with daily model costs — no remapping, no layout jump.</p>
+        </div>
+        <p class="feature-card-note">rolling 30 days by default · daily total + model costs on hover</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-head">
+          <h3>Token usage, kept honest</h3>
+          <p>Total / Input / Output / Cache stay in their own 30-day section instead of being squeezed into a chart tooltip. The totals include every ledger account and synced Mac.</p>
+        </div>
+        <p class="feature-card-note">ledger wire v3 · v1/v2 compatible · all accounts</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card-head">
           <h3>Multi-device aggregation</h3>
-          <p>Each Mac drops a per-device JSONL into <code>&lt;sync-folder&gt;/devices/&lt;id&gt;/</code>. Use iCloud, Syncthing, Dropbox, NAS — same to MyUsage. The popover totals across every Mac sharing that folder.</p>
+          <p>Each Mac publishes its daily cost, model, and token ledger under <code>&lt;sync-folder&gt;/devices/&lt;id&gt;/</code>. Use iCloud, Syncthing, Dropbox, or NAS; MyUsage has no backend.</p>
         </div>
-        <div class="feature-card-pop">
-          <Popover mini title={undefined} ago="">
-            <ProviderCard kind="claude" name="Claude Code" plan="Max">
-              <LimitBar name="Weekly" percent={62} reset="resets Sun" />
-              <div class="cost-row">
-                <span class="lbl">This month</span>
-                <span class="amount">~$543.57<span class="devices-pill">⊕ 3</span></span>
-              </div>
-            </ProviderCard>
-          </Popover>
-        </div>
+        <p class="feature-card-note">BYO sync folder · per-device ownership · no credentials synced</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-card-head">
-          <h3>Burn-rate projection — alarm only</h3>
-          <p>When current burn rate would push a limit past 100% before reset, the bar gets a dashed marker overflowing past the right edge plus a <code>projected 145%</code> note in warn-amber. Healthy projections stay silent — the bar fill alone tells you you have headroom.</p>
+          <h3>Codex reset-credit inventory</h3>
+          <p>The compact summary shows the authoritative available count and nearest expiry. Expand it only when you need every reported rate-limit reset credit and expiry.</p>
         </div>
-        <div class="feature-card-pop">
-          <Popover mini title={undefined} ago="">
-            <ProviderCard kind="claude" name="Claude Code" plan="Max">
-              <LimitBar name="Daily cap" percent={88} reset="resets in 4h · 18:30" projected={145} />
-            </ProviderCard>
-          </Popover>
-        </div>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card-head">
-          <h3>Per-bucket weekly breakdown</h3>
-          <p>Anthropic's <code>/api/oauth/usage</code> exposes plan-dependent sub-caps — model families and product lines (Claude Design, Cowork, OAuth apps). MyUsage surfaces every non-zero bucket as an indented row under the weekly bar. Plans without sub-caps show none.</p>
-        </div>
-        <div class="feature-card-pop">
-          <Popover mini title={undefined} ago="">
-            <ProviderCard kind="claude" name="Claude Code" plan="Max">
-              <LimitBar name="Weekly" percent={62} reset="resets Tue 09:00" />
-              <div class="submodels">
-                <div class="submodel"><span class="nm">sonnet</span><span class="pc">42%</span></div>
-                <div class="submodel"><span class="nm">design</span><span class="pc">14%</span></div>
-                <div class="submodel"><span class="nm">cowork</span><span class="pc">6%</span></div>
-              </div>
-            </ProviderCard>
-          </Popover>
-        </div>
+        <p class="feature-card-note">malformed or contradictory responses are never guessed</p>
       </div>
 
       <div class="feature-card">
         <div class="feature-card-head">
           <h3>Limit-pressure notifications</h3>
-          <p>Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — the same percent across two refreshes never double-fires.</p>
+          <p>Native macOS notifications fire when a tracked limit crosses your warn / crit threshold. The state machine is idempotent, so unchanged usage never double-fires.</p>
         </div>
-        <p class="feature-card-note">UNUserNotificationCenter · per-provider state machine · resets on window rollover</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card-head">
-          <h3>Privacy-respecting device identity</h3>
-          <p>Multi-device sync uses a salted SHA-256 of <code>IOPlatformUUID</code>, reshaped to RFC 4122 UUIDv4 form. The raw hardware UUID never leaves the process. Reinstalling re-derives the same ID — no ghost devices.</p>
-        </div>
-        <p class="feature-card-note">SHA-256 ( "MyUsage.v1" │ IOPlatformUUID ) → RFC 4122</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card-head">
-          <h3>In-app update channel</h3>
-          <p>On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The banner can fetch the new <code>.zip</code> for you and open Finder pre-positioned for the drag into <code>/Applications</code>.</p>
-        </div>
-        <p class="feature-card-note">No Sparkle · no auto-install · explicit drag</p>
+        <p class="feature-card-note">tunable thresholds · resets on window rollover</p>
       </div>
     </div>
   </section>
@@ -151,7 +155,7 @@ import SyncDiagram from '../components/SyncDiagram.astro';
   <!-- PROVIDERS ------------------------------------------------ -->
   <section class="section">
     <span class="eyebrow section-eyebrow">Providers</span>
-    <h2 class="section-title">Two camps: tokens-you-compute-dollars vs. dollars-given.</h2>
+    <h2 class="section-title">One reading model, four very different data sources.</h2>
     <table class="providers">
       <thead>
         <tr>
@@ -164,12 +168,12 @@ import SyncDiagram from '../components/SyncDiagram.astro';
         <tr>
           <td class="name"><ProviderTile kind="claude" />Claude Code</td>
           <td class="source">OAuth API<br /><code>~/.claude/.credentials.json</code></td>
-          <td class="feats">5 h session + weekly bars · per-bucket breakdown · burn-rate projection · monthly cost (multi-device)</td>
+          <td class="feats">5 h + weekly capacity · reserve/deficit outcome · per-bucket caps · 30-day model costs + tokens · monthly cost</td>
         </tr>
         <tr>
           <td class="name"><ProviderTile kind="codex" />Codex</td>
           <td class="source">OAuth API<br /><code>~/.codex/auth.json</code></td>
-          <td class="feats">5 h session + weekly bars · burn-rate projection · monthly cost (multi-device) · credits</td>
+          <td class="feats">5 h + weekly capacity · reserve/deficit outcome · reset credits · 30-day model costs + tokens · monthly cost</td>
         </tr>
         <tr>
           <td class="name"><ProviderTile kind="cursor" />Cursor</td>
@@ -221,7 +225,7 @@ import SyncDiagram from '../components/SyncDiagram.astro';
     <span class="eyebrow section-eyebrow">Project background</span>
     <h2 class="section-title">Built for this exact problem, by someone who has it.</h2>
     <div class="section-prose">
-      <p>MyUsage is open source under MIT, written entirely in Swift 6 / SwiftUI. The codebase ships ~227 unit tests covering the parsing, sync, and notification layers. The whole binary is under 8 MB because there are zero third-party dependencies — everything runs on first-party Apple frameworks.</p>
+      <p>MyUsage is open source under MIT, written entirely in Swift 6 / SwiftUI. The codebase ships 278 tests covering parsing, pace calculations, sync, cost attribution, credentials, and notifications. The whole binary is under 8 MB because there are zero third-party dependencies — everything runs on first-party Apple frameworks.</p>
       <p>The development story (multi-device sync architecture, locally-computed cost pipeline) lives in the <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/blog`}>blog</a>. Release history in the <a href="https://github.com/zchan0/MyUsage/blob/main/CHANGELOG.md">CHANGELOG</a>.</p>
     </div>
   </section>
