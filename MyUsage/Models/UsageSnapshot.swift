@@ -101,7 +101,7 @@ struct UsageWindow: Sendable {
     /// Returns `nil` when projection isn't meaningful: window duration
     /// unknown, no reset time, already past reset, or **not enough of
     /// the window has elapsed** for the burn rate to be reliable. We
-    /// require the lesser of (60 seconds) or (20% of window duration) —
+    /// require the greater of (60 seconds) or (20% of window duration) —
     /// e.g. a 5-hour window needs at least 1h of data before projection,
     /// and a 7-day window needs ~1.4d. Without this gate, a single early
     /// prompt of 5% in the first 10 minutes of a 5h window would extrapolate

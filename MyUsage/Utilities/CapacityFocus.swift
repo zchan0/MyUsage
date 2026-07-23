@@ -5,6 +5,12 @@ import Foundation
 /// testable instead of relying on view order.
 enum CapacityFocus {
     struct Metric: Identifiable, Sendable, Equatable {
+        enum PaceStatus: Sendable, Equatable {
+            case onTrack
+            case aheadOfPace(multiplier: Double)
+            case projectedOvershoot(percent: Double)
+        }
+
         let providerKind: ProviderKind
         let label: String
         let percentUsed: Double
@@ -14,17 +20,67 @@ enum CapacityFocus {
 
         var id: String { "\(providerKind.rawValue):\(label)" }
 
+        /// One capacity verdict shared by Detail, Overview, and ordering.
+        ///
+        /// The projection deliberately stays quiet for the first 20% of a
+        /// rolling window. During that gate, a large and sustained lead over
+        /// the deterministic pace marker is still enough evidence to warn.
+        /// Both an absolute lead and a minimum amount consumed are required so
+        /// a single prompt at the very start of a window does not false-alarm.
+        var paceStatus: PaceStatus {
+            if let projectedFinalPercent, projectedFinalPercent > 100 {
+                return .projectedOvershoot(percent: projectedFinalPercent)
+            }
+
+            guard projectedFinalPercent == nil,
+                  let pacePercent,
+                  pacePercent > 0,
+                  percentUsed >= 20,
+                  percentUsed - pacePercent >= 10
+            else {
+                return .onTrack
+            }
+
+            let multiplier = percentUsed / pacePercent
+            guard multiplier >= 1.5 else { return .onTrack }
+            return .aheadOfPace(multiplier: multiplier)
+        }
+
+        var hasCapacityRisk: Bool {
+            switch paceStatus {
+            case .onTrack:
+                false
+            case .aheadOfPace, .projectedOvershoot:
+                true
+            }
+        }
+
         var needsAttention: Bool {
-            percentUsed >= 75 || (projectedFinalPercent ?? 0) > 100
+            percentUsed >= 75 || hasCapacityRisk
+        }
+
+        /// Overview uses a higher static-percent threshold than Detail so a
+        /// long billing cycle does not look urgent merely for being busy.
+        /// Pace-based risk is shared, including the early-window fallback.
+        var requiresOverviewAttention: Bool {
+            percentUsed >= 90 || hasCapacityRisk
         }
 
         var riskScore: Double {
             let current = percentUsed
-            guard let projectedFinalPercent, projectedFinalPercent > 100 else { return current }
-            // A reliable projected overshoot should outrank a merely busy but
-            // still healthy window without turning 300% projections into an
-            // unbounded visual scale.
-            return max(current, 80 + min(projectedFinalPercent - 100, 100) * 0.2)
+            switch paceStatus {
+            case .onTrack:
+                return current
+            case .projectedOvershoot(let projected):
+                // A reliable projected overshoot should outrank a merely busy
+                // window without turning 300% projections into an unbounded
+                // visual scale.
+                return max(current, 80 + min(projected - 100, 100) * 0.2)
+            case .aheadOfPace(let multiplier):
+                // Early-window evidence is intentionally capped at the same
+                // ceiling as a reliable projection.
+                return max(current, 80 + min(multiplier - 1, 1) * 20)
+            }
         }
     }
 

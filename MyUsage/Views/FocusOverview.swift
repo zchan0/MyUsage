@@ -98,18 +98,28 @@ struct FocusOverview: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
 
-                    if let projected = metric.projectedFinalPercent, projected > 100 {
+                    switch metric.paceStatus {
+                    case .projectedOvershoot(let projected):
                         Text("\(Int(projected.rounded()))% projected")
                             .font(.system(size: 9, weight: .medium))
                             .monospacedDigit()
                             .foregroundStyle(LimitBar.warnAccent)
                             .lineLimit(1)
                             .fixedSize()
-                    } else if let secondary = secondaryCaption(provider, excluding: metric) {
-                        Text(secondary)
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
+                    case .aheadOfPace(let multiplier):
+                        Text("\(multiplier.formatted(.number.precision(.fractionLength(1))))× pace")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(LimitBar.warnAccent)
                             .lineLimit(1)
+                            .fixedSize()
+                    case .onTrack:
+                        if let secondary = secondaryCaption(provider, excluding: metric) {
+                            Text(secondary)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
                     }
 
                     if let extra = extraSpendCaption(provider) {
@@ -190,7 +200,7 @@ struct FocusOverview: View {
     /// breach. The 75% warning band remains visible inside provider Detail,
     /// but does not make a long billing cycle look urgent by percentage alone.
     private func requiresAttention(_ metric: CapacityFocus.Metric) -> Bool {
-        (metric.projectedFinalPercent ?? 0) > 100 || metric.percentUsed >= 90
+        metric.requiresOverviewAttention
     }
 
     private func statusLabel(_ metric: CapacityFocus.Metric) -> String {

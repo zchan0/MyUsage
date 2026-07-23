@@ -318,12 +318,18 @@ private struct DeckLimitInstrument: View {
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 8)
-                if let projected = alarmingProjection {
+                switch metric.paceStatus {
+                case .projectedOvershoot(let projected):
                     Text("Projected \(Int(projected.rounded()))% at reset")
                         .font(.system(size: 9.5, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(LimitBar.warnAccent)
-                } else {
+                case .aheadOfPace(let multiplier):
+                    Text("\(multiplier.formatted(.number.precision(.fractionLength(1))))× pace")
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(LimitBar.warnAccent)
+                case .onTrack:
                     Text("On track")
                         .font(.system(size: 9.5))
                         .foregroundStyle(.tertiary)
@@ -331,11 +337,6 @@ private struct DeckLimitInstrument: View {
             }
             .padding(.top, 8)
         }
-    }
-
-    private var alarmingProjection: Double? {
-        guard let projected = metric.projectedFinalPercent, projected > 100 else { return nil }
-        return projected
     }
 
     private var resetCaption: String {

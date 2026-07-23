@@ -16,6 +16,46 @@ final class CapacityFocusTests: XCTestCase {
         XCTAssertEqual(CapacityFocus.select(from: [highCurrent, overshoot], now: now), overshoot)
     }
 
+    func testEarlyWindowClearPaceLeadRequiresAttention() {
+        let metric = metric(.codex, "Weekly", 65, reset: 5 * 86_400, pace: 19)
+
+        guard case .aheadOfPace(let multiplier) = metric.paceStatus else {
+            return XCTFail("Expected an early-window pace warning")
+        }
+        XCTAssertEqual(multiplier, 65.0 / 19.0, accuracy: 0.001)
+        XCTAssertTrue(metric.needsAttention)
+        XCTAssertTrue(metric.requiresOverviewAttention)
+    }
+
+    func testEarlySinglePromptDoesNotFalseAlarm() {
+        let metric = metric(.codex, "5-hour", 5, reset: 4 * 3_600, pace: 1)
+
+        XCTAssertEqual(metric.paceStatus, .onTrack)
+        XCTAssertFalse(metric.needsAttention)
+        XCTAssertFalse(metric.requiresOverviewAttention)
+    }
+
+    func testSmallPaceLeadDoesNotFalseAlarm() {
+        let metric = metric(.claude, "Weekly", 20, reset: 5 * 86_400, pace: 15)
+
+        XCTAssertEqual(metric.paceStatus, .onTrack)
+        XCTAssertFalse(metric.requiresOverviewAttention)
+    }
+
+    func testReliableProjectionTakesPrecedenceOverPaceFallback() {
+        let metric = metric(
+            .claude,
+            "Weekly",
+            65,
+            reset: 4 * 86_400,
+            pace: 30,
+            projected: 217
+        )
+
+        XCTAssertEqual(metric.paceStatus, .projectedOvershoot(percent: 217))
+        XCTAssertTrue(metric.requiresOverviewAttention)
+    }
+
     func testHealthyWindowsChooseSoonestFutureReset() {
         let later = metric(.claude, "Weekly", 60, reset: 4_000)
         let sooner = metric(.codex, "5-hour", 12, reset: 400)
@@ -33,6 +73,7 @@ final class CapacityFocusTests: XCTestCase {
         _ label: String,
         _ percent: Double,
         reset: TimeInterval?,
+        pace: Double? = nil,
         projected: Double? = nil
     ) -> CapacityFocus.Metric {
         CapacityFocus.Metric(
@@ -40,7 +81,7 @@ final class CapacityFocusTests: XCTestCase {
             label: label,
             percentUsed: percent,
             resetsAt: reset.map { now.addingTimeInterval($0) },
-            pacePercent: nil,
+            pacePercent: pace,
             projectedFinalPercent: projected
         )
     }
