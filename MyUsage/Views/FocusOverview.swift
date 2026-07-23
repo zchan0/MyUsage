@@ -160,7 +160,7 @@ struct FocusOverview: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
         .background {
-            if metric.map(requiresAttention) == true {
+            if metric.map({ requiresAttention($0) }) == true {
                 LinearGradient(
                     colors: [provider.kind.usageTint(for: colorScheme).opacity(0.07), .clear],
                     startPoint: .leading,
@@ -179,11 +179,17 @@ struct FocusOverview: View {
     }
 
     private var attentionCount: Int {
-        providers.compactMap(primaryMetric).filter(requiresAttention).count
+        providers
+            .compactMap { primaryMetric(for: $0) }
+            .filter { requiresAttention($0) }
+            .count
     }
 
     private var onTrackCount: Int {
-        providers.compactMap(primaryMetric).filter { !requiresAttention($0) }.count
+        providers
+            .compactMap { primaryMetric(for: $0) }
+            .filter { !requiresAttention($0) }
+            .count
     }
 
     private func primaryMetric(for provider: any UsageProvider) -> CapacityFocus.Metric? {
