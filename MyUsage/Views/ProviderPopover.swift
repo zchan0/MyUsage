@@ -68,8 +68,9 @@ struct PopoverFooterBar: View {
 
             iconButton(
                 "arrow.clockwise",
-                help: "Refresh",
-                disabled: manager.isRefreshing
+                help: manager.isRefreshing ? "Refreshing…" : "Refresh",
+                disabled: manager.isRefreshing,
+                spinning: manager.isRefreshing
             ) {
                 Task { await manager.refreshAll(trigger: .manual) }
             }
@@ -137,11 +138,19 @@ struct PopoverFooterBar: View {
         _ icon: String,
         help: String,
         disabled: Bool = false,
+        spinning: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12))
+                .rotationEffect(.degrees(spinning ? 360 : 0))
+                .animation(
+                    spinning
+                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                        : .default,
+                    value: spinning
+                )
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }

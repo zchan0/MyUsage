@@ -64,10 +64,10 @@ struct ProviderDeck: View {
 
     private func accountHeader(_ snapshot: UsageSnapshot) -> some View {
         HStack(spacing: 9) {
-            AccountAvatar(email: snapshot.email)
+            AccountAvatar(kind: provider.kind, email: snapshot.email)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(snapshot.email ?? "Account unavailable")
+                Text(snapshot.email ?? provider.kind.shortName)
                     .font(.system(size: 11.5, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -89,9 +89,9 @@ struct ProviderDeck: View {
 
     private var accountCaption: String {
         switch provider.kind {
-        case .claude, .codex: "OAuth account"
+        case .claude, .codex: "\(provider.kind.shortName) · OAuth account"
         case .cursor: "Cursor account · billing cycle"
-        case .antigravity: "Google account"
+        case .antigravity: "Antigravity · Google account"
         }
     }
 
@@ -250,28 +250,28 @@ struct ProviderDeck: View {
 }
 
 private struct AccountAvatar: View {
+    let kind: ProviderKind
     let email: String?
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(
-                    colors: [Color.secondary.opacity(0.82), Color.secondary.opacity(0.58)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-            if initials.isEmpty {
-                Image(systemName: "person.fill")
-                    .font(.system(size: 10, weight: .medium))
-            } else {
+        if initials.isEmpty {
+            ProviderIconTile(kind: kind, size: 27, glyph: 15)
+        } else {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [Color.secondary.opacity(0.82), Color.secondary.opacity(0.58)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
                 Text(initials)
                     .font(.system(size: 9.5, weight: .semibold))
             }
+            .foregroundStyle(.white)
+            .frame(width: 27, height: 27)
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
         }
-        .foregroundStyle(.white)
-        .frame(width: 27, height: 27)
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
     }
 
     private var initials: String {

@@ -20,7 +20,7 @@ struct FocusOverview: View {
                 } label: {
                     providerRow(provider)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(OverviewProviderRowStyle())
                 .help("Open \(provider.kind.displayName)")
             }
         }
@@ -38,7 +38,7 @@ struct FocusOverview: View {
 
             Spacer(minLength: 8)
 
-            Text("\(onTrackCount) on track · pressure order")
+            Text("\(onTrackCount) on track")
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
         }
@@ -279,6 +279,23 @@ struct FocusOverview: View {
 
     private var divider: some View {
         Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+    }
+}
+
+private struct OverviewProviderRowStyle: ButtonStyle {
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay {
+                Rectangle()
+                    .fill(Color.primary.opacity(
+                        configuration.isPressed ? 0.09 : (hovering ? 0.045 : 0)
+                    ))
+                    .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
     }
 }
 

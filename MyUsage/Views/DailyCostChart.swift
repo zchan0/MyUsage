@@ -68,7 +68,7 @@ struct DailyCostChart: View {
     /// contrast-relief rule.
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(selectedDay.map { Self.dayLabel($0.day) } ?? "30-day model cost")
+            Text(selectedDay.map { Self.dayLabel($0.day) } ?? "Rolling 30-day cost")
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.secondary)
 

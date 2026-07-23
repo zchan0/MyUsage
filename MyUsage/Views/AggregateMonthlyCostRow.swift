@@ -13,7 +13,7 @@ struct AggregateMonthlyCostRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("Provider total · this month")
+            Text("Calendar month estimate")
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.secondary)
 

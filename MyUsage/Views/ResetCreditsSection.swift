@@ -3,22 +3,25 @@ import SwiftUI
 /// Full Codex reset-credit inventory for the provider detail page.
 struct ResetCreditsSection: View {
     let inventory: ResetCreditInventory
+    @State private var isExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-
-            if inventory.reportedAvailableCount == 0 {
-                Text("No reset credits available")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary.opacity(0.75))
-                    .padding(.top, 10)
-            } else if inventory.availableCredits.isEmpty {
-                Text("Expiry details were not reported")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary.opacity(0.75))
-                    .padding(.top, 10)
+            if hasExpiryDetails {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    header
+                }
+                .buttonStyle(.plain)
+                .help(isExpanded ? "Hide reset-credit expiries" : "Show reset-credit expiries")
             } else {
+                header
+            }
+
+            if isExpanded && hasExpiryDetails {
                 VStack(spacing: 0) {
                     ForEach(Array(inventory.availableCredits.enumerated()), id: \.element.id) { index, credit in
                         creditRow(index: index, credit: credit)
@@ -28,7 +31,7 @@ struct ResetCreditsSection: View {
             }
 
             let undisclosed = inventory.reportedAvailableCount - inventory.availableCredits.count
-            if undisclosed > 0 {
+            if isExpanded && undisclosed > 0 {
                 Text("\(undisclosed) additional credit\(undisclosed == 1 ? "" : "s") without expiry details")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
@@ -40,37 +43,44 @@ struct ResetCreditsSection: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("RESET CREDITS")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Reset credits")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(.secondary)
 
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text("\(inventory.reportedAvailableCount)")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .monospacedDigit()
-                    Text("available")
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text("\(inventory.reportedAvailableCount) available")
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .monospacedDigit()
 
             Spacer(minLength: 12)
 
             if let expiration = inventory.earliestExpiration {
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text("NEXT EXPIRY")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                    Text("in \(OverviewSummary.shortCountdown(until: expiration))")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(expiryColor(expiration))
-                }
+                Text("next")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                Text(expiration, format: .dateTime.month(.abbreviated).day().hour().minute())
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(expiryColor(expiration))
+            } else if inventory.reportedAvailableCount > 0 {
+                Text("expiry not reported")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+
+            if hasExpiryDetails {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
         }
-        .frame(minHeight: 34)
+        .frame(minHeight: 24)
+        .contentShape(Rectangle())
+    }
+
+    private var hasExpiryDetails: Bool {
+        !inventory.availableCredits.isEmpty
     }
 
     private func creditRow(index: Int, credit: ResetCredit) -> some View {
