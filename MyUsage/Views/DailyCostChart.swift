@@ -1,11 +1,6 @@
 import Charts
 import SwiftUI
 
-struct ModelCostInsight: Equatable, Sendable {
-    let name: String
-    let sharePercent: Double
-}
-
 struct DailyModelCost: Identifiable, Equatable, Sendable {
     let name: String
     let costUSD: Double?
@@ -13,24 +8,12 @@ struct DailyModelCost: Identifiable, Equatable, Sendable {
     var id: String { name }
 }
 
-enum DailyCostChartInsights {
-    static func topModel(in series: [LedgerStore.DailyCost]) -> ModelCostInsight? {
-        var totals: [String: Double] = [:]
-        for day in series {
-            for (model, cost) in day.byModel where cost > 0 {
-                totals[model, default: 0] += cost
-            }
-        }
-
-        let total = series.reduce(0) { $0 + max(0, $1.totalUSD) }
-        return topModel(in: totals, totalUSD: total)
-    }
-
+enum DailyCostChartBreakdown {
     /// Cost values for one selected day, kept in the chart's stable 30-day
     /// family order. `nil` means that family had no cost on the selected day.
     /// "Other" mirrors the chart stack: unattributed cost plus folded
     /// long-tail families.
-    static func dailyBreakdown(
+    static func daily(
         for day: LedgerStore.DailyCost,
         families: [String],
         otherLabel: String = "Other"
@@ -54,31 +37,31 @@ enum DailyCostChartInsights {
         }
     }
 
-    static func topModel(
-        in breakdown: [DailyModelCost],
-        totalUSD: Double
-    ) -> ModelCostInsight? {
-        let totals: [String: Double] = Dictionary(
-            uniqueKeysWithValues: breakdown.compactMap { entry in
-                guard let cost = entry.costUSD, cost > 0 else { return nil }
-                return (entry.name, cost)
+    /// The same breakdown shape as a selected day, aggregated over the
+    /// complete visible period. Using one shaping path keeps row order,
+    /// "Other", and missing-value behavior identical across hover states.
+    static func period(
+        in series: [LedgerStore.DailyCost],
+        families: [String],
+        otherLabel: String = "Other"
+    ) -> [DailyModelCost] {
+        var totals: [String: Double] = [:]
+        for day in series {
+            for (model, cost) in day.byModel where cost > 0 {
+                totals[model, default: 0] += cost
             }
+        }
+
+        let period = LedgerStore.DailyCost(
+            day: "period",
+            totalUSD: series.reduce(0) { $0 + max(0, $1.totalUSD) },
+            byModel: totals
         )
-        return topModel(in: totals, totalUSD: totalUSD)
-    }
-
-    private static func topModel(
-        in totals: [String: Double],
-        totalUSD: Double
-    ) -> ModelCostInsight? {
-        guard totalUSD > 0,
-              let winner = totals.sorted(by: {
-                  $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
-              }).first
-        else { return nil }
-
-        let share = min(100, max(0, winner.value / totalUSD * 100))
-        return ModelCostInsight(name: winner.key, sharePercent: share)
+        return daily(
+            for: period,
+            families: families,
+            otherLabel: otherLabel
+        )
     }
 }
 
@@ -92,7 +75,8 @@ enum DailyCostChartInsights {
 ///   carry no per-model breakdown — folds into a gray "Other".
 /// - Model families share one muted provider hue and differ by opacity.
 /// - Hover (chartXSelection) swaps the header line to the hovered day's
-///   date + total — the tooltip equivalent for a 316pt-wide popover.
+///   date + total, and the fixed model rows to that day's costs — the
+///   tooltip equivalent for a 316pt-wide popover.
 struct DailyCostChart: View {
     let kind: ProviderKind
     let series: [LedgerStore.DailyCost]
@@ -112,8 +96,7 @@ struct DailyCostChart: View {
         VStack(alignment: .leading, spacing: 8) {
             header
             chart
-            legend
-            insights
+            modelBreakdown
         }
     }
 
@@ -227,79 +210,43 @@ struct DailyCostChart: View {
         return 0
     }
 
-    /// Stable legend keys. Hover adds the selected day's model costs without
-    /// changing family order or color mapping. A two-column grid keeps up to
-    /// five chart families readable without making the popover excessively
-    /// tall.
-    private var legend: some View {
-        LazyVGrid(columns: legendColumns, alignment: .leading, spacing: 4) {
-            ForEach(Array(zip(familyOrder, familyColors)), id: \.0) { family, color in
-                legendItem(family: family, color: color)
+    /// A fixed vertical legend and value table. Default values cover the
+    /// rolling window; hover replaces them in place with daily values, so
+    /// the panel never changes height or remaps a model's color.
+    private var modelBreakdown: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(displayedBreakdown.enumerated()), id: \.element.id) { index, entry in
+                modelBreakdownRow(
+                    entry: entry,
+                    color: familyColors[index]
+                )
             }
         }
     }
 
-    private var legendColumns: [GridItem] {
-        let count = max(1, min(2, familyOrder.count))
-        return Array(
-            repeating: GridItem(.flexible(), spacing: 12, alignment: .leading),
-            count: count
-        )
-    }
-
-    private func legendItem(family: String, color: Color) -> some View {
-        let cost = selectedModelCosts?[family]
-        let isAbsent = selectedDay != nil && cost == nil
-
+    private func modelBreakdownRow(
+        entry: DailyModelCost,
+        color: Color
+    ) -> some View {
         return HStack(spacing: 4) {
             Circle()
                 .fill(color)
                 .frame(width: 6, height: 6)
-            Text(family)
+            Text(entry.name)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
-            if selectedDay != nil {
-                Spacer(minLength: 3)
-                Text(Self.modelCostLabel(cost))
-                    .font(.system(size: 8.5, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                    .fixedSize()
-            }
+            Spacer(minLength: 8)
+
+            Text(Self.modelCostLabel(entry.costUSD, estimated: selectedDay == nil))
+                .font(.system(size: 8.5, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .fixedSize()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(isAbsent ? 0.45 : 1)
-    }
-
-    /// One quiet answer beneath the legend: which model accounts for the
-    /// largest share of the visible 30-day cost. The right edge anchors the
-    /// chart in time without forcing a default hover selection that would dim
-    /// every other bar.
-    @ViewBuilder
-    private var insights: some View {
-        if let topModel {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text("Top model")
-                    .font(.system(size: 8.5))
-                    .foregroundStyle(.tertiary)
-                Text(topModel.name)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Text("\(Int(topModel.sharePercent.rounded()))%")
-                    .font(.system(size: 8.5, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-
-                Spacer(minLength: 8)
-
-                Text(insightScopeLabel)
-                    .font(.system(size: 8.5, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-            }
-        }
+        .frame(height: 14)
+        .opacity(selectedDay != nil && entry.costUSD == nil ? 0.45 : 1)
     }
 
     // MARK: - Data shaping
@@ -390,19 +337,19 @@ struct DailyCostChart: View {
 
     private var selectedBreakdown: [DailyModelCost]? {
         guard let selectedDay else { return nil }
-        return DailyCostChartInsights.dailyBreakdown(
+        return DailyCostChartBreakdown.daily(
             for: selectedDay,
             families: familyOrder,
             otherLabel: Self.otherLabel
         )
     }
 
-    private var selectedModelCosts: [String: Double]? {
-        guard let selectedBreakdown else { return nil }
-        return Dictionary(uniqueKeysWithValues: selectedBreakdown.compactMap { entry in
-            guard let cost = entry.costUSD else { return nil }
-            return (entry.name, cost)
-        })
+    private var displayedBreakdown: [DailyModelCost] {
+        selectedBreakdown ?? DailyCostChartBreakdown.period(
+            in: series,
+            families: familyOrder,
+            otherLabel: Self.otherLabel
+        )
     }
 
     /// While a day is hovered, un-hovered bars recede slightly so the
@@ -414,20 +361,6 @@ struct DailyCostChart: View {
 
     private var totalUSD: Double {
         series.reduce(0) { $0 + $1.totalUSD }
-    }
-
-    private var topModel: ModelCostInsight? {
-        if let selectedDay, let selectedBreakdown {
-            return DailyCostChartInsights.topModel(
-                in: selectedBreakdown,
-                totalUSD: selectedDay.totalUSD
-            )
-        }
-        return DailyCostChartInsights.topModel(in: series)
-    }
-
-    private var insightScopeLabel: String {
-        selectedDay.map { Self.dayLabel($0.day) } ?? "30d ago → Today"
     }
 
     // MARK: - Formatting
@@ -452,10 +385,10 @@ struct DailyCostChart: View {
         return formatter.string(from: date).uppercased()
     }
 
-    private static func modelCostLabel(_ cost: Double?) -> String {
+    private static func modelCostLabel(_ cost: Double?, estimated: Bool) -> String {
         guard let cost, cost > 0 else { return "—" }
-        if cost < 0.01 { return "<$0.01" }
-        return ProviderCardCostRow.formatCost(cost, estimated: false)
+        if cost < 0.01 { return estimated ? "~<$0.01" : "<$0.01" }
+        return ProviderCardCostRow.formatCost(cost, estimated: estimated)
     }
 
     private func xAxisLabel(for date: Date) -> String {
