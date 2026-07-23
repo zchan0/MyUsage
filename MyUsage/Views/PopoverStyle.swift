@@ -13,8 +13,15 @@ struct PopoverGlassSurface: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color(nsColor: .windowBackgroundColor)
-                .opacity(colorScheme == .dark ? 0.52 : 0.60)
+            // A · Clean Glass: use a neutral, substantially opaque overlay
+            // instead of windowBackgroundColor. The latter carries its own
+            // warm-gray cast and lets too much wallpaper colour through.
+            if colorScheme == .dark {
+                Color(red: 37 / 255, green: 39 / 255, blue: 44 / 255)
+                    .opacity(0.90)
+            } else {
+                Color.white.opacity(0.86)
+            }
 
             LinearGradient(
                 colors: [

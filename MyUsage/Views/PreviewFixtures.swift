@@ -50,6 +50,7 @@ enum PreviewFixtures {
             resetsAt: now.addingTimeInterval(3.8 * 86_400),
             windowDuration: 7 * 86_400
         )
+        claude.onDemandSpend = CreditInfo(amount: 2.32, limit: 100, currency: "USD")
         claude.monthlyEstimatedCost = 112.40
         claude.lastRefreshed = now.addingTimeInterval(-32)
 

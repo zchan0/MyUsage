@@ -8,6 +8,7 @@ struct FocusOverview: View {
     @Binding var selection: PopoverTab
 
     @Environment(UsageManager.self) private var manager
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -85,7 +86,7 @@ struct FocusOverview: View {
                     pacePercent: metric.pacePercent,
                     level: LimitSafety.level(for: metric.percentUsed),
                     height: 4,
-                    tint: provider.kind.usageTint
+                    tint: provider.kind.usageTint(for: colorScheme)
                 )
                 .padding(.top, 9)
 
@@ -94,17 +95,30 @@ struct FocusOverview: View {
                         .font(.system(size: 9, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
 
                     if let projected = metric.projectedFinalPercent, projected > 100 {
                         Text("\(Int(projected.rounded()))% projected")
                             .font(.system(size: 9, weight: .medium))
                             .monospacedDigit()
                             .foregroundStyle(LimitBar.warnAccent)
+                            .lineLimit(1)
+                            .fixedSize()
                     } else if let secondary = secondaryCaption(provider, excluding: metric) {
                         Text(secondary)
                             .font(.system(size: 9))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
+                    }
+
+                    if let extra = extraSpendCaption(provider) {
+                        Text("Extra \(extra)")
+                            .font(.system(size: 9))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
 
                     Spacer(minLength: 4)
@@ -135,7 +149,7 @@ struct FocusOverview: View {
         .background {
             if metric.map(requiresAttention) == true {
                 LinearGradient(
-                    colors: [provider.kind.usageTint.opacity(0.07), .clear],
+                    colors: [provider.kind.usageTint(for: colorScheme).opacity(0.07), .clear],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -213,6 +227,13 @@ struct FocusOverview: View {
             pieces.append("\(credits) credit\(credits == 1 ? "" : "s")")
         }
         return pieces.isEmpty ? nil : pieces.joined(separator: " · ")
+    }
+
+    private func extraSpendCaption(_ provider: any UsageProvider) -> String? {
+        guard provider.kind == .claude,
+              let extra = provider.snapshot?.onDemandSpend
+        else { return nil }
+        return ProviderCardCostRow.formatCost(extra.amount, estimated: false)
     }
 
     private struct SpendCaption {

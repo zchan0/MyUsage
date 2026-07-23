@@ -205,8 +205,8 @@ struct DailyCostChart: View {
                 : Color(red: 0.68, green: 0.39, blue: 0.27)
         case .codex:
             colorScheme == .dark
-                ? Color(red: 0.66, green: 0.69, blue: 0.73)
-                : Color(red: 0.36, green: 0.39, blue: 0.43)
+                ? Color(red: 80 / 255, green: 196 / 255, blue: 158 / 255)
+                : Color(red: 16 / 255, green: 138 / 255, blue: 108 / 255)
         case .cursor:
             colorScheme == .dark ? Color.white.opacity(0.72) : Color.black.opacity(0.66)
         case .antigravity:

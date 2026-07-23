@@ -17,6 +17,7 @@ struct ProviderCardLimits: View {
     var cached: Bool = false
 
     @Environment(UsageManager.self) private var manager
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -30,7 +31,7 @@ struct ProviderCardLimits: View {
                         projectedPercent: session.projectedFinalPercent(),
                         pacePercent: cached ? nil : session.onPacePercent(),
                         expired: isExpired(session),
-                        tint: kind.usageTint
+                        tint: kind.usageTint(for: colorScheme)
                     )
                 }
                 if let weekly = snapshot.weeklyUsage {
@@ -41,7 +42,7 @@ struct ProviderCardLimits: View {
                         projectedPercent: weekly.projectedFinalPercent(),
                         pacePercent: cached ? nil : weekly.onPacePercent(),
                         expired: isExpired(weekly),
-                        tint: kind.usageTint
+                        tint: kind.usageTint(for: colorScheme)
                     )
                     // Per-bucket caps render as peers of the Weekly bar,
                     // not as sub-rows under it. Each row is one model's
@@ -52,9 +53,19 @@ struct ProviderCardLimits: View {
                     // stale as the parent.
                     if manager.showPerModelBars, !isExpired(weekly) {
                         ForEach(snapshot.weeklyByModel) { row in
-                            LimitBar(name: row.label, percent: row.percent, tint: kind.usageTint)
+                            LimitBar(
+                                name: row.label,
+                                percent: row.percent,
+                                tint: kind.usageTint(for: colorScheme)
+                            )
                         }
                     }
+                }
+                if kind == .claude, let extra = snapshot.onDemandSpend {
+                    ExtraUsageInstrument(
+                        spend: extra,
+                        tint: kind.usageTint(for: colorScheme)
+                    )
                 }
                 if anyWindowExpired {
                     refreshHint
@@ -67,7 +78,7 @@ struct ProviderCardLimits: View {
                         name: quota.label,
                         percent: quota.percentUsed,
                         monoName: true,
-                        tint: kind.usageTint
+                        tint: kind.usageTint(for: colorScheme)
                     )
                 }
             }
@@ -109,6 +120,8 @@ struct ProviderCardLimits: View {
 struct CursorLimits: View {
     let snapshot: UsageSnapshot
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         let hasIncluded = snapshot.spentAmount != nil
         let hasOnDemand = snapshot.onDemandSpend != nil
@@ -119,7 +132,7 @@ struct CursorLimits: View {
                     name: "Included",
                     percent: snapshot.totalUsagePercent ?? 0,
                     reset: spent.formatted,
-                    tint: ProviderKind.cursor.usageTint
+                    tint: ProviderKind.cursor.usageTint(for: colorScheme)
                 )
             }
             if let onDemand = snapshot.onDemandSpend {
@@ -129,7 +142,7 @@ struct CursorLimits: View {
                         name: "On-demand",
                         percent: pct,
                         reset: "+\(onDemand.formatted)",
-                        tint: ProviderKind.cursor.usageTint
+                        tint: ProviderKind.cursor.usageTint(for: colorScheme)
                     )
                 } else {
                     // No on-demand cap reported — show the spend as a
@@ -154,6 +167,37 @@ struct CursorLimits: View {
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary.opacity(0.7))
                 .italic()
+        }
+    }
+}
+
+/// Claude's API reports Extra usage separately from estimated token cost.
+/// A configured monthly limit behaves like a normal bounded instrument;
+/// accounts without a reported cap still get an explicit metered amount.
+struct ExtraUsageInstrument: View {
+    let spend: CreditInfo
+    let tint: Color
+
+    @ViewBuilder
+    var body: some View {
+        if let limit = spend.limit, limit > 0 {
+            LimitBar(
+                name: "Extra usage",
+                percent: spend.amount / limit * 100,
+                reset: spend.formatted,
+                tint: tint
+            )
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Extra usage")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(.secondary.opacity(0.95))
+                Spacer(minLength: 8)
+                Text(ProviderCardCostRow.formatCost(spend.amount, estimated: false))
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary.opacity(0.92))
+            }
         }
     }
 }

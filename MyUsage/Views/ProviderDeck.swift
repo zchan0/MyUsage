@@ -6,6 +6,7 @@ struct ProviderDeck: View {
     let provider: any UsageProvider
 
     @Environment(UsageManager.self) private var manager
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         content
@@ -35,6 +36,16 @@ struct ProviderDeck: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 18)
                     .overlay(alignment: .bottom) { sectionDivider }
+            }
+
+            if provider.kind == .claude, let extra = snapshot.onDemandSpend {
+                ExtraUsageInstrument(
+                    spend: extra,
+                    tint: provider.kind.usageTint(for: colorScheme)
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 17)
+                .overlay(alignment: .bottom) { sectionDivider }
             }
 
             if provider.kind == .codex {
@@ -272,6 +283,8 @@ private struct AccountAvatar: View {
 private struct DeckLimitInstrument: View {
     let metric: CapacityFocus.Metric
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -295,7 +308,7 @@ private struct DeckLimitInstrument: View {
                 pacePercent: metric.pacePercent,
                 level: LimitSafety.level(for: metric.percentUsed),
                 height: 6,
-                tint: metric.providerKind.usageTint
+                tint: metric.providerKind.usageTint(for: colorScheme)
             )
             .padding(.top, 10)
 

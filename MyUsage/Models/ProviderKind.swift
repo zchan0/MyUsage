@@ -56,10 +56,17 @@ enum ProviderKind: String, CaseIterable, Identifiable, Codable {
     /// Low-saturation rail tint used consistently in Overview and Detail.
     /// Risk remains encoded by the percent/forecast copy, so a provider does
     /// not switch visual identity when a limit crosses a threshold.
-    var usageTint: Color {
+    ///
+    /// Codex keeps its official graphite icon tile, while usage data uses the
+    /// familiar ChatGPT teal. Its dark-appearance tint is deliberately lighter
+    /// so the thin rail retains the same visual weight on a charcoal surface.
+    func usageTint(for colorScheme: ColorScheme) -> Color {
         switch self {
         case .claude:      Color(red: 0.79, green: 0.43, blue: 0.29).opacity(0.82)
-        case .codex:       Color(red: 0.48, green: 0.51, blue: 0.55).opacity(0.72)
+        case .codex:
+            colorScheme == .dark
+                ? Color(red: 80 / 255, green: 196 / 255, blue: 158 / 255).opacity(0.62)
+                : Color(red: 16 / 255, green: 138 / 255, blue: 108 / 255).opacity(0.78)
         case .cursor:      Color(red: 0.31, green: 0.33, blue: 0.36).opacity(0.76)
         case .antigravity: Color(red: 0.50, green: 0.37, blue: 0.72).opacity(0.72)
         }
