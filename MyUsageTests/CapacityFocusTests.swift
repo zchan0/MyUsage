@@ -19,10 +19,12 @@ final class CapacityFocusTests: XCTestCase {
     func testEarlyWindowClearPaceLeadRequiresAttention() {
         let metric = metric(.codex, "Weekly", 65, reset: 5 * 86_400, pace: 19)
 
-        guard case .aheadOfPace(let multiplier) = metric.paceStatus else {
+        guard case .earlyDeficit(let multiplier) = metric.riskSignal else {
             return XCTFail("Expected an early-window pace warning")
         }
         XCTAssertEqual(multiplier, 65.0 / 19.0, accuracy: 0.001)
+        XCTAssertEqual(metric.paceBalance, .deficit(percent: 46))
+        XCTAssertEqual(CapacityPaceText.detailSummary(for: metric, now: now), "46% in deficit")
         XCTAssertTrue(metric.needsAttention)
         XCTAssertTrue(metric.requiresOverviewAttention)
     }
@@ -30,7 +32,8 @@ final class CapacityFocusTests: XCTestCase {
     func testEarlySinglePromptDoesNotFalseAlarm() {
         let metric = metric(.codex, "5-hour", 5, reset: 4 * 3_600, pace: 1)
 
-        XCTAssertEqual(metric.paceStatus, .onTrack)
+        XCTAssertEqual(metric.riskSignal, .none)
+        XCTAssertEqual(metric.paceBalance, .deficit(percent: 4))
         XCTAssertFalse(metric.needsAttention)
         XCTAssertFalse(metric.requiresOverviewAttention)
     }
@@ -38,22 +41,61 @@ final class CapacityFocusTests: XCTestCase {
     func testSmallPaceLeadDoesNotFalseAlarm() {
         let metric = metric(.claude, "Weekly", 20, reset: 5 * 86_400, pace: 15)
 
-        XCTAssertEqual(metric.paceStatus, .onTrack)
+        XCTAssertEqual(metric.riskSignal, .none)
+        XCTAssertEqual(metric.paceBalance, .deficit(percent: 5))
         XCTAssertFalse(metric.requiresOverviewAttention)
     }
 
+    func testReserveAndOnPaceUsePercentagePointDistance() {
+        let reserve = metric(.codex, "Weekly", 24, reset: 4 * 86_400, pace: 40)
+        let onPace = metric(.claude, "5-hour", 31, reset: 2_000, pace: 30)
+
+        XCTAssertEqual(reserve.paceBalance, .reserve(percent: 16))
+        XCTAssertEqual(CapacityPaceText.balanceLabel(for: reserve), "16% in reserve")
+        XCTAssertEqual(onPace.paceBalance, .onPace)
+        XCTAssertEqual(CapacityPaceText.balanceLabel(for: onPace), "On pace")
+    }
+
     func testReliableProjectionTakesPrecedenceOverPaceFallback() {
+        let exhaustion = now.addingTimeInterval(3_600)
         let metric = metric(
             .claude,
             "Weekly",
             65,
             reset: 4 * 86_400,
             pace: 30,
-            projected: 217
+            projected: 217,
+            exhaustion: exhaustion
         )
 
-        XCTAssertEqual(metric.paceStatus, .projectedOvershoot(percent: 217))
+        XCTAssertEqual(metric.riskSignal, .projectedOvershoot(percent: 217))
+        XCTAssertEqual(metric.paceOutcome, .runsOut(at: exhaustion))
+        XCTAssertEqual(
+            CapacityPaceText.detailSummary(for: metric, now: now),
+            "35% in deficit · Runs out in 1h 0m"
+        )
+        XCTAssertEqual(
+            CapacityPaceText.overviewSummary(for: metric, now: now),
+            "35% deficit · runs out in 1h 0m"
+        )
         XCTAssertTrue(metric.requiresOverviewAttention)
+    }
+
+    func testReliableReserveReportsLastingUntilReset() {
+        let metric = metric(
+            .codex,
+            "Weekly",
+            30,
+            reset: 4 * 86_400,
+            pace: 50,
+            projected: 60
+        )
+
+        XCTAssertEqual(metric.paceOutcome, .lastsUntilReset)
+        XCTAssertEqual(
+            CapacityPaceText.detailSummary(for: metric, now: now),
+            "20% in reserve · Lasts until reset"
+        )
     }
 
     func testHealthyWindowsChooseSoonestFutureReset() {
@@ -74,7 +116,8 @@ final class CapacityFocusTests: XCTestCase {
         _ percent: Double,
         reset: TimeInterval?,
         pace: Double? = nil,
-        projected: Double? = nil
+        projected: Double? = nil,
+        exhaustion: Date? = nil
     ) -> CapacityFocus.Metric {
         CapacityFocus.Metric(
             providerKind: provider,
@@ -82,7 +125,8 @@ final class CapacityFocusTests: XCTestCase {
             percentUsed: percent,
             resetsAt: reset.map { now.addingTimeInterval($0) },
             pacePercent: pace,
-            projectedFinalPercent: projected
+            projectedFinalPercent: projected,
+            projectedExhaustionAt: exhaustion
         )
     }
 }

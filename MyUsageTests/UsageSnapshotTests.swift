@@ -235,6 +235,46 @@ struct UsageWindowProjectionTests {
         #expect(abs(projected! - 150) < 0.01)
     }
 
+    @Test("reliable hot pace reports when capacity will run out")
+    func projectedExhaustionDate() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        // 5h window, 3h elapsed, 80% used. At the observed rate the
+        // remaining 20% lasts 45 minutes.
+        let window = UsageWindow(
+            percentUsed: 80,
+            resetsAt: now.addingTimeInterval(2 * 3_600),
+            windowDuration: 5 * 3_600
+        )
+
+        let exhaustion = window.projectedExhaustionDate(now: now)
+        #expect(exhaustion != nil)
+        #expect(abs(exhaustion!.timeIntervalSince(now) - 45 * 60) < 0.01)
+    }
+
+    @Test("pace that lasts through reset has no exhaustion date")
+    func projectedExhaustionLastsToReset() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let window = UsageWindow(
+            percentUsed: 30,
+            resetsAt: now.addingTimeInterval(2 * 3_600),
+            windowDuration: 5 * 3_600
+        )
+
+        #expect(window.projectedExhaustionDate(now: now) == nil)
+    }
+
+    @Test("exhaustion date uses the same early-window reliability gate")
+    func projectedExhaustionIsGated() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let window = UsageWindow(
+            percentUsed: 25,
+            resetsAt: now.addingTimeInterval(5 * 3_600 - 30 * 60),
+            windowDuration: 5 * 3_600
+        )
+
+        #expect(window.projectedExhaustionDate(now: now) == nil)
+    }
+
     @Test("projection is nil when reset is in the past")
     func resetInPast() {
         let now = Date(timeIntervalSince1970: 1_000_000)

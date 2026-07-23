@@ -98,31 +98,28 @@ struct FocusOverview: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
 
-                    switch metric.paceStatus {
-                    case .projectedOvershoot(let projected):
-                        Text("\(Int(projected.rounded()))% projected")
-                            .font(.system(size: 9, weight: .medium))
+                    if let pace = CapacityPaceText.overviewSummary(for: metric) {
+                        Text(pace)
+                            .font(.system(
+                                size: 9,
+                                weight: metric.hasCapacityRisk ? .medium : .regular,
+                                design: .monospaced
+                            ))
                             .monospacedDigit()
-                            .foregroundStyle(LimitBar.warnAccent)
+                            .foregroundStyle(metric.hasCapacityRisk
+                                ? AnyShapeStyle(LimitBar.warnAccent)
+                                : AnyShapeStyle(.tertiary))
                             .lineLimit(1)
-                            .fixedSize()
-                    case .aheadOfPace(let multiplier):
-                        Text("\(multiplier.formatted(.number.precision(.fractionLength(1))))× pace")
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(LimitBar.warnAccent)
+                            .minimumScaleFactor(0.82)
+                            .help(CapacityPaceText.detailSummary(for: metric) ?? pace)
+                    } else if let secondary = secondaryCaption(provider, excluding: metric) {
+                        Text(secondary)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
                             .lineLimit(1)
-                            .fixedSize()
-                    case .onTrack:
-                        if let secondary = secondaryCaption(provider, excluding: metric) {
-                            Text(secondary)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
                     }
 
-                    if let extra = extraSpendCaption(provider) {
+                    if !metric.hasCapacityRisk, let extra = extraSpendCaption(provider) {
                         Text("Extra \(extra)")
                             .font(.system(size: 9))
                             .monospacedDigit()
@@ -133,7 +130,7 @@ struct FocusOverview: View {
 
                     Spacer(minLength: 4)
 
-                    if let spend = spendCaption(provider) {
+                    if !metric.hasCapacityRisk, let spend = spendCaption(provider) {
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             Text(spend.amount)
                                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))

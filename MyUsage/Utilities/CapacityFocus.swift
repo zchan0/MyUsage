@@ -5,10 +5,21 @@ import Foundation
 /// testable instead of relying on view order.
 enum CapacityFocus {
     struct Metric: Identifiable, Sendable, Equatable {
-        enum PaceStatus: Sendable, Equatable {
-            case onTrack
-            case aheadOfPace(multiplier: Double)
+        enum PaceBalance: Sendable, Equatable {
+            case onPace
+            case deficit(percent: Double)
+            case reserve(percent: Double)
+        }
+
+        enum RiskSignal: Sendable, Equatable {
+            case none
+            case earlyDeficit(multiplier: Double)
             case projectedOvershoot(percent: Double)
+        }
+
+        enum PaceOutcome: Sendable, Equatable {
+            case runsOut(at: Date)
+            case lastsUntilReset
         }
 
         let providerKind: ProviderKind
@@ -17,17 +28,37 @@ enum CapacityFocus {
         let resetsAt: Date?
         let pacePercent: Double?
         let projectedFinalPercent: Double?
+        let projectedExhaustionAt: Date?
 
         var id: String { "\(providerKind.rawValue):\(label)" }
 
-        /// One capacity verdict shared by Detail, Overview, and ordering.
-        ///
-        /// The projection deliberately stays quiet for the first 20% of a
-        /// rolling window. During that gate, a large and sustained lead over
-        /// the deterministic pace marker is still enough evidence to warn.
-        /// Both an absolute lead and a minimum amount consumed are required so
-        /// a single prompt at the very start of a window does not false-alarm.
-        var paceStatus: PaceStatus {
+        /// Distance from the deterministic pace notch, expressed in
+        /// percentage points. A ±2-point dead zone matches the visual reading
+        /// of the bar: tiny fill/marker differences are simply "On pace."
+        var paceBalance: PaceBalance? {
+            guard let pacePercent else { return nil }
+            let delta = percentUsed - pacePercent
+            if abs(delta) <= 2 { return .onPace }
+            if delta > 0 { return .deficit(percent: delta) }
+            return .reserve(percent: abs(delta))
+        }
+
+        /// Actionable outcome is intentionally separate from pace balance.
+        /// It appears only after the projection reliability gate has opened.
+        var paceOutcome: PaceOutcome? {
+            if let projectedExhaustionAt {
+                return .runsOut(at: projectedExhaustionAt)
+            }
+            if projectedFinalPercent != nil {
+                return .lastsUntilReset
+            }
+            return nil
+        }
+
+        /// One risk verdict shared by Detail, Overview, and ordering. The
+        /// early-window fallback stays internal; users see the more legible
+        /// reserve/deficit distance instead of a burn-rate multiplier.
+        var riskSignal: RiskSignal {
             if let projectedFinalPercent, projectedFinalPercent > 100 {
                 return .projectedOvershoot(percent: projectedFinalPercent)
             }
@@ -38,19 +69,19 @@ enum CapacityFocus {
                   percentUsed >= 20,
                   percentUsed - pacePercent >= 10
             else {
-                return .onTrack
+                return .none
             }
 
             let multiplier = percentUsed / pacePercent
-            guard multiplier >= 1.5 else { return .onTrack }
-            return .aheadOfPace(multiplier: multiplier)
+            guard multiplier >= 1.5 else { return .none }
+            return .earlyDeficit(multiplier: multiplier)
         }
 
         var hasCapacityRisk: Bool {
-            switch paceStatus {
-            case .onTrack:
+            switch riskSignal {
+            case .none:
                 false
-            case .aheadOfPace, .projectedOvershoot:
+            case .earlyDeficit, .projectedOvershoot:
                 true
             }
         }
@@ -68,15 +99,15 @@ enum CapacityFocus {
 
         var riskScore: Double {
             let current = percentUsed
-            switch paceStatus {
-            case .onTrack:
+            switch riskSignal {
+            case .none:
                 return current
             case .projectedOvershoot(let projected):
                 // A reliable projected overshoot should outrank a merely busy
                 // window without turning 300% projections into an unbounded
                 // visual scale.
                 return max(current, 80 + min(projected - 100, 100) * 0.2)
-            case .aheadOfPace(let multiplier):
+            case .earlyDeficit(let multiplier):
                 // Early-window evidence is intentionally capped at the same
                 // ceiling as a reliable projection.
                 return max(current, 80 + min(multiplier - 1, 1) * 20)
@@ -99,7 +130,8 @@ enum CapacityFocus {
                         percentUsed: $0.percentUsed,
                         resetsAt: $0.resetsAt,
                         pacePercent: $0.onPacePercent(now: now),
-                        projectedFinalPercent: $0.projectedFinalPercent(now: now)
+                        projectedFinalPercent: $0.projectedFinalPercent(now: now),
+                        projectedExhaustionAt: $0.projectedExhaustionDate(now: now)
                     )
                 },
                 snapshot.weeklyUsage.map {
@@ -109,7 +141,8 @@ enum CapacityFocus {
                         percentUsed: $0.percentUsed,
                         resetsAt: $0.resetsAt,
                         pacePercent: $0.onPacePercent(now: now),
-                        projectedFinalPercent: $0.projectedFinalPercent(now: now)
+                        projectedFinalPercent: $0.projectedFinalPercent(now: now),
+                        projectedExhaustionAt: $0.projectedExhaustionDate(now: now)
                     )
                 }
             ].compactMap { $0 }
@@ -123,7 +156,8 @@ enum CapacityFocus {
                         percentUsed: $0,
                         resetsAt: snapshot.billingCycleEnd,
                         pacePercent: nil,
-                        projectedFinalPercent: nil
+                        projectedFinalPercent: nil,
+                        projectedExhaustionAt: nil
                     )
                 },
                 snapshot.onDemandUsagePercent.map {
@@ -133,7 +167,8 @@ enum CapacityFocus {
                         percentUsed: $0,
                         resetsAt: snapshot.billingCycleEnd,
                         pacePercent: nil,
-                        projectedFinalPercent: nil
+                        projectedFinalPercent: nil,
+                        projectedExhaustionAt: nil
                     )
                 }
             ].compactMap { $0 }
@@ -146,7 +181,8 @@ enum CapacityFocus {
                     percentUsed: $0.percentUsed,
                     resetsAt: $0.resetsAt,
                     pacePercent: nil,
-                    projectedFinalPercent: nil
+                    projectedFinalPercent: nil,
+                    projectedExhaustionAt: nil
                 )
             }
             .sorted { $0.percentUsed > $1.percentUsed }
@@ -176,4 +212,67 @@ enum CapacityFocus {
         guard let date, date > now else { return .distantFuture }
         return date
     }
+}
+
+enum CapacityPaceText {
+    static func balanceLabel(for metric: CapacityFocus.Metric) -> String? {
+        guard let balance = metric.paceBalance else { return nil }
+        switch balance {
+        case .onPace:
+            return "On pace"
+        case .deficit(let percent):
+            return "\(Int(percent.rounded()))% in deficit"
+        case .reserve(let percent):
+            return "\(Int(percent.rounded()))% in reserve"
+        }
+    }
+
+    static func outcomeLabel(
+        for metric: CapacityFocus.Metric,
+        now: Date = .now
+    ) -> String? {
+        guard let outcome = metric.paceOutcome else { return nil }
+        switch outcome {
+        case .runsOut(let date):
+            return "Runs out in \(OverviewSummary.shortCountdown(until: date, now: now))"
+        case .lastsUntilReset:
+            return "Lasts until reset"
+        }
+    }
+
+    static func detailSummary(
+        for metric: CapacityFocus.Metric,
+        now: Date = .now
+    ) -> String? {
+        [balanceLabel(for: metric), outcomeLabel(for: metric, now: now)]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+            .nilIfEmpty
+    }
+
+    static func overviewSummary(
+        for metric: CapacityFocus.Metric,
+        now: Date = .now
+    ) -> String? {
+        guard let balance = compactBalanceLabel(for: metric) else { return nil }
+        guard case .runsOut(let date) = metric.paceOutcome else { return balance }
+        let countdown = OverviewSummary.shortCountdown(until: date, now: now)
+        return "\(balance) · runs out in \(countdown)"
+    }
+
+    private static func compactBalanceLabel(for metric: CapacityFocus.Metric) -> String? {
+        guard let balance = metric.paceBalance else { return nil }
+        switch balance {
+        case .onPace:
+            return "On pace"
+        case .deficit(let percent):
+            return "\(Int(percent.rounded()))% deficit"
+        case .reserve(let percent):
+            return "\(Int(percent.rounded()))% reserve"
+        }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -318,21 +318,19 @@ private struct DeckLimitInstrument: View {
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
                 Spacer(minLength: 8)
-                switch metric.paceStatus {
-                case .projectedOvershoot(let projected):
-                    Text("Projected \(Int(projected.rounded()))% at reset")
-                        .font(.system(size: 9.5, weight: .medium))
+                if let summary = CapacityPaceText.detailSummary(for: metric) {
+                    Text(summary)
+                        .font(.system(
+                            size: 9.5,
+                            weight: metric.hasCapacityRisk ? .medium : .regular,
+                            design: .monospaced
+                        ))
                         .monospacedDigit()
-                        .foregroundStyle(LimitBar.warnAccent)
-                case .aheadOfPace(let multiplier):
-                    Text("\(multiplier.formatted(.number.precision(.fractionLength(1))))× pace")
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(LimitBar.warnAccent)
-                case .onTrack:
-                    Text("On track")
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(metric.hasCapacityRisk
+                            ? AnyShapeStyle(LimitBar.warnAccent)
+                            : AnyShapeStyle(.tertiary))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
                 }
             }
             .padding(.top, 8)

@@ -111,6 +111,34 @@ struct UsageWindow: Sendable {
     /// time so a "you'll be at 230% by Sunday" can still be detected
     /// upstream (e.g. for a stronger warning).
     func projectedFinalPercent(now: Date = .now) -> Double? {
+        guard let context = projectionContext(now: now) else { return nil }
+        return percentUsed * context.duration / context.elapsed
+    }
+
+    /// When the current linear burn rate would consume the remaining
+    /// capacity before reset. Uses the same reliability gate as the final
+    /// projection; `nil` means either the estimate is not reliable yet or the
+    /// current rate lasts through reset.
+    func projectedExhaustionDate(now: Date = .now) -> Date? {
+        guard let context = projectionContext(now: now), percentUsed > 0 else {
+            return nil
+        }
+        if percentUsed >= 100 { return now }
+
+        let rate = percentUsed / context.elapsed
+        guard rate > 0 else { return nil }
+        let secondsUntilExhausted = (100 - percentUsed) / rate
+        guard secondsUntilExhausted.isFinite, secondsUntilExhausted >= 0 else {
+            return nil
+        }
+
+        let exhaustion = now.addingTimeInterval(secondsUntilExhausted)
+        return exhaustion < context.resetsAt ? exhaustion : nil
+    }
+
+    private func projectionContext(
+        now: Date
+    ) -> (resetsAt: Date, duration: TimeInterval, elapsed: TimeInterval)? {
         guard let resetsAt, let windowDuration, windowDuration > 0 else {
             return nil
         }
@@ -119,7 +147,7 @@ struct UsageWindow: Sendable {
         let elapsed = windowDuration - timeRemaining
         let minElapsed = max(60, windowDuration * 0.20)
         guard elapsed >= minElapsed else { return nil }
-        return percentUsed * windowDuration / elapsed
+        return (resetsAt, windowDuration, elapsed)
     }
 }
 
