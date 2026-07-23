@@ -13,19 +13,21 @@ struct PopoverGlassSurface: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // A · Clean Glass: use a neutral, substantially opaque overlay
-            // instead of windowBackgroundColor. The latter carries its own
-            // warm-gray cast and lets too much wallpaper colour through.
+            // A · Clean Glass. These values are the *additional* neutralizing
+            // layer above NSVisualEffectView(.popover), not the final CSS-like
+            // surface alpha. The AppKit material already contributes its own
+            // light/dark tint; using the mockup's final 0.86/0.90 values here
+            // double-tinted the real panel into a flat near-opaque sheet.
             if colorScheme == .dark {
                 Color(red: 37 / 255, green: 39 / 255, blue: 44 / 255)
-                    .opacity(0.90)
+                    .opacity(0.84)
             } else {
-                Color.white.opacity(0.86)
+                Color.white.opacity(0.76)
             }
 
             LinearGradient(
                 colors: [
-                    Color.white.opacity(colorScheme == .dark ? 0.045 : 0.20),
+                    Color.white.opacity(colorScheme == .dark ? 0.035 : 0.10),
                     Color.white.opacity(colorScheme == .dark ? 0.012 : 0.04),
                     .clear,
                 ],

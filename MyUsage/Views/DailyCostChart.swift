@@ -1,6 +1,31 @@
 import Charts
 import SwiftUI
 
+struct ModelCostInsight: Equatable, Sendable {
+    let name: String
+    let sharePercent: Double
+}
+
+enum DailyCostChartInsights {
+    static func topModel(in series: [LedgerStore.DailyCost]) -> ModelCostInsight? {
+        var totals: [String: Double] = [:]
+        for day in series {
+            for (model, cost) in day.byModel where cost > 0 {
+                totals[model, default: 0] += cost
+            }
+        }
+
+        guard let winner = totals.sorted(by: {
+            $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+        }).first else { return nil }
+
+        let total = series.reduce(0) { $0 + max(0, $1.totalUSD) }
+        guard total > 0 else { return nil }
+        let share = min(100, max(0, winner.value / total * 100))
+        return ModelCostInsight(name: winner.key, sharePercent: share)
+    }
+}
+
 /// Trailing-30-day daily cost, stacked by model family — shown on a
 /// provider's own tab beneath the cost row.
 ///
@@ -32,6 +57,7 @@ struct DailyCostChart: View {
             header
             chart
             legend
+            insights
         }
     }
 
@@ -90,7 +116,7 @@ struct DailyCostChart: View {
                 // truncating; the trailing plot inset gives that overflow room.
                 AxisValueLabel {
                     if let date = value.as(Date.self) {
-                        Text(date, format: .dateTime.month(.abbreviated).day())
+                        Text(xAxisLabel(for: date))
                             .font(.system(size: 8.5, design: .monospaced))
                             .foregroundStyle(Color.secondary.opacity(0.65))
                             .fixedSize()
@@ -148,6 +174,36 @@ struct DailyCostChart: View {
                 }
             }
             Spacer(minLength: 0)
+        }
+    }
+
+    /// One quiet answer beneath the legend: which model accounts for the
+    /// largest share of the visible 30-day cost. The right edge anchors the
+    /// chart in time without forcing a default hover selection that would dim
+    /// every other bar.
+    @ViewBuilder
+    private var insights: some View {
+        if let topModel {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text("Top model")
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(.tertiary)
+                Text(topModel.name)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text("\(Int(topModel.sharePercent.rounded()))%")
+                    .font(.system(size: 8.5, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+
+                Spacer(minLength: 8)
+
+                Text("30d ago → Today")
+                    .font(.system(size: 8.5, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -244,6 +300,10 @@ struct DailyCostChart: View {
         series.reduce(0) { $0 + $1.totalUSD }
     }
 
+    private var topModel: ModelCostInsight? {
+        DailyCostChartInsights.topModel(in: series)
+    }
+
     // MARK: - Formatting
 
     private static func parseDay(_ day: String) -> Date? {
@@ -264,6 +324,17 @@ struct DailyCostChart: View {
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
         return formatter.string(from: date).uppercased()
+    }
+
+    private func xAxisLabel(for date: Date) -> String {
+        if let last = xAxisDates.last, abs(date.timeIntervalSince(last)) < 1 {
+            return "Today"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        return formatter.string(from: date)
     }
 }
 

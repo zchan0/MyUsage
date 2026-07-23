@@ -40,29 +40,37 @@ struct ResetCreditsSection: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Text("RESET CREDITS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.secondary.opacity(0.72))
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("RESET CREDITS")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.tertiary)
 
-            Text("\(inventory.reportedAvailableCount)")
-                .font(.system(size: 21, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(inventory.reportedAvailableCount)")
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                    Text("available")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.secondary)
+                }
+            }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 12)
 
             if let expiration = inventory.earliestExpiration {
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: 3) {
                     Text("NEXT EXPIRY")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundStyle(.tertiary)
                     Text("in \(OverviewSummary.shortCountdown(until: expiration))")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(expiryColor(expiration))
                 }
             }
         }
+        .frame(minHeight: 34)
     }
 
     private func creditRow(index: Int, credit: ResetCredit) -> some View {
