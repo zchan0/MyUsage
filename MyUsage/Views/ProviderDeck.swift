@@ -293,13 +293,13 @@ private struct DeckLimitInstrument: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 Text("\(Int(metric.percentUsed.rounded()))%")
-                    .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 17, weight: .semibold, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(metric.needsAttention
                         ? AnyShapeStyle(LimitBar.warnAccent)
                         : AnyShapeStyle(.primary))
                 Text("used")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9.5))
                     .foregroundStyle(.secondary)
             }
 
@@ -312,29 +312,53 @@ private struct DeckLimitInstrument: View {
             )
             .padding(.top, 10)
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(resetCaption)
-                    .font(.system(size: 9.5, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                Spacer(minLength: 8)
-                if let summary = CapacityPaceText.detailSummary(for: metric) {
-                    Text(summary)
-                        .font(.system(
-                            size: 9.5,
-                            weight: metric.hasCapacityRisk ? .medium : .regular,
-                            design: .monospaced
-                        ))
-                        .monospacedDigit()
-                        .foregroundStyle(metric.hasCapacityRisk
-                            ? AnyShapeStyle(LimitBar.warnAccent)
-                            : AnyShapeStyle(.tertiary))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-            }
+            paceFooter
             .padding(.top, 8)
         }
+    }
+
+    @ViewBuilder
+    private var paceFooter: some View {
+        if let summary = CapacityPaceText.detailSummary(for: metric) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    resetText
+                        .fixedSize()
+                    Spacer(minLength: 28)
+                    paceText(summary)
+                        .fixedSize()
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    resetText
+                    paceText(summary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+        } else {
+            resetText
+        }
+    }
+
+    private var resetText: some View {
+        Text(resetCaption)
+            .font(.system(size: 9.5, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(.tertiary)
+    }
+
+    private func paceText(_ summary: String) -> some View {
+        Text(summary)
+            .font(.system(
+                size: 9.5,
+                weight: metric.hasCapacityRisk ? .medium : .regular,
+                design: .monospaced
+            ))
+            .monospacedDigit()
+            .foregroundStyle(metric.hasCapacityRisk
+                ? AnyShapeStyle(LimitBar.warnAccent)
+                : AnyShapeStyle(.tertiary))
+            .lineLimit(1)
     }
 
     private var resetCaption: String {

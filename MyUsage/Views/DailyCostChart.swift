@@ -53,7 +53,7 @@ struct DailyCostChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             header
             chart
             legend
@@ -107,6 +107,9 @@ struct DailyCostChart: View {
         // the axis collapses to the data extent — two days of usage
         // rendered as two enormous bars filling the plot.
         .chartXScale(domain: xDomain)
+        // Leave a little air above the tallest stack so it does not visually
+        // collide with the total in the header.
+        .chartYScale(domain: 0...yAxisCeiling)
         .chartXAxis {
             AxisMarks(values: xAxisDates) { value in
                 // Closure form + fixedSize: Charts width-limits a *centered*
@@ -133,6 +136,14 @@ struct DailyCostChart: View {
                 .padding(.trailing, 30)
         }
         .frame(height: 96)
+    }
+
+    private var yAxisCeiling: Double {
+        let dailyStacks = Dictionary(grouping: segments, by: \.day)
+            .values
+            .map { $0.reduce(0) { $0 + $1.usd } }
+        let maximum = dailyStacks.max() ?? 0
+        return max(0.01, maximum * 1.12)
     }
 
     /// Trailing 30 days ending today (UTC day buckets, matching the data).
@@ -203,7 +214,6 @@ struct DailyCostChart: View {
                     .font(.system(size: 8.5, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.top, 2)
         }
     }
 
