@@ -68,7 +68,7 @@ struct FocusOverview: View {
                 if let metric {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("\(Int(metric.percentUsed.rounded()))%")
-                            .font(.system(size: 14.5, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
                             .monospacedDigit()
                             .foregroundStyle(requiresAttention(metric)
                                 ? AnyShapeStyle(LimitBar.warnAccent)
@@ -99,6 +99,10 @@ struct FocusOverview: View {
                         .minimumScaleFactor(0.82)
 
                     if let pace = CapacityPaceText.overviewSummary(for: metric) {
+                        if metric.hasCapacityRisk {
+                            Spacer(minLength: 12)
+                        }
+
                         Text(pace)
                             .font(.system(
                                 size: 9,
@@ -119,28 +123,30 @@ struct FocusOverview: View {
                             .lineLimit(1)
                     }
 
-                    if !metric.hasCapacityRisk, let extra = extraSpendCaption(provider) {
-                        Text("Extra \(extra)")
-                            .font(.system(size: 9))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-
-                    Spacer(minLength: 4)
-
-                    if !metric.hasCapacityRisk, let spend = spendCaption(provider) {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(spend.amount)
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    if !metric.hasCapacityRisk {
+                        if let extra = extraSpendCaption(provider) {
+                            Text("Extra \(extra)")
+                                .font(.system(size: 9))
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
-                            Text(spend.scope)
-                                .font(.system(size: 8.5))
-                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .fixedSize()
                         }
-                        .fixedSize()
+
+                        Spacer(minLength: 4)
+
+                        if let spend = spendCaption(provider) {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text(spend.amount)
+                                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                                Text(spend.scope)
+                                    .font(.system(size: 8.5))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .fixedSize()
+                        }
                     }
                 }
                 .padding(.top, 7)
