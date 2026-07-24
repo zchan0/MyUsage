@@ -96,17 +96,6 @@ struct SettingsView: View {
                                 .toggleStyle(.switch)
                                 .labelsHidden()
                         }
-
-                        CardDivider()
-
-                        SettingsRow(
-                            "Show Claude per-model bars",
-                            caption: "Independent weekly caps for Opus / Sonnet / Design when your plan exposes them. 0% means the cap exists but is unused this week."
-                        ) {
-                            Toggle("", isOn: $mgr.showPerModelBars)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                        }
                     }
                 }
 

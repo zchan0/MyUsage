@@ -5,7 +5,7 @@ import SwiftUI
 /// SwiftUI layer only neutralizes wallpaper colour bleed and adds a restrained
 /// highlight so the material reads as clean glass in both appearances.
 enum PopoverLayout {
-    static let width: CGFloat = 348
+    static let width: CGFloat = 330
 }
 
 struct PopoverGlassSurface: View {

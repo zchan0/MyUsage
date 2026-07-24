@@ -26,19 +26,20 @@ struct ProviderPopover: View {
 
 // MARK: - Shared popover chrome
 
-/// "N min ago" mono label used by the compact footer.
+/// "N min ago" mono label used by the compact footer. Shares the footer's
+/// size / weight / colour so the "Updated" prefix and the relative time read
+/// as one label rather than two mismatched fonts.
 struct RelativeTimestampLabel: View {
     let date: Date
 
     var body: some View {
         (
             Text(date, style: .relative)
-                .font(.system(size: 10.5, weight: .regular, design: .monospaced))
-                .monospacedDigit()
             + Text(" ago")
-                .font(.system(size: 10.5, weight: .regular, design: .monospaced))
         )
-        .foregroundStyle(.secondary.opacity(0.7))
+        .font(.system(size: 10, weight: .regular, design: .monospaced))
+        .monospacedDigit()
+        .foregroundStyle(.tertiary)
     }
 }
 
@@ -52,15 +53,15 @@ struct PopoverFooterBar: View {
     var body: some View {
         HStack(spacing: 2) {
             if let lastRefreshed = manager.lastRefreshed {
-                HStack(spacing: 3) {
+                HStack(spacing: 4) {
                     Text("Updated")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.tertiary)
                     RelativeTimestampLabel(date: lastRefreshed)
                 }
-                .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
             } else {
                 Text("Not refreshed")
-                    .font(.system(size: 9.5))
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
 

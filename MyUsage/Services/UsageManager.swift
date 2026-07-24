@@ -66,17 +66,6 @@ final class UsageManager {
         didSet { UserDefaults.standard.set(showEstimatedCost, forKey: "showEstimatedCost") }
     }
 
-    /// Whether Claude's per-model bars (Opus / Sonnet / Design / …)
-    /// render under the Weekly bar. Each row is one model's separate
-    /// weekly cap — 0% means the cap exists on this plan but is unused
-    /// this week, not "no data". Plans where Anthropic doesn't return
-    /// per-bucket fields at all (Max 5x and most Pro tiers, where
-    /// everything pools into the unified weekly cap) show nothing
-    /// regardless of this toggle.
-    var showPerModelBars: Bool {
-        didSet { UserDefaults.standard.set(showPerModelBars, forKey: "showPerModelBars") }
-    }
-
     /// Master toggle for limit-pressure notifications.
     var notificationsEnabled: Bool {
         didSet { UserDefaults.standard.set(notificationsEnabled, forKey: "notificationsEnabled") }
@@ -118,7 +107,6 @@ final class UsageManager {
         self.menuBarMode = UserDefaults.standard.string(forKey: "menuBarMode")
             .flatMap(MenuBarMode.init(rawValue:)) ?? .merged
         self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
-        self.showPerModelBars = UserDefaults.standard.object(forKey: "showPerModelBars") as? Bool ?? true
         self.notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
         self.notifyWarnThreshold = (UserDefaults.standard.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
         self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
