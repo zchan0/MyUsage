@@ -6,6 +6,39 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.16.1 — 2026-07-24
+
+### Changed
+- **Distinct per-model colors in the cost chart.** Each model family now gets
+  its own validated, colorblind-safe hue instead of shades of a single
+  provider color, so a heavy model (for example Fable) reads as its own
+  series rather than a darker version of the one above it. Colors are keyed
+  to the model name — they stay put when spend rankings shift — and any new
+  model is assigned a color automatically, with no per-model code.
+- **Tighter popover.** Panel width trimmed 348 → 330 pt.
+
+### Fixed
+- **Consistent footer timestamp.** The "Updated …" label and its relative
+  time now share one font, size, and color instead of three mismatched
+  treatments.
+
+### Removed
+- **Dead "Show Claude per-model bars" setting.** The toggle stopped driving
+  any UI after the popover redesign; removed it and its stored preference.
+  Per-model weekly bars require per-model caps in the API, which pooled
+  plans (including Max) don't expose.
+
+### 中文
+
+- **成本图分模型独立配色**:每个模型有自己经过校验的、色盲安全的颜色,不再是同一
+  provider 色的深浅,重度模型(如 Fable)一眼可辨。颜色按模型名固定,花费排名变化
+  也不换色;新模型自动分配颜色,无需为每个模型改代码。
+- **面板更紧凑**:宽度 348 → 330 pt。
+- **修复底栏时间戳字体不一致**:"Updated …" 标签与相对时间现在统一字体、字号、颜色。
+- **移除失效的 "Show Claude per-model bars" 开关**:改版后它已不控制任何 UI,连同
+  其存储的偏好一并删除。分模型周限额条需要 API 返回分模型配额,而汇总型套餐
+  (包括 Max)并不提供。
+
 ## v0.16.0 — 2026-07-23
 
 ### Added
