@@ -6,6 +6,34 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.16.2 — 2026-07-27
+
+### Added
+- **Claude additional limits.** Claude Detail now surfaces model- and
+  product-specific weekly caps such as Fable and Daily Routines in one
+  compact `Additional limits` section. Structured rate-limit entries and
+  legacy response aliases are both supported and deduplicated, so future
+  caps can appear without a per-model UI change.
+
+### Changed
+- **More compact rolling limits.** The 5-hour and Weekly regions use smaller
+  14pt percentages and tighter spacing. Detail always presents 5-hour before
+  Weekly for predictable scanning, while Overview continues to prioritize
+  whichever window carries the highest risk.
+- **Provider-themed cost charts.** Model stacks and legend markers now use
+  opacity steps of the provider's own restrained tint, replacing unrelated
+  categorical colors with a more cohesive Claude or Codex palette.
+
+### 中文
+
+- **Claude 附加限额**：Claude 详情页会在紧凑的 `Additional limits` 区域展示
+  Fable、Daily Routines 等模型或产品级周限额。解析同时兼容结构化
+  rate-limit entries 与旧响应字段别名，并自动去重；未来新增限额无需逐个修改 UI。
+- **滚动限额更紧凑**：5-hour 与 Weekly 使用更小的 14pt 百分比和更紧凑的间距；
+  详情页固定按 5-hour → Weekly 展示，Overview 仍优先显示风险最高的窗口。
+- **成本图回归 provider 主题色**：模型堆叠柱和图例标识改用 provider 克制主题色
+  的不同透明度，不再混用无关分类色；Claude 与 Codex 的视觉更统一协调。
+
 ## v0.16.1 — 2026-07-24
 
 ### Changed
