@@ -100,7 +100,6 @@ struct ProviderDeck: View {
     @ViewBuilder
     private func rollingInstruments(_ snapshot: UsageSnapshot) -> some View {
         let metrics = CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
-            .sorted { $0.riskScore > $1.riskScore }
         if metrics.isEmpty {
             Text("No rolling limits reported")
                 .font(.system(size: 11))

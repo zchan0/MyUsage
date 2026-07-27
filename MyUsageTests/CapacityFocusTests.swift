@@ -4,6 +4,29 @@ import XCTest
 final class CapacityFocusTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    func testRollingMetricsKeepFiveHourBeforeWeekly() {
+        var snapshot = UsageSnapshot()
+        snapshot.sessionUsage = UsageWindow(
+            percentUsed: 20,
+            resetsAt: now.addingTimeInterval(3_600),
+            windowDuration: 5 * 3_600
+        )
+        snapshot.weeklyUsage = UsageWindow(
+            percentUsed: 95,
+            resetsAt: now.addingTimeInterval(5 * 86_400),
+            windowDuration: 7 * 86_400
+        )
+
+        for provider in [ProviderKind.claude, .codex] {
+            let labels = CapacityFocus.metrics(
+                providerKind: provider,
+                snapshot: snapshot,
+                now: now
+            ).map(\.label)
+            XCTAssertEqual(labels, ["5-hour", "Weekly"])
+        }
+    }
+
     func testAttentionWindowOutranksSoonerHealthyReset() {
         let healthy = metric(.claude, "5-hour", 30, reset: 300)
         let pressured = metric(.codex, "Weekly", 81, reset: 10_000)

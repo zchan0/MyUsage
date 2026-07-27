@@ -73,8 +73,8 @@ enum DailyCostChartBreakdown {
 /// - At most **4** named families (ranked by 30-day total); everything
 ///   else — plus the unattributed remainder of days whose ledger rows
 ///   carry no per-model breakdown — folds into a gray "Other".
-/// - Each model family gets its own validated categorical hue (see
-///   `familyColors`) so a heavy model reads as distinct, not a shade.
+/// - Model families share the provider tint and use descending opacity
+///   steps, keeping the cost chart visually tied to its provider.
 /// - Hover (chartXSelection) swaps the header line to the hovered day's
 ///   date + total, and the fixed model rows to that day's costs — the
 ///   tooltip equivalent for a 316pt-wide popover.
@@ -298,63 +298,21 @@ struct DailyCostChart: View {
         return result
     }
 
-    /// A distinct hue per model family so each model reads as its own series
-    /// instead of a second shade of one colour — the old opacity-only ramp
-    /// made a heavy family (e.g. Fable) indistinguishable from the next one
-    /// down. The four slots are the dataviz reference palette's first four
-    /// categorical steps, validated colourblind-safe on both surfaces via
-    /// `scripts/validate_palette.js`. Families past four fold into a neutral
-    /// "Other". The legend rows below carry name + cost as text, which
-    /// satisfies the light-mode contrast-relief rule for the lighter slots.
-    ///
-    /// Colour follows the **model name**, not its cost rank: a family's slot
-    /// is derived from a stable hash of its name, so a model keeps its colour
-    /// even when another model overtakes it in spend (rank-based assignment
-    /// would swap the two colours). No hard-coded model list — any model,
-    /// including ones added later, gets a deterministic slot automatically.
-    /// Slots are assigned in sorted-name order so collision resolution (≤4
-    /// named families, 4 slots ⇒ every one lands a unique slot) is stable.
+    /// One provider hue at four opacity steps. The strongest step belongs to
+    /// the highest-cost family in the stable 30-day ranking, so the stack has
+    /// a clear visual hierarchy without introducing unrelated categorical
+    /// colours. Family names and exact values remain visible in the rows below
+    /// rather than relying on colour alone. Long-tail families fold into a
+    /// neutral "Other".
     private var familyColors: [Color] {
-        let slots: [Color] = colorScheme == .dark
-            ? [Color(red: 57 / 255, green: 135 / 255, blue: 229 / 255),   // blue
-               Color(red: 217 / 255, green: 89 / 255, blue: 38 / 255),    // orange
-               Color(red: 25 / 255, green: 158 / 255, blue: 112 / 255),   // aqua
-               Color(red: 201 / 255, green: 133 / 255, blue: 0 / 255)]    // yellow
-            : [Color(red: 42 / 255, green: 120 / 255, blue: 214 / 255),   // blue
-               Color(red: 235 / 255, green: 104 / 255, blue: 52 / 255),   // orange
-               Color(red: 27 / 255, green: 175 / 255, blue: 122 / 255),   // aqua
-               Color(red: 237 / 255, green: 161 / 255, blue: 0 / 255)]    // yellow
+        let tint = kind.usageTint(for: colorScheme)
+        let opacitySteps = [1.0, 0.76, 0.54, 0.36]
         let other = Color.primary.opacity(0.18)
 
-        // Deterministic name → slot, resolving collisions by linear probe.
-        var slotFor: [String: Int] = [:]
-        var used = Set<Int>()
-        for family in familyOrder.filter({ $0 != Self.otherLabel }).sorted() {
-            var slot = Int(Self.stableHash(family) % UInt64(slots.count))
-            var probes = 0
-            while used.contains(slot) && probes < slots.count {
-                slot = (slot + 1) % slots.count
-                probes += 1
-            }
-            slotFor[family] = slot
-            used.insert(slot)
-        }
-
-        return familyOrder.map { family in
+        return familyOrder.enumerated().map { index, family in
             if family == Self.otherLabel { return other }
-            return slots[slotFor[family] ?? 0]
+            return tint.opacity(opacitySteps[min(index, opacitySteps.count - 1)])
         }
-    }
-
-    /// Process-stable string hash (djb2). `String.hashValue` is per-run
-    /// randomised, which would repaint every family on each launch — this
-    /// keeps a model's colour identical across launches.
-    private static func stableHash(_ string: String) -> UInt64 {
-        var hash: UInt64 = 5381
-        for byte in string.utf8 {
-            hash = (hash &* 33) &+ UInt64(byte)
-        }
-        return hash
     }
 
     // MARK: - Selection
