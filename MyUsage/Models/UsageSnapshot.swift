@@ -151,14 +151,29 @@ struct UsageWindow: Sendable {
     }
 }
 
-/// One row of the per-model breakdown shown under Claude's weekly bar.
-/// Anthropic's `/api/oauth/usage` returns separate utilization values
-/// for `seven_day_sonnet`, `seven_day_opus`, etc. — this surfaces them
-/// as a list, sorted by percent so the heaviest consumer reads first.
+/// One compact row in Claude's additional-limit breakdown.
+///
+/// Anthropic can return model-scoped weekly caps (Fable, Opus, Sonnet, ...)
+/// as well as product-scoped weekly caps such as Daily Routines. They share
+/// the same visual treatment, but remain distinct from the account-wide
+/// weekly limit.
 struct WeeklyModelUsage: Sendable, Equatable, Identifiable {
-    let label: String       // "Sonnet", "Opus", "Haiku"
+    let id: String
+    let label: String
     let percent: Double
-    var id: String { label }
+    let resetsAt: Date?
+
+    init(
+        id: String? = nil,
+        label: String,
+        percent: Double,
+        resetsAt: Date? = nil
+    ) {
+        self.id = id ?? label
+        self.label = label
+        self.percent = percent
+        self.resetsAt = resetsAt
+    }
 }
 
 /// Per-model quota info (used by Antigravity).
@@ -220,9 +235,10 @@ struct UsageSnapshot: Sendable {
     // MARK: - Rolling windows (Claude, Codex)
     var sessionUsage: UsageWindow?
     var weeklyUsage: UsageWindow?
-    /// Per-model breakdown of the weekly window. Populated only for
-    /// Claude (Anthropic's API exposes it; OpenAI's Codex does not).
-    /// Sorted by percent descending; only models with > 0% included.
+    /// Additional weekly limits reported for Claude. This includes dynamic
+    /// model-scoped caps (for example Fable) and product caps such as Daily
+    /// Routines. Rows are sorted by utilization and returned 0% caps remain
+    /// visible because their presence means the account has that allowance.
     var weeklyByModel: [WeeklyModelUsage] = []
 
     // MARK: - Billing cycle (Cursor)

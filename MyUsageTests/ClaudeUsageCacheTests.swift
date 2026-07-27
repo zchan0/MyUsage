@@ -175,7 +175,10 @@ struct ClaudeUsageCacheTests {
 
     private func sampleResponse(utilization: Int = 35) -> ClaudeUsageResponse {
         ClaudeUsageResponse(
-            fiveHour: .init(utilization: utilization, resetsAt: "2026-04-14T20:00:00Z"),
+            fiveHour: .init(
+                utilization: Double(utilization),
+                resetsAt: "2026-04-14T20:00:00Z"
+            ),
             sevenDay: .init(utilization: 18, resetsAt: "2026-04-20T00:00:00Z"),
             sevenDayOpus: nil, sevenDaySonnet: nil, sevenDayHaiku: nil,
             sevenDayOmelette: nil, sevenDayCowork: nil, sevenDayOauthApps: nil,

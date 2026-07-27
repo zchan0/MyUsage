@@ -113,7 +113,14 @@ struct ProviderDeck: View {
                 ForEach(metrics) { metric in
                     DeckLimitInstrument(metric: metric)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 17)
+                        .padding(.vertical, 12)
+                        .overlay(alignment: .bottom) { sectionDivider }
+                }
+
+                if provider.kind == .claude, !snapshot.weeklyByModel.isEmpty {
+                    ClaudeAdditionalLimits(rows: snapshot.weeklyByModel)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
                         .overlay(alignment: .bottom) { sectionDivider }
                 }
             }
@@ -289,17 +296,17 @@ private struct DeckLimitInstrument: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(metric.label)
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 Text("\(Int(metric.percentUsed.rounded()))%")
-                    .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(metric.needsAttention
                         ? AnyShapeStyle(LimitBar.warnAccent)
                         : AnyShapeStyle(.primary))
                 Text("used")
-                    .font(.system(size: 9.5))
+                    .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }
 
@@ -310,36 +317,41 @@ private struct DeckLimitInstrument: View {
                 height: 6,
                 tint: metric.providerKind.usageTint(for: colorScheme)
             )
-            .padding(.top, 10)
+            .padding(.top, 8)
 
             paceFooter
-            .padding(.top, 8)
+            .padding(.top, 6)
         }
     }
 
     private var paceFooter: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                resetText
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            resetText
+                .fixedSize()
+
+            if let summary = compactPaceSummary {
+                Spacer(minLength: 18)
+                paceText(summary)
                     .fixedSize()
-
-                if let balance = CapacityPaceText.balanceLabel(for: metric) {
-                    Spacer(minLength: 28)
-                    paceText(balance)
-                        .fixedSize()
-                }
-            }
-
-            if let outcome = CapacityPaceText.outcomeLabel(for: metric) {
-                paceText(outcome)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .help(CapacityPaceText.detailSummary(for: metric) ?? summary)
             }
         }
     }
 
+    /// Keep the primary limit footer to one line. A predicted exhaustion is
+    /// the actionable outcome and outranks the intermediate deficit number;
+    /// otherwise the quieter reserve/on-pace reading is enough. The complete
+    /// balance + outcome sentence remains available as hover help.
+    private var compactPaceSummary: String? {
+        if case .runsOut = metric.paceOutcome {
+            return CapacityPaceText.outcomeLabel(for: metric)
+        }
+        return CapacityPaceText.balanceLabel(for: metric)
+    }
+
     private var resetText: some View {
         Text(resetCaption)
-            .font(.system(size: 9.5, design: .monospaced))
+            .font(.system(size: 9, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(.tertiary)
     }
@@ -347,7 +359,7 @@ private struct DeckLimitInstrument: View {
     private func paceText(_ summary: String) -> some View {
         Text(summary)
             .font(.system(
-                size: 9.5,
+                size: 9,
                 weight: metric.hasCapacityRisk ? .medium : .regular,
                 design: .monospaced
             ))
@@ -361,6 +373,59 @@ private struct DeckLimitInstrument: View {
     private var resetCaption: String {
         guard let resetsAt = metric.resetsAt else { return "Reset not reported" }
         return "Resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
+    }
+}
+
+/// Claude's model/product-specific weekly caps are secondary to the account-
+/// wide 5-hour and weekly limits, so they use a compact single-line rail.
+/// This keeps Fable and Daily Routines visible without turning each into
+/// another full-height hero instrument.
+private struct ClaudeAdditionalLimits: View {
+    let rows: [WeeklyModelUsage]
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Additional limits")
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(.tertiary)
+
+            ForEach(rows) { row in
+                HStack(spacing: 9) {
+                    Text(row.label)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 8)
+
+                    ProgressTrack(
+                        percent: row.percent,
+                        level: LimitSafety.level(for: row.percent),
+                        height: 4,
+                        tint: ProviderKind.claude.usageTint(for: colorScheme)
+                    )
+                    .frame(width: 104)
+
+                    Text("\(Int(row.percent.rounded()))%")
+                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(row.percent >= 75
+                            ? AnyShapeStyle(LimitBar.warnAccent)
+                            : AnyShapeStyle(.primary.opacity(0.86)))
+                        .frame(width: 34, alignment: .trailing)
+                }
+                .help(helpText(for: row))
+            }
+        }
+    }
+
+    private func helpText(for row: WeeklyModelUsage) -> String {
+        guard let resetsAt = row.resetsAt else {
+            return "\(row.label): \(Int(row.percent.rounded()))% used"
+        }
+        return "\(row.label): \(Int(row.percent.rounded()))% used · resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
     }
 }
 

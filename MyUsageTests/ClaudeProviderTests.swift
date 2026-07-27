@@ -157,7 +157,7 @@ struct ClaudeProviderTests {
         #expect(snapshot.weeklyByModel[2].percent == 0)
     }
 
-    @Test("Per-bucket breakdown also surfaces product caps (Design/Cowork/OAuth apps)")
+    @Test("Per-bucket breakdown also surfaces product caps")
     func mapSnapshotWeeklyBucketsProducts() {
         // Some Enterprise/Team plans expose product-line sub-caps in
         // addition to (or instead of) model-family caps. Surface every
@@ -170,7 +170,7 @@ struct ClaudeProviderTests {
             sevenDaySonnet: .init(utilization: 12, resetsAt: nil),
             sevenDayHaiku: nil,
             sevenDayOmelette: .init(utilization: 22, resetsAt: nil),  // Claude Design
-            sevenDayCowork: .init(utilization: 8, resetsAt: nil),     // Claude Cowork
+            sevenDayCowork: .init(utilization: 8, resetsAt: nil),     // legacy Daily Routines key
             sevenDayOauthApps: .init(utilization: 0, resetsAt: nil),  // exists @ 0% — kept
             extraUsage: nil
         )
@@ -181,7 +181,7 @@ struct ClaudeProviderTests {
         #expect(snapshot.weeklyByModel[0].percent == 22)
         #expect(snapshot.weeklyByModel[1].label == "Sonnet")
         #expect(snapshot.weeklyByModel[1].percent == 12)
-        #expect(snapshot.weeklyByModel[2].label == "Cowork")
+        #expect(snapshot.weeklyByModel[2].label == "Daily Routines")
         #expect(snapshot.weeklyByModel[2].percent == 8)
         #expect(snapshot.weeklyByModel[3].label == "OAuth apps")
         #expect(snapshot.weeklyByModel[3].percent == 0)
@@ -320,6 +320,122 @@ struct ClaudeProviderTests {
 
         let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
         #expect(snapshot.weeklyByModel.map(\.label) == ["Fable"])
+    }
+
+    @Test("Decodes fractional usage with Fable and Daily Routines")
+    func decodeFableAndDailyRoutines() throws {
+        let json = """
+        {
+          "five_hour": {"utilization": 3.5, "resets_at": null},
+          "seven_day": {"utilization": 6.25, "resets_at": null},
+          "seven_day_routines": {
+            "utilization": 21.5,
+            "resets_at": "2026-07-30T10:00:00Z"
+          },
+          "limits": [
+            {
+              "kind": "weekly_scoped",
+              "group": "weekly",
+              "percent": 12.5,
+              "resets_at": "2026-07-30T10:00:00Z",
+              "scope": {"model": {"id": "claude-fable-5", "display_name": "Fable"}}
+            }
+          ]
+        }
+        """
+        let response = try JSONDecoder().decode(
+            ClaudeUsageResponse.self,
+            from: Data(json.utf8)
+        )
+        let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+
+        #expect(snapshot.sessionUsage?.percentUsed == 3.5)
+        #expect(snapshot.weeklyUsage?.percentUsed == 6.25)
+        #expect(snapshot.weeklyByModel.map(\.label) == ["Daily Routines", "Fable"])
+        #expect(snapshot.weeklyByModel.map(\.percent) == [21.5, 12.5])
+        #expect(snapshot.weeklyByModel.allSatisfy { $0.resetsAt != nil })
+    }
+
+    @Test("A reported null Daily Routines alias remains visible at zero")
+    func decodeNullDailyRoutinesAlias() throws {
+        let aliases = [
+            "seven_day_routines",
+            "seven_day_claude_routines",
+            "claude_routines",
+            "routines",
+            "routine",
+            "seven_day_cowork",
+            "cowork",
+        ]
+
+        for alias in aliases {
+            let json = """
+            {
+              "seven_day": {"utilization": 6, "resets_at": null},
+              "\(alias)": null
+            }
+            """
+            let response = try JSONDecoder().decode(
+                ClaudeUsageResponse.self,
+                from: Data(json.utf8)
+            )
+            let snapshot = ClaudeProvider.mapToSnapshot(response, plan: nil)
+
+            #expect(response.routinesLimitReported)
+            #expect(snapshot.weeklyByModel == [
+                WeeklyModelUsage(label: "Daily Routines", percent: 0)
+            ])
+
+            let cachedData = try JSONEncoder().encode(response)
+            let cachedResponse = try JSONDecoder().decode(
+                ClaudeUsageResponse.self,
+                from: cachedData
+            )
+            #expect(cachedResponse.routinesLimitReported)
+            #expect(
+                ClaudeProvider.mapToSnapshot(cachedResponse, plan: nil).weeklyByModel
+                    == [WeeklyModelUsage(label: "Daily Routines", percent: 0)]
+            )
+        }
+    }
+
+    @Test("Scoped limits ignore all-model and duplicate model entries")
+    func scopedLimitsFilterGenericAndDuplicateRows() {
+        let response = ClaudeUsageResponse(
+            fiveHour: nil,
+            sevenDay: .init(utilization: 20, resetsAt: nil),
+            limits: [
+                .init(
+                    kind: "weekly_scoped",
+                    group: "weekly",
+                    percent: 20,
+                    severity: nil,
+                    resetsAt: nil,
+                    scope: .init(model: .init(id: "all-models", displayName: "All models")),
+                    isActive: true
+                ),
+                .init(
+                    kind: "weekly_scoped",
+                    group: "weekly",
+                    percent: 15,
+                    severity: nil,
+                    resetsAt: nil,
+                    scope: .init(model: .init(id: "claude-fable-5", displayName: "Fable")),
+                    isActive: true
+                ),
+                .init(
+                    kind: "weekly_scoped",
+                    group: "weekly",
+                    percent: 10,
+                    severity: nil,
+                    resetsAt: nil,
+                    scope: .init(model: .init(id: "claude-fable-5", displayName: "Fable duplicate")),
+                    isActive: true
+                ),
+            ]
+        )
+
+        #expect(ClaudeProvider.weeklyModelRows(from: response).map(\.label) == ["Fable"])
     }
 
     @Test("Map usage response with extra usage")

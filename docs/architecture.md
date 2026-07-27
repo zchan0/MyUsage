@@ -78,7 +78,13 @@ MyUsage/
 - `five_hour.utilization` — % used in 5h rolling window
 - `five_hour.resets_at` — ISO 8601
 - `seven_day.utilization` — % used in 7-day window
-- `seven_day_opus` — separate Opus weekly limit (optional)
+- `limits[]` entries with `kind = weekly_scoped` — dynamic model-specific
+  weekly limits such as Fable (optional)
+- `seven_day_opus` / `seven_day_sonnet` — legacy model-specific weekly
+  limits (optional)
+- `seven_day_routines` and legacy aliases including `seven_day_cowork` —
+  Daily Routines weekly limit (optional; a reported `null` remains a visible
+  0% allowance)
 - `extra_usage` — monthly overage credits in cents (optional)
 
 **Billing model:** Rolling windows (5h + 7d simultaneous), hitting either throttles.

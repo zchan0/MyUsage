@@ -40,13 +40,14 @@ struct ClaudeCredentials: Codable, Sendable {
 /// only plans that actually meter usage against that bucket return a non-
 /// null value. Max 5x users typically see all sub-caps as null because
 /// their usage rolls up into the unified `sevenDay` figure; some Enterprise
-/// / Team tiers have separate Opus / Design / Cowork caps.
+/// / Team tiers have separate Opus, Design, or Daily Routines caps.
 ///
 /// The bucket vocabulary has been evolving:
 /// - `sevenDayOpus` / `sevenDaySonnet` — model-family caps (Haiku appears
 ///   to have been removed from the response entirely as of mid-2026).
 /// - `sevenDayOmelette` — Anthropic's internal codename for **Claude Design**.
-/// - `sevenDayCowork` — **Claude Cowork** (the collaborative coding product).
+/// - `sevenDayRoutines` and several older aliases, including
+///   `sevenDayCowork`, map to the **Daily Routines** product cap.
 /// - `sevenDayOauthApps` — usage attributed to third-party OAuth apps.
 ///
 /// Other codename fields appear in the response (`tangelo`, `iguana_necktie`,
@@ -73,6 +74,13 @@ struct ClaudeUsageResponse: Codable, Sendable {
     let sevenDayCowork: ClaudeWindow?
     let sevenDayOauthApps: ClaudeWindow?
 
+    /// Normalized Daily Routines window plus whether any known key was
+    /// present. Presence is tracked separately because Anthropic sometimes
+    /// reports a supported allowance as `null`; that still means the row
+    /// exists and should be shown at 0%, matching Claude's own consumers.
+    let sevenDayRoutines: ClaudeWindow?
+    let routinesLimitReported: Bool
+
     let extraUsage: ClaudeExtraUsage?
 
     /// Structured per-cap array (current API shape). Supersedes the flat
@@ -89,6 +97,12 @@ struct ClaudeUsageResponse: Codable, Sendable {
         case sevenDayOmelette = "seven_day_omelette"
         case sevenDayCowork = "seven_day_cowork"
         case sevenDayOauthApps = "seven_day_oauth_apps"
+        case sevenDayRoutines = "seven_day_routines"
+        case sevenDayClaudeRoutines = "seven_day_claude_routines"
+        case claudeRoutines = "claude_routines"
+        case routines
+        case routine
+        case cowork
         case extraUsage = "extra_usage"
         case limits
     }
@@ -106,6 +120,8 @@ struct ClaudeUsageResponse: Codable, Sendable {
         sevenDayOmelette: ClaudeWindow? = nil,
         sevenDayCowork: ClaudeWindow? = nil,
         sevenDayOauthApps: ClaudeWindow? = nil,
+        sevenDayRoutines: ClaudeWindow? = nil,
+        routinesLimitReported: Bool? = nil,
         extraUsage: ClaudeExtraUsage? = nil,
         limits: [ClaudeLimit]? = nil
     ) {
@@ -117,12 +133,65 @@ struct ClaudeUsageResponse: Codable, Sendable {
         self.sevenDayOmelette = sevenDayOmelette
         self.sevenDayCowork = sevenDayCowork
         self.sevenDayOauthApps = sevenDayOauthApps
+        self.sevenDayRoutines = sevenDayRoutines
+        self.routinesLimitReported = routinesLimitReported
+            ?? (sevenDayRoutines != nil || sevenDayCowork != nil)
         self.extraUsage = extraUsage
         self.limits = limits
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        fiveHour = try container.decodeIfPresent(ClaudeWindow.self, forKey: .fiveHour)
+        sevenDay = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDay)
+        sevenDayOpus = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayOpus)
+        sevenDaySonnet = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDaySonnet)
+        sevenDayHaiku = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayHaiku)
+        sevenDayOmelette = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayOmelette)
+        sevenDayCowork = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayCowork)
+        sevenDayOauthApps = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayOauthApps)
+        extraUsage = try container.decodeIfPresent(ClaudeExtraUsage.self, forKey: .extraUsage)
+        limits = try container.decodeIfPresent([ClaudeLimit].self, forKey: .limits)
+
+        let routineKeys: [CodingKeys] = [
+            .sevenDayRoutines,
+            .sevenDayClaudeRoutines,
+            .claudeRoutines,
+            .routines,
+            .routine,
+            .sevenDayCowork,
+            .cowork,
+        ]
+        routinesLimitReported = routineKeys.contains { container.contains($0) }
+
+        var decodedRoutine: ClaudeWindow?
+        for key in routineKeys where decodedRoutine == nil {
+            decodedRoutine = try container.decodeIfPresent(ClaudeWindow.self, forKey: key)
+        }
+        sevenDayRoutines = decodedRoutine
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(fiveHour, forKey: .fiveHour)
+        try container.encodeIfPresent(sevenDay, forKey: .sevenDay)
+        try container.encodeIfPresent(sevenDayOpus, forKey: .sevenDayOpus)
+        try container.encodeIfPresent(sevenDaySonnet, forKey: .sevenDaySonnet)
+        try container.encodeIfPresent(sevenDayHaiku, forKey: .sevenDayHaiku)
+        try container.encodeIfPresent(sevenDayOmelette, forKey: .sevenDayOmelette)
+        try container.encodeIfPresent(sevenDayOauthApps, forKey: .sevenDayOauthApps)
+        if let routinesWindow {
+            try container.encode(routinesWindow, forKey: .sevenDayRoutines)
+        } else if routinesLimitReported {
+            try container.encodeNil(forKey: .sevenDayRoutines)
+        }
+        try container.encodeIfPresent(extraUsage, forKey: .extraUsage)
+        try container.encodeIfPresent(limits, forKey: .limits)
+    }
+
     struct ClaudeWindow: Codable, Sendable {
-        let utilization: Int       // % used (0-100)
+        let utilization: Double   // % used (0-100; API may be fractional)
         let resetsAt: String?     // ISO 8601
 
         enum CodingKeys: String, CodingKey {
@@ -133,8 +202,8 @@ struct ClaudeUsageResponse: Codable, Sendable {
 
     struct ClaudeExtraUsage: Codable, Sendable {
         let isEnabled: Bool?
-        let usedCredits: Int?     // cents
-        let monthlyLimit: Int?    // cents (0 = unlimited)
+        let usedCredits: Double?     // cents
+        let monthlyLimit: Double?    // cents (0 = unlimited)
         let currency: String?
 
         enum CodingKeys: String, CodingKey {
@@ -186,6 +255,12 @@ struct ClaudeUsageResponse: Codable, Sendable {
                 }
             }
         }
+    }
+
+    /// The server has used several names for the same Daily Routines cap.
+    /// Prefer the current key, then the documented historical aliases.
+    var routinesWindow: ClaudeWindow? {
+        sevenDayRoutines ?? sevenDayCowork
     }
 }
 
@@ -827,7 +902,7 @@ final class ClaudeProvider: UsageProvider {
 
         if let fh = response.fiveHour {
             snapshot.sessionUsage = UsageWindow(
-                percentUsed: Double(fh.utilization),
+                percentUsed: fh.utilization,
                 resetsAt: fh.resetsAt.flatMap { parseISO8601($0) },
                 windowDuration: 5 * 3600
             )
@@ -835,7 +910,7 @@ final class ClaudeProvider: UsageProvider {
 
         if let sd = response.sevenDay {
             snapshot.weeklyUsage = UsageWindow(
-                percentUsed: Double(sd.utilization),
+                percentUsed: sd.utilization,
                 resetsAt: sd.resetsAt.flatMap { parseISO8601($0) },
                 windowDuration: 7 * 24 * 3600
             )
@@ -844,8 +919,8 @@ final class ClaudeProvider: UsageProvider {
         snapshot.weeklyByModel = weeklyModelRows(from: response)
 
         if let extra = response.extraUsage, extra.isEnabled == true {
-            let spent = Double(extra.usedCredits ?? 0) / 100.0
-            let limit = extra.monthlyLimit.map { $0 > 0 ? Double($0) / 100.0 : nil } ?? nil
+            let spent = (extra.usedCredits ?? 0) / 100.0
+            let limit = extra.monthlyLimit.map { $0 > 0 ? $0 / 100.0 : nil } ?? nil
             snapshot.onDemandSpend = CreditInfo(
                 amount: spent,
                 limit: limit,
@@ -856,8 +931,8 @@ final class ClaudeProvider: UsageProvider {
         return snapshot
     }
 
-    /// Per-model weekly caps for the popover's breakdown rows, sorted by
-    /// utilization desc so the heaviest cap reads first.
+    /// Additional Claude caps for the popover's compact breakdown, sorted by
+    /// utilization so the most constrained cap reads first.
     ///
     /// Source precedence:
     ///  1. The structured `limits` array (current API). Every
@@ -870,38 +945,81 @@ final class ClaudeProvider: UsageProvider {
     ///  2. Legacy flat `seven_day_<codename>` fields — used only when the
     ///     response predates the `limits` array (`limits == nil`).
     ///
+    /// Daily Routines is returned separately under one of several flat keys,
+    /// so it is appended regardless of which scoped-limit representation is
+    /// active.
+    ///
     /// 0% rows are kept on purpose: a returned cap at 0% means "this cap
     /// exists on your plan but is unused this week" — information the user
     /// wants (and exactly the current Fable state). Only absent caps drop.
     nonisolated static func weeklyModelRows(
         from response: ClaudeUsageResponse
     ) -> [WeeklyModelUsage] {
+        var rows: [WeeklyModelUsage]
+
         if let limits = response.limits {
-            return limits.compactMap { limit -> WeeklyModelUsage? in
+            var seen: Set<String> = []
+            rows = limits.compactMap { limit -> WeeklyModelUsage? in
                 guard limit.kind == "weekly_scoped",
-                      let name = limit.scope?.model?.displayName,
-                      !name.isEmpty else { return nil }
-                return WeeklyModelUsage(label: name, percent: limit.percent ?? 0)
+                      limit.group == "weekly",
+                      let rawName = limit.scope?.model?.displayName,
+                      let name = nonEmpty(rawName),
+                      !isAllModelsScope(
+                        id: limit.scope?.model?.id,
+                        displayName: name
+                      ),
+                      let percent = limit.percent,
+                      percent.isFinite
+                else { return nil }
+
+                let identity = nonEmpty(limit.scope?.model?.id) ?? name
+                guard seen.insert(identity.lowercased()).inserted else {
+                    return nil
+                }
+                return WeeklyModelUsage(
+                    id: identity,
+                    label: name,
+                    percent: percent,
+                    resetsAt: limit.resetsAt.flatMap { parseISO8601($0) }
+                )
             }
-            .sorted { $0.percent > $1.percent }
+        } else {
+            // Legacy fallback — flat codename fields. Model families plus
+            // product lines, each plan-dependent and optional. Cowork is
+            // normalized separately as Daily Routines below.
+            rows = [
+                ("Opus",       response.sevenDayOpus),
+                ("Sonnet",     response.sevenDaySonnet),
+                ("Haiku",      response.sevenDayHaiku),
+                ("Design",     response.sevenDayOmelette),
+                ("OAuth apps", response.sevenDayOauthApps)
+            ].compactMap { (label, window) -> WeeklyModelUsage? in
+                guard let window else { return nil }
+                return WeeklyModelUsage(
+                    label: label,
+                    percent: window.utilization,
+                    resetsAt: window.resetsAt.flatMap { parseISO8601($0) }
+                )
+            }
         }
 
-        // Legacy fallback — flat codename fields. Model families
-        // (Opus/Sonnet/Haiku) plus product lines (Design/Cowork/OAuth apps),
-        // each plan-dependent and optional. Missing/nil window means the cap
-        // doesn't exist on this plan and is dropped.
-        return [
-            ("Opus",       response.sevenDayOpus),
-            ("Sonnet",     response.sevenDaySonnet),
-            ("Haiku",      response.sevenDayHaiku),
-            ("Design",     response.sevenDayOmelette),
-            ("Cowork",     response.sevenDayCowork),
-            ("OAuth apps", response.sevenDayOauthApps)
-        ].compactMap { (label, window) -> WeeklyModelUsage? in
-            guard let window else { return nil }
-            return WeeklyModelUsage(label: label, percent: Double(window.utilization))
+        if response.routinesLimitReported {
+            rows.removeAll { $0.label.caseInsensitiveCompare("Daily Routines") == .orderedSame }
         }
-        .sorted { $0.percent > $1.percent }
+        if let routines = response.routinesWindow {
+            rows.append(WeeklyModelUsage(
+                label: "Daily Routines",
+                percent: routines.utilization,
+                resetsAt: routines.resetsAt.flatMap { parseISO8601($0) }
+            ))
+        } else if response.routinesLimitReported {
+            rows.append(WeeklyModelUsage(label: "Daily Routines", percent: 0))
+        }
+
+        return rows.sorted {
+            if $0.percent != $1.percent { return $0.percent > $1.percent }
+            return $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+        }
     }
 }
 
@@ -911,6 +1029,24 @@ private func parseISO8601(_ string: String) -> Date? {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return formatter.date(from: string) ?? ISO8601DateFormatter().date(from: string)
+}
+
+private func nonEmpty(_ value: String?) -> String? {
+    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !trimmed.isEmpty else { return nil }
+    return trimmed
+}
+
+private func isAllModelsScope(id: String?, displayName: String) -> Bool {
+    let normalize: (String) -> String = {
+        $0.lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: " ", with: "-")
+    }
+    if normalize(displayName) == "all-models" { return true }
+    guard let id = nonEmpty(id) else { return false }
+    let normalizedID = normalize(id)
+    return normalizedID == "all-models" || normalizedID.hasSuffix("-all-models")
 }
 
 enum ProviderError: LocalizedError {

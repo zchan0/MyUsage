@@ -20,6 +20,12 @@ account-first detail view, while keeping cost and token scopes truthful.
   repeating the selected provider name.
 - Limit rails are continuous capsules. Their fill uses a restrained provider
   tint; forecast text still communicates risk.
+- Claude/Codex 5-hour and Weekly instruments use compact one-line metadata
+  footers; predicted exhaustion replaces routine pace text when it is more
+  actionable.
+- Claude Detail shows model/product-specific weekly caps such as Fable and
+  Daily Routines in a lightweight `Additional limits` rail rather than
+  repeating the full primary-instrument treatment.
 - Claude/Codex Detail shows a trailing-30-day model-cost chart using one muted
   provider hue with opacity-based model layers.
 - Claude/Codex Detail shows trailing-30-day Total/Input/Output/Cache token
@@ -35,13 +41,17 @@ account-first detail view, while keeping cost and token scopes truthful.
 
 ## Manual Verification Checklist
 
-- [x] Four-provider merged Overview is 348pt wide, pressure ordered, and has no
+- [x] Four-provider merged Overview is 330pt wide, pressure ordered, and has no
   clipped tab or provider text.
 - [x] Overview cost appears only in its provider row with the correct scope.
 - [x] One-provider Claude Detail opens directly with account identity and no
   redundant provider/title header.
 - [x] Claude Weekly sorts ahead of 5-hour when its projected risk is higher;
   both rails use Claude's restrained brand tint.
+- [x] One-provider Claude Detail keeps 5-hour and Weekly compact at 330pt,
+  uses 14pt percentages, and keeps reset/pace metadata on one line.
+- [x] Fable and Daily Routines render in `Additional limits` in both light and
+  dark appearances; known null Daily Routines keys render truthfully at 0%.
 - [x] Claude/Codex charts show three date anchors, muted provider colors, and
   readable legends in light and dark appearances.
 - [x] Token summary shows Total/Input/Output/Cache and labels the range as
