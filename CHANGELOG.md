@@ -6,7 +6,16 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## Unreleased
+## v0.16.3 — 2026-07-31
+
+### Added
+- **Weekly usage by model.** Pooled Claude plans (Max included) report only
+  `session` and `weekly_all` — no per-model caps — so Fable never had a bar to
+  appear in. The Claude detail page now splits the Weekly limit into estimated
+  per-model shares from the local cost ledger: the rows sum to the Weekly
+  percentage and sit directly under it, sharing its reset and pace rather than
+  inventing their own. Marked `estimated`, and suppressed entirely whenever the
+  API does report real model-scoped caps.
 
 ### Fixed
 - **No more daily Keychain password prompts.** The Claude CLI writes its
@@ -19,15 +28,6 @@ the 中文 half lives here only.
   is involved; Developer ID signing would not have fixed this, because the
   reset clears every partition, not just ad-hoc ones. Full analysis in
   `docs/claude-keychain-prompt-bug.md`.
-
-### Added
-- **Weekly usage by model.** Pooled Claude plans (Max included) report only
-  `session` and `weekly_all` — no per-model caps — so Fable never had a bar to
-  appear in. The Claude detail page now splits the Weekly limit into estimated
-  per-model shares from the local cost ledger: the rows sum to the Weekly
-  percentage and sit directly under it, sharing its reset and pace rather than
-  inventing their own. Marked `estimated`, and suppressed entirely whenever the
-  API does report real model-scoped caps.
 
 ### 中文
 
