@@ -11,10 +11,17 @@ import Security
 ///      query. Succeeds silently once the user has clicked "Always Allow";
 ///      fails with `errSecInteractionNotAllowed` instead of showing the
 ///      password dialog otherwise.
-///   3. MyUsage's own Keychain cache — a copy of the last credentials we
+///   3. The same item read through `/usr/bin/security`. This is the step that
+///      survives CLI token rotation: the CLI writes with
+///      `security add-generic-password -U`, which resets the item's ACL
+///      partition list to `apple-tool:` and thereby revokes the grant behind
+///      step 2 roughly every 8 hours. The security tool is itself an
+///      `apple-tool:`, so it still reads silently. See `SecurityToolKeychain`
+///      for the full mechanism.
+///   4. MyUsage's own Keychain cache — a copy of the last credentials we
 ///      managed to read. We created the item, so reading it never prompts.
-///      Every successful read of sources 1–2 refreshes this copy.
-///   4. Last resort, only when 1–3 produced nothing usable: an
+///      Every successful read of sources 1–3 refreshes this copy.
+///   5. Last resort, only when 1–4 produced nothing usable: an
 ///      **interactive** read of the CLI item — the one dialog where the
 ///      user should click "Always Allow". MyUsage invokes this from an
 ///      explicit manual Refresh; background refreshes remain silent. Gated
@@ -31,12 +38,16 @@ final class ClaudeCredentialStore {
     struct IO: Sendable {
         var readFile: @Sendable (String) -> Data?
         var readKeychain: @Sendable (_ service: String, _ allowUI: Bool) -> (data: Data?, status: OSStatus)
+        var readViaSecurityTool: @Sendable (_ service: String) -> Data?
         var writeKeychain: @Sendable (_ data: Data, _ service: String, _ account: String?) -> OSStatus
 
         static let live = IO(
             readFile: { FileManager.default.contents(atPath: $0) },
             readKeychain: { service, allowUI in
                 KeychainHelper.readGenericPasswordResult(service: service, allowUI: allowUI)
+            },
+            readViaSecurityTool: { service in
+                SecurityToolKeychain.readGenericPassword(service: service)
             },
             writeKeychain: { data, service, account in
                 KeychainHelper.upsertGenericPassword(data, service: service, account: account)
@@ -47,6 +58,7 @@ final class ClaudeCredentialStore {
     enum Origin: String {
         case file
         case cliKeychain
+        case cliSecurityTool
         case ownCache
     }
 
@@ -151,7 +163,7 @@ final class ClaudeCredentialStore {
             return LoadResult(credentials: creds, origin: .file)
         }
 
-        // 2) CLI Keychain item, silently.
+        // 2) CLI Keychain item, silently and in-process.
         let probe = io.readKeychain(cliKeychainService, false)
         lastCLIStatus = probe.status
         if let data = probe.data, let creds = Self.decode(data) {
@@ -159,12 +171,26 @@ final class ClaudeCredentialStore {
             return LoadResult(credentials: creds, origin: .cliKeychain)
         }
 
-        // 3) Our own cached copy. Served even when expired — the provider
+        // 3) Same item through `/usr/bin/security`. Reached on every CLI token
+        //    rotation, which resets the ACL partition list and makes step 2
+        //    fail; the security tool's `apple-tool:` identity is the one the
+        //    CLI's own write keeps authorized. A success here means the item
+        //    is readable after all, so the ACL-blocked status from step 2 must
+        //    not leak to callers — it would otherwise drive the interactive
+        //    bootstrap and the "needs Keychain access" copy.
+        if let data = io.readViaSecurityTool(cliKeychainService),
+           let creds = Self.decode(data) {
+            lastCLIStatus = errSecSuccess
+            cacheIfChanged(data)
+            return LoadResult(credentials: creds, origin: .cliSecurityTool)
+        }
+
+        // 4) Our own cached copy. Served even when expired — the provider
         //    turns an expired token into the "run `claude`" hint, which
         //    beats prompting.
         let cached = io.readKeychain(Self.cacheService, false).data.flatMap(Self.decode)
 
-        // 4) Interactive bootstrap: only when the silent probe said the CLI
+        // 5) Interactive bootstrap: only when the silent probe said the CLI
         //    item exists but needs approval, AND we hold no usable copy
         //    (none at all, or only an expired one that the silent path can't
         //    replace precisely because the ACL blocks us).

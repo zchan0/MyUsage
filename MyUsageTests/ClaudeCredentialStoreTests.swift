@@ -38,7 +38,11 @@ final class ClaudeCredentialStoreTests: XCTestCase {
         var cliInteractive: (Data?, OSStatus) = (nil, errSecUserCanceled)
         var cache: Data?
 
+        /// Payload returned by the `/usr/bin/security` fallback, nil = miss.
+        var securityToolData: Data?
+
         var interactiveReadCount = 0
+        var securityToolReadCount = 0
         var cacheWriteCount = 0
 
         let defaults: UserDefaults
@@ -72,6 +76,12 @@ final class ClaudeCredentialStoreTests: XCTestCase {
                             }
                             if let data = self.cliData { return (data, errSecSuccess) }
                             return (nil, self.cliNoUIStatus)
+                        }
+                    },
+                    readViaSecurityTool: { [weak self] _ in
+                        MainActor.assumeIsolated {
+                            self?.securityToolReadCount += 1
+                            return self?.securityToolData
                         }
                     },
                     writeKeychain: { [weak self] data, _, _ in
@@ -114,6 +124,79 @@ final class ClaudeCredentialStoreTests: XCTestCase {
         XCTAssertEqual(result?.origin, .cliKeychain)
         XCTAssertEqual(h.cache, h.cliData)
         XCTAssertEqual(h.interactiveReadCount, 0)
+    }
+
+    // MARK: - `/usr/bin/security` fallback
+    //
+    // The CLI rewrites its Keychain item with `security add-generic-password
+    // -U` on every token rotation, which resets the item's ACL partition list
+    // to `apple-tool:` and makes the in-process no-UI read fail again. These
+    // cover the step that keeps that from turning into a password prompt.
+
+    func testSecurityToolServesWhenInProcessReadIsACLBlocked() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliNoUIStatus = errSecInteractionNotAllowed
+        h.securityToolData = Self.credsJSON(accessToken: "at-rotated")
+
+        let result = h.makeStore().load(interactive: true)
+
+        XCTAssertEqual(result?.origin, .cliSecurityTool)
+        XCTAssertEqual(result?.credentials.claudeAiOauth?.accessToken, "at-rotated")
+        XCTAssertEqual(h.cache, h.securityToolData, "must refresh our own cache copy")
+        XCTAssertEqual(h.interactiveReadCount, 0, "the whole point is not prompting")
+    }
+
+    /// A successful security-tool read means the item *is* readable, so the
+    /// ACL-blocked status must not survive to drive the "needs Keychain
+    /// access" messaging or the interactive bootstrap.
+    func testSecurityToolSuccessClearsBlockedStatus() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliNoUIStatus = errSecInteractionNotAllowed
+        h.securityToolData = Self.credsJSON()
+
+        let store = h.makeStore()
+        _ = store.load(interactive: true)
+
+        XCTAssertEqual(store.lastCLIStatus, errSecSuccess)
+    }
+
+    /// An expired cached copy used to be the trigger for the daily prompt.
+    /// With the security tool in the chain it is bypassed entirely.
+    func testSecurityToolPreemptsInteractiveBootstrapOverExpiredCache() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliNoUIStatus = errSecInteractionNotAllowed
+        h.cache = Self.expiredCredsJSON()
+        h.securityToolData = Self.credsJSON(accessToken: "at-fresh")
+
+        let result = h.makeStore().load(interactive: true)
+
+        XCTAssertEqual(result?.credentials.claudeAiOauth?.accessToken, "at-fresh")
+        XCTAssertEqual(h.interactiveReadCount, 0)
+    }
+
+    func testSecurityToolNotConsultedWhenInProcessReadSucceeds() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliData = Self.credsJSON()
+
+        let result = h.makeStore().load(interactive: false)
+
+        XCTAssertEqual(result?.origin, .cliKeychain)
+        XCTAssertEqual(h.securityToolReadCount, 0, "no subprocess when the cheap path works")
+    }
+
+    /// Falling through the security tool must not change the pre-existing
+    /// behaviour of the steps after it.
+    func testSecurityToolMissFallsThroughToInteractiveBootstrap() {
+        let h = Harness(defaultsSuite: #function)
+        h.cliNoUIStatus = errSecInteractionNotAllowed
+        h.securityToolData = nil
+        h.cliInteractive = (Self.credsJSON(accessToken: "at-approved"), errSecSuccess)
+
+        let result = h.makeStore().load(interactive: true)
+
+        XCTAssertEqual(h.securityToolReadCount, 1)
+        XCTAssertEqual(result?.origin, .cliKeychain)
+        XCTAssertEqual(result?.credentials.claudeAiOauth?.accessToken, "at-approved")
     }
 
     func testOwnCacheServesWhenCLIBlocked() {
