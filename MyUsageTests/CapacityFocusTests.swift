@@ -27,6 +27,110 @@ final class CapacityFocusTests: XCTestCase {
         }
     }
 
+    // MARK: - Model-scoped weekly caps
+    //
+    // This developer's own account pools its quota and reports none of these,
+    // so the plans that *do* return them (per-model caps for Fable, Opus, …)
+    // are only ever exercised here. They must behave like real limits, not
+    // like the estimated breakdown shown to pooled plans.
+
+    private func snapshotWithScopedCaps() -> UsageSnapshot {
+        var snapshot = UsageSnapshot()
+        snapshot.sessionUsage = UsageWindow(
+            percentUsed: 20,
+            resetsAt: now.addingTimeInterval(3_600),
+            windowDuration: 5 * 3_600
+        )
+        snapshot.weeklyUsage = UsageWindow(
+            percentUsed: 40,
+            resetsAt: now.addingTimeInterval(2 * 86_400),
+            windowDuration: 7 * 86_400
+        )
+        snapshot.weeklyByModel = [
+            WeeklyModelUsage(
+                label: "Fable",
+                percent: 98,
+                resetsAt: now.addingTimeInterval(2 * 86_400)
+            ),
+            WeeklyModelUsage(
+                label: "Daily Routines",
+                percent: 5,
+                resetsAt: now.addingTimeInterval(2 * 86_400),
+                scope: .product
+            )
+        ]
+        return snapshot
+    }
+
+    func testScopedModelCapsBecomeFirstClassMetrics() {
+        let labels = CapacityFocus.metrics(
+            providerKind: .claude,
+            snapshot: snapshotWithScopedCaps(),
+            now: now
+        ).map(\.label)
+
+        XCTAssertEqual(labels, ["5-hour", "Weekly", "Fable only"])
+    }
+
+    /// Product caps are not capacity in the "how much is left" sense, so they
+    /// must not compete for the Overview focus.
+    func testProductCapsAreNotMetrics() {
+        let labels = CapacityFocus.metrics(
+            providerKind: .claude,
+            snapshot: snapshotWithScopedCaps(),
+            now: now
+        ).map(\.label)
+
+        XCTAssertFalse(labels.contains("Daily Routines"))
+    }
+
+    /// The whole point of promoting them: a nearly-exhausted per-model cap is
+    /// the binding constraint even while the pooled weekly bar looks relaxed.
+    func testNearlyExhaustedModelCapWinsOverviewFocus() {
+        let metrics = CapacityFocus.metrics(
+            providerKind: .claude,
+            snapshot: snapshotWithScopedCaps(),
+            now: now
+        )
+
+        XCTAssertEqual(CapacityFocus.select(from: metrics, now: now)?.label, "Fable only")
+    }
+
+    func testScopedCapGetsPaceFromItsOwnSevenDayWindow() {
+        let metric = CapacityFocus.metrics(
+            providerKind: .claude,
+            snapshot: snapshotWithScopedCaps(),
+            now: now
+        ).first { $0.label == "Fable only" }
+
+        // 5 of 7 days elapsed → the on-pace notch sits at ~71%, and 98% used
+        // against it is a deficit, not a comfortable position.
+        XCTAssertEqual(try XCTUnwrap(metric?.pacePercent), 5.0 / 7.0 * 100, accuracy: 0.001)
+        XCTAssertEqual(metric?.resetsAt, now.addingTimeInterval(2 * 86_400))
+    }
+
+    /// Pooled plans report no scoped caps at all — the ordinary case must be
+    /// untouched by any of the above.
+    func testPooledPlansGainNoExtraMetrics() {
+        var snapshot = UsageSnapshot()
+        snapshot.weeklyUsage = UsageWindow(
+            percentUsed: 40,
+            resetsAt: now.addingTimeInterval(2 * 86_400),
+            windowDuration: 7 * 86_400
+        )
+        snapshot.weeklyByModel = [
+            WeeklyModelUsage(label: "Daily Routines", percent: 0, scope: .product)
+        ]
+
+        let labels = CapacityFocus.metrics(
+            providerKind: .claude,
+            snapshot: snapshot,
+            now: now
+        ).map(\.label)
+
+        XCTAssertEqual(labels, ["Weekly"])
+    }
+
     func testAttentionWindowOutranksSoonerHealthyReset() {
         let healthy = metric(.claude, "5-hour", 30, reset: 300)
         let pressured = metric(.codex, "Weekly", 81, reset: 10_000)

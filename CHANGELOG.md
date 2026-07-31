@@ -6,6 +6,34 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## Unreleased
+
+### Changed
+- **Per-model weekly caps are now first-class limits.** Plans that report
+  model-scoped weekly caps (`weekly_scoped` — Fable, Opus, …) rendered them on
+  a small secondary rail, visually unlike the 5-hour and Weekly instruments
+  they belong beside. They now use the same instrument: same bar, same
+  percentage, their own reset and their own 7-day pace. Because they are real
+  quotas, they also compete for the Overview focus — a Fable cap at 98% is the
+  binding constraint even while a pooled weekly bar reads 40%, and that used to
+  be invisible there. Product caps (Daily Routines, OAuth apps) stay on the
+  compact rail; they are not capacity in the same sense.
+- **Estimated weekly split is limited to the leading model.** Enumerating every
+  family repeated the cost chart's legend and padded the page with derived
+  numbers. Only the model actually driving the week gets a row, chosen by
+  share rather than by name.
+
+### 中文
+
+- **分模型周限额升为一等限额**：API 返回分模型周限额（`weekly_scoped`，如 Fable、
+  Opus）的套餐，此前用的是次级小条，和它旁边的 5-hour / Weekly 完全不是一套视觉。
+  现在改用同一个 instrument：同样的进度条、同样的百分比，reset 和 pace 都用它自己的
+  7 天窗口算。既然是真配额，它也会参与 Overview 的焦点竞争——Fable 打到 98%
+  而汇总 Weekly 才 40% 时，那才是真正卡住你的那条，以前在 Overview 完全看不见。
+  Daily Routines、OAuth apps 这类 product 限额留在紧凑条上，它们不是同一种「容量」。
+- **本地估算的周内分模型只保留占比最高的那个**：全部列出来既重复了下方成本图的图例，
+  又用一堆推算数字撑长页面。现在只显示真正吃掉这周额度的那个模型，按占比选，不绑模型名。
+
 ## v0.16.3 — 2026-07-31
 
 ### Added

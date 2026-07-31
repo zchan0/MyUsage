@@ -117,26 +117,30 @@ struct ProviderDeck: View {
                 }
 
                 if provider.kind == .claude {
-                    if !snapshot.weeklyByModel.isEmpty {
+                    // Model-scoped caps are already rendered above as full
+                    // instruments by the metrics loop. What is left here is the
+                    // product caps — Daily Routines, OAuth apps — which are not
+                    // capacity in the same sense and stay on the compact rail.
+                    let productLimits = snapshot.weeklyByModel.filter { $0.scope == .product }
+                    if !productLimits.isEmpty {
                         ClaudeAdditionalLimits(
                             title: "Additional limits",
-                            rows: snapshot.weeklyByModel
+                            rows: productLimits
                         )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
                         .overlay(alignment: .bottom) { sectionDivider }
                     }
 
-                    let estimated = estimatedWeeklySplit(snapshot)
-                    if !estimated.isEmpty {
-                        ClaudeAdditionalLimits(
-                            title: "Weekly by model",
-                            caption: "estimated",
-                            rows: estimated
-                        )
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 11)
-                        .overlay(alignment: .bottom) { sectionDivider }
+                    // Per-model rows are the Weekly bar decomposed, so they use
+                    // the same instrument as 5-hour and Weekly — same bar, same
+                    // percentage treatment, same reset line, same pace notch —
+                    // rather than a second, smaller visual language.
+                    ForEach(estimatedWeeklyMetrics(snapshot)) { metric in
+                        DeckLimitInstrument(metric: metric, caption: "estimated")
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .overlay(alignment: .bottom) { sectionDivider }
                     }
                 }
             }
@@ -149,15 +153,38 @@ struct ProviderDeck: View {
     /// as Daily Routines — so a non-empty `weeklyByModel` is not evidence that
     /// the model question has been answered. A reported model cap always wins;
     /// nothing is estimated on top of it.
-    private func estimatedWeeklySplit(_ snapshot: UsageSnapshot) -> [WeeklyModelUsage] {
-        guard !snapshot.weeklyByModel.contains(where: { $0.scope == .model }) else {
-            return []
-        }
-        return WeeklyModelSplit.rows(
+    private func estimatedWeeklyMetrics(_ snapshot: UsageSnapshot) -> [CapacityFocus.Metric] {
+        guard !snapshot.weeklyByModel.contains(where: { $0.scope == .model }),
+              let weekly = snapshot.weeklyUsage
+        else { return [] }
+
+        // Only the model actually driving the week earns a full instrument.
+        // Enumerating every family turns the page into a list and repeats what
+        // the cost chart's legend below already breaks down; the question this
+        // answers is "what is eating my weekly limit", which has one answer.
+        // Deliberately not keyed to a model name — whichever family leads gets
+        // the row, so a future model needs no code change.
+        let rows = WeeklyModelSplit.rows(
             series: manager.ledger.dailyCosts[.claude] ?? [],
-            weeklyPercentUsed: snapshot.weeklyUsage?.percentUsed ?? 0,
-            weeklyResetsAt: snapshot.weeklyUsage?.resetsAt
-        )
+            weeklyPercentUsed: weekly.percentUsed,
+            weeklyResetsAt: weekly.resetsAt
+        ).prefix(1)
+
+        // Reset and pace are taken verbatim from the weekly window, because
+        // that *is* the window these shares live in. Projection is left off:
+        // extrapolating an estimated slice to a predicted exhaustion would
+        // dress a guess up as a forecast.
+        return rows.map { row in
+            CapacityFocus.Metric(
+                providerKind: .claude,
+                label: row.label,
+                percentUsed: row.percent,
+                resetsAt: weekly.resetsAt,
+                pacePercent: weekly.onPacePercent(),
+                projectedFinalPercent: nil,
+                projectedExhaustionAt: nil
+            )
+        }
     }
 
     private func resetCredits(_ snapshot: UsageSnapshot) -> some View {
@@ -322,15 +349,23 @@ private struct AccountAvatar: View {
 
 private struct DeckLimitInstrument: View {
     let metric: CapacityFocus.Metric
+    /// Marks a row whose percentage is derived rather than reported, without
+    /// giving it a different shape from the reported ones.
+    var caption: String?
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(metric.label)
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(.secondary)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 8.5))
+                        .foregroundStyle(.quaternary)
+                }
                 Spacer(minLength: 8)
                 Text("\(Int(metric.percentUsed.rounded()))%")
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))

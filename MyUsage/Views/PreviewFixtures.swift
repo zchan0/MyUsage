@@ -59,7 +59,8 @@ enum PreviewFixtures {
             WeeklyModelUsage(
                 label: "Daily Routines",
                 percent: 12,
-                resetsAt: now.addingTimeInterval(3.8 * 86_400)
+                resetsAt: now.addingTimeInterval(3.8 * 86_400),
+                scope: .product
             ),
         ]
         claude.onDemandSpend = CreditInfo(amount: 2.32, limit: 100, currency: "USD")

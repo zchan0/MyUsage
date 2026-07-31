@@ -145,7 +145,11 @@ enum CapacityFocus {
                         projectedExhaustionAt: $0.projectedExhaustionDate(now: now)
                     )
                 }
-            ].compactMap { $0 }
+            ].compactMap { $0 } + scopedModelMetrics(
+                providerKind: providerKind,
+                snapshot: snapshot,
+                now: now
+            )
 
         case .cursor:
             return [
@@ -187,6 +191,42 @@ enum CapacityFocus {
             }
             .sorted { $0.percentUsed > $1.percentUsed }
         }
+    }
+
+    /// Model-scoped weekly caps (Claude's `weekly_scoped` limits — Fable, Opus,
+    /// …) are real quotas with their own reset, so they are first-class rolling
+    /// limits, not a footnote: a Fable cap at 98% is the binding constraint even
+    /// when the pooled weekly bar reads 40%, and Overview has to be able to
+    /// focus on it. Product caps (Daily Routines, OAuth apps) stay out — they
+    /// are not what "how much capacity do I have left" means.
+    ///
+    /// Empty for every plan that pools its quota, and for every provider other
+    /// than Claude, so the ordinary case pays nothing.
+    private static func scopedModelMetrics(
+        providerKind: ProviderKind,
+        snapshot: UsageSnapshot,
+        now: Date
+    ) -> [Metric] {
+        snapshot.weeklyByModel
+            .filter { $0.scope == .model }
+            .map { row in
+                let window = UsageWindow(
+                    percentUsed: row.percent,
+                    resetsAt: row.resetsAt,
+                    windowDuration: 7 * 24 * 3600
+                )
+                return Metric(
+                    providerKind: providerKind,
+                    // CodexBar's wording: the cap that applies to this model
+                    // only, as opposed to the pooled weekly bar above it.
+                    label: "\(row.label) only",
+                    percentUsed: row.percent,
+                    resetsAt: row.resetsAt,
+                    pacePercent: window.onPacePercent(now: now),
+                    projectedFinalPercent: window.projectedFinalPercent(now: now),
+                    projectedExhaustionAt: window.projectedExhaustionDate(now: now)
+                )
+            }
     }
 
     static func select(from metrics: [Metric], now: Date = .now) -> Metric? {
