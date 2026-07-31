@@ -19,6 +19,7 @@ MYUSAGE_AUTOPILOT=open:0 \
 MYUSAGE_SNAPSHOT=$SCRATCH/panel.png \
 MYUSAGE_NO_PROMPT=1 \
 MYUSAGE_DEBUG_LOG=$SCRATCH/autopilot.log \
+MYUSAGE_TAB=claude \
 .build/debug/MyUsage > /dev/null 2>&1 &
 APP_PID=$!
 # Poll for completion (timeline: ~4s toggle + ~6s settle + snapshot):
@@ -33,6 +34,9 @@ Then Read `$SCRATCH/panel.png`. Renders with the machine's live
 provider data and current system appearance (light/dark follows the
 OS — you don't get to pick).
 
+`MYUSAGE_TAB=<claude|codex|cursor|antigravity>` picks the page the
+popover opens on; drop it to snapshot Overview.
+
 ## Gotchas
 
 - `MYUSAGE_NO_PROMPT=1` is belt-and-braces; despite the non-.app
@@ -40,6 +44,9 @@ OS — you don't get to pick).
   launch has been observed to throw the macOS Keychain password
   dialog for "Claude Code-credentials" (blocks startup until
   dismissed — a policy regression worth checking if it recurs).
+  Since the `/usr/bin/security` read path landed, a dev binary reads
+  live Claude credentials with no prompt at all, so the snapshot now
+  shows real Claude data instead of "No credentials found".
 - The autopilot toggle occasionally doesn't fire (startup race);
   if the log stops at `setPanelFrame` lines with no `click`, just
   relaunch — second attempt has always worked.
@@ -49,6 +56,6 @@ OS — you don't get to pick).
 - NSLog is unreliable for bare binaries — always pass
   MYUSAGE_DEBUG_LOG and read the file. Don't use `swift run`
   (buffers child output); run `.build/debug/MyUsage` directly.
-- There is no autopilot verb for switching popover tabs yet: the
-  snapshot shows the Overview page only. Detail pages need a human
-  eyeball (or extend the autopilot in MyUsageApp.swift).
+- `MYUSAGE_TAB` sets the *initial* tab (UsagePopover.initialTab).
+  There is still no verb for switching tabs mid-run, so one launch
+  snapshots one page.

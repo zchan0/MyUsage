@@ -9,7 +9,21 @@ struct UsagePopover: View {
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
 
-    @State private var selectedTab: PopoverTab = .overview
+    @State private var selectedTab: PopoverTab = Self.initialTab
+
+    /// The autopilot snapshot harness can only reach the page the popover
+    /// opens on, so `MYUSAGE_TAB=<provider rawValue>` lets it land directly on
+    /// a detail page (`.claude`, `.codex`, …). DEBUG-only; unset means
+    /// Overview, the normal entry point.
+    private static var initialTab: PopoverTab {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["MYUSAGE_TAB"],
+           let kind = ProviderKind(rawValue: raw) {
+            return .provider(kind)
+        }
+        #endif
+        return .overview
+    }
 
     var body: some View {
         VStack(spacing: 0) {

@@ -998,7 +998,8 @@ final class ClaudeProvider: UsageProvider {
                 return WeeklyModelUsage(
                     label: label,
                     percent: window.utilization,
-                    resetsAt: window.resetsAt.flatMap { parseISO8601($0) }
+                    resetsAt: window.resetsAt.flatMap { parseISO8601($0) },
+                    scope: label == "OAuth apps" ? .product : .model
                 )
             }
         }
@@ -1010,10 +1011,11 @@ final class ClaudeProvider: UsageProvider {
             rows.append(WeeklyModelUsage(
                 label: "Daily Routines",
                 percent: routines.utilization,
-                resetsAt: routines.resetsAt.flatMap { parseISO8601($0) }
+                resetsAt: routines.resetsAt.flatMap { parseISO8601($0) },
+                scope: .product
             ))
         } else if response.routinesLimitReported {
-            rows.append(WeeklyModelUsage(label: "Daily Routines", percent: 0))
+            rows.append(WeeklyModelUsage(label: "Daily Routines", percent: 0, scope: .product))
         }
 
         return rows.sorted {

@@ -116,14 +116,48 @@ struct ProviderDeck: View {
                         .overlay(alignment: .bottom) { sectionDivider }
                 }
 
-                if provider.kind == .claude, !snapshot.weeklyByModel.isEmpty {
-                    ClaudeAdditionalLimits(rows: snapshot.weeklyByModel)
+                if provider.kind == .claude {
+                    if !snapshot.weeklyByModel.isEmpty {
+                        ClaudeAdditionalLimits(
+                            title: "Additional limits",
+                            rows: snapshot.weeklyByModel
+                        )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
                         .overlay(alignment: .bottom) { sectionDivider }
+                    }
+
+                    let estimated = estimatedWeeklySplit(snapshot)
+                    if !estimated.isEmpty {
+                        ClaudeAdditionalLimits(
+                            title: "Weekly by model",
+                            caption: "estimated",
+                            rows: estimated
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
+                        .overlay(alignment: .bottom) { sectionDivider }
+                    }
                 }
             }
         }
+    }
+
+    /// Per-model weekly figures, derived from local cost, for plans whose API
+    /// reports no model-scoped caps at all. Pooled plans (Max included) return
+    /// only `session` and `weekly_all`, sometimes alongside *product* caps such
+    /// as Daily Routines — so a non-empty `weeklyByModel` is not evidence that
+    /// the model question has been answered. A reported model cap always wins;
+    /// nothing is estimated on top of it.
+    private func estimatedWeeklySplit(_ snapshot: UsageSnapshot) -> [WeeklyModelUsage] {
+        guard !snapshot.weeklyByModel.contains(where: { $0.scope == .model }) else {
+            return []
+        }
+        return WeeklyModelSplit.rows(
+            series: manager.ledger.dailyCosts[.claude] ?? [],
+            weeklyPercentUsed: snapshot.weeklyUsage?.percentUsed ?? 0,
+            weeklyResetsAt: snapshot.weeklyUsage?.resetsAt
+        )
     }
 
     private func resetCredits(_ snapshot: UsageSnapshot) -> some View {
@@ -375,20 +409,30 @@ private struct DeckLimitInstrument: View {
     }
 }
 
-/// Claude's model/product-specific weekly caps are secondary to the account-
-/// wide 5-hour and weekly limits, so they use a compact single-line rail.
-/// This keeps Fable and Daily Routines visible without turning each into
-/// another full-height hero instrument.
+/// Claude's per-model weekly figures are secondary to the account-wide 5-hour
+/// and weekly limits, so they use a compact single-line rail. This keeps Fable
+/// and Daily Routines visible without turning each into another full-height
+/// hero instrument — and without repeating the countdown and pace already
+/// shown by the Weekly instrument directly above, which these rows share.
 private struct ClaudeAdditionalLimits: View {
+    let title: String
+    var caption: String?
     let rows: [WeeklyModelUsage]
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Additional limits")
-                .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(.tertiary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 8.5))
+                        .foregroundStyle(.quaternary)
+                }
+            }
 
             ForEach(rows) { row in
                 HStack(spacing: 9) {
@@ -421,10 +465,11 @@ private struct ClaudeAdditionalLimits: View {
     }
 
     private func helpText(for row: WeeklyModelUsage) -> String {
-        guard let resetsAt = row.resetsAt else {
-            return "\(row.label): \(Int(row.percent.rounded()))% used"
-        }
-        return "\(row.label): \(Int(row.percent.rounded()))% used · resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
+        let share = caption == nil
+            ? "\(Int(row.percent.rounded()))% used"
+            : "≈\(Int(row.percent.rounded()))% of the weekly limit, estimated from local cost"
+        guard let resetsAt = row.resetsAt else { return "\(row.label): \(share)" }
+        return "\(row.label): \(share) · resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
     }
 }
 

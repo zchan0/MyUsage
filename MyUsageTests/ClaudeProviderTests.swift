@@ -383,7 +383,7 @@ struct ClaudeProviderTests {
 
             #expect(response.routinesLimitReported)
             #expect(snapshot.weeklyByModel == [
-                WeeklyModelUsage(label: "Daily Routines", percent: 0)
+                WeeklyModelUsage(label: "Daily Routines", percent: 0, scope: .product)
             ])
 
             let cachedData = try JSONEncoder().encode(response)
@@ -394,7 +394,7 @@ struct ClaudeProviderTests {
             #expect(cachedResponse.routinesLimitReported)
             #expect(
                 ClaudeProvider.mapToSnapshot(cachedResponse, plan: nil).weeklyByModel
-                    == [WeeklyModelUsage(label: "Daily Routines", percent: 0)]
+                    == [WeeklyModelUsage(label: "Daily Routines", percent: 0, scope: .product)]
             )
         }
     }

@@ -6,6 +6,44 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## Unreleased
+
+### Fixed
+- **No more daily Keychain password prompts.** The Claude CLI writes its
+  rotated OAuth token with `security add-generic-password -U`, which resets
+  the Keychain item's ACL *partition list* to `apple-tool:` — silently
+  revoking the "Always Allow" grant roughly every 8 hours and forcing a new
+  password panel. MyUsage now reads that item through `/usr/bin/security`,
+  whose `apple-tool:` identity is the one the CLI's own write keeps
+  authorized, so rotation no longer costs a prompt. No ACL or signing change
+  is involved; Developer ID signing would not have fixed this, because the
+  reset clears every partition, not just ad-hoc ones. Full analysis in
+  `docs/claude-keychain-prompt-bug.md`.
+
+### Added
+- **Weekly usage by model.** Pooled Claude plans (Max included) report only
+  `session` and `weekly_all` — no per-model caps — so Fable never had a bar to
+  appear in. The Claude detail page now splits the Weekly limit into estimated
+  per-model shares from the local cost ledger: the rows sum to the Weekly
+  percentage and sit directly under it, sharing its reset and pace rather than
+  inventing their own. Marked `estimated`, and suppressed entirely whenever the
+  API does report real model-scoped caps.
+
+### 中文
+
+- **不再每天弹钥匙串密码框**：Claude CLI 用 `security add-generic-password -U`
+  写轮转后的 OAuth token，而这条命令会把钥匙串条目的 ACL **partition list**
+  重置成只剩 `apple-tool:`——等于每约 8 小时静默作废一次「始终允许」，于是又弹一次
+  密码框。现在 MyUsage 改走 `/usr/bin/security` 读取该条目：它的 `apple-tool:`
+  身份正是 CLI 自己的写入唯一会保留的那一个，轮转不再产生弹窗。不改 ACL、不改签名；
+  顺带纠正一个旧结论——Developer ID 签名解决不了这个问题，因为重置会清掉*所有*
+  partition，不只 ad-hoc 的那种。完整分析见 `docs/claude-keychain-prompt-bug.md`。
+- **周用量分模型展示**：汇总型 Claude 套餐（含 Max）只返回 `session` 和
+  `weekly_all`，没有任何分模型配额，Fable 因此从来就没有条可展示。现在 Claude
+  详情页用本地成本 ledger 把 Weekly 限额拆成各模型的估算占比：各行之和等于 Weekly
+  百分比，紧贴其下方，**reset 和 pace 直接沿用 Weekly 的**，不另造一套。标注
+  `estimated`；一旦 API 真的返回分模型配额，该区域自动让位。
+
 ## v0.16.2 — 2026-07-27
 
 ### Added

@@ -158,21 +158,33 @@ struct UsageWindow: Sendable {
 /// the same visual treatment, but remain distinct from the account-wide
 /// weekly limit.
 struct WeeklyModelUsage: Sendable, Equatable, Identifiable {
+    /// What the cap is attached to. A plan can report product caps (Daily
+    /// Routines, OAuth apps) while reporting no per-model caps at all, so
+    /// "are there model rows?" cannot be answered by a non-empty list — it
+    /// decides whether the UI needs an estimated per-model breakdown instead.
+    enum Scope: Sendable, Equatable {
+        case model
+        case product
+    }
+
     let id: String
     let label: String
     let percent: Double
     let resetsAt: Date?
+    let scope: Scope
 
     init(
         id: String? = nil,
         label: String,
         percent: Double,
-        resetsAt: Date? = nil
+        resetsAt: Date? = nil,
+        scope: Scope = .model
     ) {
         self.id = id ?? label
         self.label = label
         self.percent = percent
         self.resetsAt = resetsAt
+        self.scope = scope
     }
 }
 
