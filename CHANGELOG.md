@@ -6,7 +6,7 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## Unreleased
+## v0.16.4 — 2026-08-01
 
 ### Fixed
 - **Monthly cost estimate counted rows from previous months.** The scan
