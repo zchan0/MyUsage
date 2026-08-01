@@ -8,6 +8,15 @@ the 中文 half lives here only.
 
 ## Unreleased
 
+### Added
+- **Extra usage now shows its deadline and pace.** The row reported a running
+  total with no indication of when it resets. Claude's API carries no period
+  field for it — no `resets_at`, and `daily` / `weekly` / `cap` / `balance` all
+  return null — but the window is the UTC calendar month, so the countdown is
+  derived locally. Accounts without a `monthly_limit` have no denominator for a
+  percentage, so their pace is a projected total instead: "~$210 by reset",
+  withheld until enough of the month has elapsed for the rate to mean anything.
+
 ### Changed
 - **Per-model weekly caps are now first-class limits.** Plans that report
   model-scoped weekly caps (`weekly_scoped` — Fable, Opus, …) rendered them on
@@ -22,8 +31,18 @@ the 中文 half lives here only.
   family repeated the cost chart's legend and padded the page with derived
   numbers. Only the model actually driving the week gets a row, chosen by
   share rather than by name.
+- **Per-model rows moved above `Additional limits`.** Everything that is
+  capacity now reads top to bottom without a secondary rail interrupting it.
 
 ### 中文
+
+- **Extra usage 补上到期时间和 pace**：这一行以前只有累计金额，看不出什么时候清零。
+  Claude API 里没有任何周期字段（无 `resets_at`，`daily`/`weekly`/`cap`/`balance`
+  全 null），但窗口就是 UTC 自然月，所以倒计时在本地推出来。没有 `monthly_limit`
+  的账号算不出百分比，pace 就改成金额预测「~$210 by reset」，并且在月初数据不足时
+  不显示——否则 1 号花 $40 会外推成一千多，纯属吓人。
+- **分模型行挪到 `Additional limits` 上方**：属于「容量」的东西现在从上到下连续排列，
+  中间不再被次级条打断。
 
 - **分模型周限额升为一等限额**：API 返回分模型周限额（`weekly_scoped`，如 Fable、
   Opus）的套餐，此前用的是次级小条，和它旁边的 5-hour / Weekly 完全不是一套视觉。

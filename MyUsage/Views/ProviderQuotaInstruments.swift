@@ -99,26 +99,51 @@ struct ExtraUsageInstrument: View {
     let spend: CreditInfo
     let tint: Color
 
-    @ViewBuilder
     var body: some View {
-        if let limit = spend.limit, limit > 0 {
-            LimitBar(
-                name: "Extra usage",
-                percent: spend.amount / limit * 100,
-                reset: spend.formatted,
-                tint: tint
-            )
-        } else {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Extra usage")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.secondary.opacity(0.95))
-                Spacer(minLength: 8)
-                Text(ProviderCardCostRow.formatCost(spend.amount, estimated: false))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary.opacity(0.92))
+        VStack(alignment: .leading, spacing: 7) {
+            if let limit = spend.limit, limit > 0 {
+                LimitBar(
+                    name: "Extra usage",
+                    percent: spend.amount / limit * 100,
+                    reset: spend.formatted,
+                    tint: tint
+                )
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Extra usage")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.secondary.opacity(0.95))
+                    Spacer(minLength: 8)
+                    Text(ProviderCardCostRow.formatCost(spend.amount, estimated: false))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(.primary.opacity(0.92))
+                }
+            }
+
+            periodFooter
+        }
+    }
+
+    /// Extra usage is the one spend figure with a hard deadline, so it gets the
+    /// same footer shape as the rolling limits: countdown on the left, pace on
+    /// the right. The projection is a dollar figure rather than a percentage,
+    /// because an account without a `monthly_limit` has no denominator — "at
+    /// this rate, ~$210 by the reset" is the only honest pace for it.
+    private var periodFooter: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("Resets in \(OverviewSummary.shortCountdown(until: ExtraUsagePeriod.bounds().end))")
+                .fixedSize()
+
+            if let projected = ExtraUsagePeriod.projectedSpend(spent: spend.amount) {
+                Spacer(minLength: 18)
+                Text("~\(ProviderCardCostRow.formatCost(projected, estimated: false)) by reset")
+                    .fixedSize()
+                    .help("Projected total for this period at the current rate.")
             }
         }
+        .font(.system(size: 9, design: .monospaced))
+        .monospacedDigit()
+        .foregroundStyle(.tertiary)
     }
 }

@@ -117,10 +117,24 @@ struct ProviderDeck: View {
                 }
 
                 if provider.kind == .claude {
-                    // Model-scoped caps are already rendered above as full
-                    // instruments by the metrics loop. What is left here is the
-                    // product caps — Daily Routines, OAuth apps — which are not
-                    // capacity in the same sense and stay on the compact rail.
+                    // Per-model rows are the Weekly bar decomposed, so they use
+                    // the same instrument as 5-hour and Weekly — same bar, same
+                    // percentage treatment, same reset line, same pace notch —
+                    // rather than a second, smaller visual language. They stay
+                    // adjacent to the Weekly bar they subdivide, which also puts
+                    // every capacity instrument above the secondary rail
+                    // regardless of whether the figure came from the API or the
+                    // local estimate.
+                    ForEach(estimatedWeeklyMetrics(snapshot)) { metric in
+                        DeckLimitInstrument(metric: metric, caption: "estimated")
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .overlay(alignment: .bottom) { sectionDivider }
+                    }
+
+                    // Everything above is capacity. What is left is the product
+                    // caps — Daily Routines, OAuth apps — which are not, so they
+                    // close out the section on the compact rail.
                     let productLimits = snapshot.weeklyByModel.filter { $0.scope == .product }
                     if !productLimits.isEmpty {
                         ClaudeAdditionalLimits(
@@ -130,17 +144,6 @@ struct ProviderDeck: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
                         .overlay(alignment: .bottom) { sectionDivider }
-                    }
-
-                    // Per-model rows are the Weekly bar decomposed, so they use
-                    // the same instrument as 5-hour and Weekly — same bar, same
-                    // percentage treatment, same reset line, same pace notch —
-                    // rather than a second, smaller visual language.
-                    ForEach(estimatedWeeklyMetrics(snapshot)) { metric in
-                        DeckLimitInstrument(metric: metric, caption: "estimated")
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .overlay(alignment: .bottom) { sectionDivider }
                     }
                 }
             }
