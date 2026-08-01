@@ -6,6 +6,50 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## Unreleased
+
+### Added
+- **Token efficiency replaces the raw token counters.** The four counters
+  (total / input / output / cache) described the same shape every day — for an
+  agentic client roughly 99% of tokens are prompt and 97% of those are cache
+  reads — so nothing in them moved. In their place: the effective rate in
+  dollars per million tokens, which absorbs both model mix and cache efficiency
+  and has real range (measured $0.74–$3.89 across 30 days), a 14-day trend, and
+  a cache-hit meter. Token volume stays as a footnote, where it serves as the
+  denominator rather than a headline.
+- **Cache TTL downgrade notice.** Exhausting the 5-hour quota makes the server
+  hand back the 5-minute prompt cache instead of the 1-hour one, after which
+  context stops surviving ordinary idle gaps and is rebuilt several times as
+  often. Nothing surfaced this before. MyUsage already tracks the 5-hour limit,
+  so it can name the cause and the recovery condition rather than just raising
+  an alarm.
+
+### Fixed
+- **Cache writes were charged at the wrong rate.** Claude bills the 5-minute
+  prompt cache at 1.25x input and the 1-hour one at 2x. Both the transcript and
+  the upstream price table carry the distinction and MyUsage discarded it on
+  both sides, so nearly every Claude cache write — Claude Code uses the 1-hour
+  TTL — was priced at the cheaper rate. Measured on one account, August to date
+  moved from $92.99 to $112.10. Existing installs pick the corrected rates up
+  when the 24-hour pricing cache next refreshes; pre-split history is left at
+  its recorded value rather than revalued on a guess.
+
+### 中文
+
+- **Token efficiency 取代原始计数器**：Total / Input / Output / Cache 四个数每天
+  讲同一句话（约 99% 是 prompt，其中 97% 是 cache read），形状永远不变。改为展示
+  等效单价 $/Mtok —— 它同时吸收模型组合与缓存效率，实测 30 天区间 $0.74–$3.89，
+  是唯一有真实动态范围的指标 —— 外加 14 天趋势线和缓存命中率条。token 总量降为注脚，
+  在那里当分母而不是头条。
+- **缓存 TTL 降级提示**：打满 5 小时配额后，服务端会把 1 小时缓存换成 5 分钟的，
+  此后上下文撑不过正常的空闲间隔，重建次数成倍增加。此前没有任何工具展示这件事。
+  MyUsage 本来就在跟踪 5 小时限额，因此能同时说明成因和恢复条件，而不是只报警。
+- **修复缓存写入计价错档**：Claude 的 5 分钟缓存按 input 的 1.25 倍计费，1 小时按
+  2 倍。transcript 和上游价格表都提供了这个区分，而 MyUsage 两边都丢掉了 —— Claude
+  Code 用的正是 1 小时档，于是几乎所有 Claude 缓存写入都按便宜的档位计价。实测某账号
+  8 月至今由 $92.99 修正为 $112.10。存量安装在 24 小时价格缓存刷新后自动生效；
+  拆分之前的历史保留原值，不做凭空重估。
+
 ## v0.16.4 — 2026-08-01
 
 ### Fixed

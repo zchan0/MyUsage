@@ -348,8 +348,24 @@ final class LedgerStore: @unchecked Sendable {
         /// contribute to the total only; the chart renders the remainder
         /// as "Other".
         let byModel: [String: Double]
+        /// Token buckets recorded for the day, summed across devices and
+        /// accounts. `.zero` for rows written before token attribution
+        /// existed. Pairs with `totalUSD` to give a per-day effective rate.
+        let tokens: TokenUsage
 
         var id: String { day }
+
+        init(
+            day: String,
+            totalUSD: Double,
+            byModel: [String: Double],
+            tokens: TokenUsage = .zero
+        ) {
+            self.day = day
+            self.totalUSD = totalUSD
+            self.byModel = byModel
+            self.tokens = tokens
+        }
     }
 
     /// Day-by-day aggregates for a provider from `fromDay` (inclusive,
@@ -358,7 +374,7 @@ final class LedgerStore: @unchecked Sendable {
     /// zero-padded ISO dates.
     func dailyCosts(provider: ProviderKind, fromDay: String) throws -> [DailyCost] {
         let sql = """
-            SELECT day, cost_usd, cost_by_model
+            SELECT day, cost_usd, cost_by_model, token_usage
             FROM ledger_entries
             WHERE provider = ?1 AND day >= ?2
             ORDER BY day ASC;
@@ -378,10 +394,17 @@ final class LedgerStore: @unchecked Sendable {
 
         var totals: [String: Double] = [:]
         var byModel: [String: [String: Double]] = [:]
+        var tokens: [String: TokenUsage] = [:]
         while sqlite3_step(stmt) == SQLITE_ROW {
             guard let dayCStr = sqlite3_column_text(stmt, 0) else { continue }
             let day = String(cString: dayCStr)
             totals[day, default: 0] += sqlite3_column_double(stmt, 1)
+
+            if let tokenCStr = sqlite3_column_text(stmt, 3),
+               let tokenData = String(cString: tokenCStr).data(using: .utf8),
+               let usage = try? JSONDecoder().decode(TokenUsage.self, from: tokenData) {
+                tokens[day, default: .zero] += usage
+            }
 
             guard let jsonCStr = sqlite3_column_text(stmt, 2) else { continue }
             let json = String(cString: jsonCStr)
@@ -397,7 +420,8 @@ final class LedgerStore: @unchecked Sendable {
             DailyCost(
                 day: day,
                 totalUSD: totals[day] ?? 0,
-                byModel: byModel[day] ?? [:]
+                byModel: byModel[day] ?? [:],
+                tokens: tokens[day] ?? .zero
             )
         }
     }

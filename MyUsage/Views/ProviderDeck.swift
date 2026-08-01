@@ -238,7 +238,15 @@ struct ProviderDeck: View {
                     }
                 }
 
-                if let tokens {
+                // Prefer the derived readings; they need per-day cost paired
+                // with per-day tokens, which only the ledger series carries.
+                // Fall back to the raw counters when that is unavailable.
+                if let efficiency = TokenEfficiency.reading(from: series) {
+                    sectionDivider
+                    TokenEfficiencySection(kind: provider.kind, reading: efficiency)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                } else if let tokens {
                     sectionDivider
                     TokenUsageSummary(usage: tokens)
                         .padding(.horizontal, 16)
