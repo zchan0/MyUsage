@@ -16,17 +16,36 @@ enum TokenEfficiency {
     /// processed. It absorbs both model mix and cache efficiency, so a single
     /// number captures "am I paying more per unit of work than usual".
     struct Reading: Equatable, Sendable {
-        /// USD per million tokens across the window.
+        /// USD per million tokens for the most recent day carrying enough
+        /// volume to be meaningful.
+        ///
+        /// Deliberately *not* a 30-day average. This reading exists to catch
+        /// anomalies, and an average over a month is the one window guaranteed
+        /// to hide them: a day that costs 3× normal moves a 30-day mean by a
+        /// few percent. The sparkline supplies the history; the headline is
+        /// today.
         let effectiveRate: Double
-        /// Share of prompt tokens served from cache (0–100).
+        /// Median rate across the preceding days, so the headline can be read
+        /// as "cheap or expensive **for me**" without knowing the usual range.
+        /// nil until there are enough prior days to form one.
+        let baselineRate: Double?
+        /// Share of prompt tokens served from cache on the headline day
+        /// (0–100). Same window as the rate, for the same reason.
         let cacheHitPercent: Double
         /// Share of prompt tokens that had to be re-cached (0–100). This is
         /// the actionable half: reads are nearly free, writes are not.
         let reCachePercent: Double
         /// Share of all tokens that were generated rather than re-read (0–100).
         let outputPercent: Double
-        /// Total tokens across the window — the denominator, not a headline.
+        /// Tokens processed on the headline day — the denominator, not a
+        /// headline.
         let totalTokens: Int
+        /// How the headline day compares to `baselineRate`, in percent.
+        /// nil when there is no baseline to compare against.
+        var deltaPercent: Double? {
+            guard let baselineRate, baselineRate > 0 else { return nil }
+            return (effectiveRate / baselineRate - 1) * 100
+        }
         /// Per-day effective rate, oldest first, for the sparkline.
         let dailyRates: [Double]
         /// Whether the account is currently writing to the short-lived cache.
@@ -70,31 +89,43 @@ enum TokenEfficiency {
         from series: [LedgerStore.DailyCost],
         sparklineDays: Int = 14
     ) -> Reading? {
-        let attributed = series.filter { !$0.tokens.isEmpty }
-        guard !attributed.isEmpty else { return nil }
-
-        var totals = TokenUsage.zero
-        var cost = 0.0
-        for day in attributed {
-            totals += day.tokens
-            cost += day.totalUSD
+        // Only days with enough volume to produce a stable ratio. A day with
+        // two requests yields a rate that is noise, and as the headline it
+        // would be actively misleading.
+        let usable = series.filter {
+            !$0.tokens.isEmpty && $0.tokens.total >= minimumTokensPerDay && $0.totalUSD > 0
         }
-        guard totals.total > 0 else { return nil }
+        guard let latest = usable.last else { return nil }
 
-        // Prompt tokens are everything the model read; output is what it wrote.
-        let prompt = totals.total - totals.output
-        let cached = totals.cacheRead + totals.cachedInput
-        let writes = totals.cacheWrite
+        let day = latest.tokens
+        let prompt = day.total - day.output
+        let cached = day.cacheRead + day.cachedInput
+
+        let history = usable.dropLast().suffix(sparklineDays).map {
+            $0.totalUSD / (Double($0.tokens.total) / 1_000_000)
+        }
 
         return Reading(
-            effectiveRate: cost / (Double(totals.total) / 1_000_000),
+            effectiveRate: latest.totalUSD / (Double(day.total) / 1_000_000),
+            baselineRate: median(of: history),
             cacheHitPercent: prompt > 0 ? Double(cached) / Double(prompt) * 100 : 0,
-            reCachePercent: prompt > 0 ? Double(writes) / Double(prompt) * 100 : 0,
-            outputPercent: Double(totals.output) / Double(totals.total) * 100,
-            totalTokens: totals.total,
-            dailyRates: dailyRates(from: attributed, limit: sparklineDays),
-            cacheTTL: ttlState(from: attributed.suffix(ttlWindowDays))
+            reCachePercent: prompt > 0 ? Double(day.cacheWrite) / Double(prompt) * 100 : 0,
+            outputPercent: day.total > 0 ? Double(day.output) / Double(day.total) * 100 : 0,
+            totalTokens: day.total,
+            dailyRates: dailyRates(from: usable, limit: sparklineDays),
+            cacheTTL: ttlState(from: usable.suffix(ttlWindowDays))
         )
+    }
+
+    /// Median rather than mean: one runaway day should not redefine "normal".
+    /// nil below three samples, where a median is not yet a baseline.
+    static func median(of values: [Double]) -> Double? {
+        guard values.count >= 3 else { return nil }
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        return sorted.count.isMultiple(of: 2)
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid]
     }
 
     /// Per-day rate for the trailing `limit` days that carry enough volume.

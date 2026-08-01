@@ -41,7 +41,7 @@ struct TokenEfficiencySection: View {
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
-            Text("30 days · all accounts")
+            Text("today · all accounts")
                 .font(.system(size: 8.5))
                 .foregroundStyle(.tertiary)
         }
@@ -49,18 +49,26 @@ struct TokenEfficiencySection: View {
 
     private var rateRow: some View {
         HStack(alignment: .center, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(rateText)
-                    .font(.system(size: 19, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-                Text("/Mtok")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(rateText)
+                        .font(.system(size: 19, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
+                    Text("/Mtok")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.tertiary)
+                }
+                if let delta = deltaText {
+                    Text(delta)
+                        .font(.system(size: 8.5, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                }
             }
             Sparkline(values: reading.dailyRates, tint: tint)
                 .frame(height: 26)
         }
-        .help("Dollars per million tokens processed — model mix and cache efficiency in one number.")
+        .help(rateExplanation)
     }
 
     private var meter: some View {
@@ -87,6 +95,26 @@ struct TokenEfficiencySection: View {
         .help("Share of prompt tokens served from cache. Reads cost a tenth of fresh input.")
     }
 
+    /// What the number is and why it moves. Nothing else in the popover
+    /// states a unit price, so it cannot be inferred from context.
+    private var rateExplanation: String {
+        var text = "What a million tokens of work cost you today: spend divided "
+            + "by tokens processed. It rises when a pricier model does more of "
+            + "the work, or when less of the context comes from cache."
+        if let baseline = reading.baselineRate {
+            text += String(format: " Your recent median is $%.2f.", baseline)
+        }
+        return text
+    }
+
+    /// Spelled out rather than an arrow: a bare ↑ next to a price reads as
+    /// "went up" without saying against what.
+    private var deltaText: String? {
+        guard let delta = reading.deltaPercent, abs(delta) >= 1 else { return nil }
+        let direction = delta > 0 ? "above" : "below"
+        return "\(Int(abs(delta).rounded()))% \(direction) your usual"
+    }
+
     private var footnote: some View {
         Text(footnoteText)
             .font(.system(size: 9, design: .monospaced))
@@ -99,7 +127,7 @@ struct TokenEfficiencySection: View {
         let total = TokenCountFormatter.string(reading.totalTokens)
         let output = String(format: "%.1f", reading.outputPercent)
         let reCache = String(format: "%.0f", reading.reCachePercent)
-        return "\(total) tokens · \(output)% output · \(reCache)% re-cached"
+        return "\(total) tokens today · \(output)% output · \(reCache)% re-cached"
     }
 
     /// Sub-dollar rates need a second decimal to move at all; past $10 the
@@ -161,7 +189,7 @@ private struct CacheTTLNotice: View {
             return "Keep gaps under 5 min until the 5-hour window resets."
         }
         let countdown = OverviewSummary.shortCountdown(until: resetsAt)
-        return "Keep gaps under 5 min. Normal caching returns in \(countdown)."
+        return "Keep gaps under 5 min. The 1-hour cache returns in \(countdown)."
     }
 
     /// Why the notice appeared, for anyone who wants to check it.
@@ -258,8 +286,8 @@ private struct Sparkline: View {
         TokenEfficiencySection(
             kind: .claude,
             reading: TokenEfficiency.Reading(
-                effectiveRate: 1.30, cacheHitPercent: 97, reCachePercent: 3,
-                outputPercent: 0.5, totalTokens: 772_000_000,
+                effectiveRate: 1.30, baselineRate: 1.28, cacheHitPercent: 97, reCachePercent: 3,
+                outputPercent: 0.5, totalTokens: 52_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.4, 1.1, 1.3, 1.3],
                 cacheTTL: .standard
             )
@@ -268,8 +296,8 @@ private struct Sparkline: View {
         TokenEfficiencySection(
             kind: .claude,
             reading: TokenEfficiency.Reading(
-                effectiveRate: 1.78, cacheHitPercent: 90, reCachePercent: 10,
-                outputPercent: 0.5, totalTokens: 772_000_000,
+                effectiveRate: 1.78, baselineRate: 1.28, cacheHitPercent: 90, reCachePercent: 10,
+                outputPercent: 0.5, totalTokens: 52_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.5, 1.9, 2.1, 2.4],
                 cacheTTL: .downgraded(sharePercent: 36)
             ),

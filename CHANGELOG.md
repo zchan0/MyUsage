@@ -15,8 +15,10 @@ the 中文 half lives here only.
   reads — so nothing in them moved. In their place: the effective rate in
   dollars per million tokens, which absorbs both model mix and cache efficiency
   and has real range (measured $0.74–$3.89 across 30 days), a 14-day trend, and
-  a cache-hit meter. Token volume stays as a footnote, where it serves as the
-  denominator rather than a headline.
+  a cache-hit meter. The headline is the current day against a median of the
+  recent ones — an average over the whole window is the one shape guaranteed to
+  hide the anomaly the reading exists to catch. Token volume stays as a
+  footnote, where it serves as the denominator rather than a headline.
 - **Cache TTL downgrade notice.** Exhausting the 5-hour quota makes the server
   hand back the 5-minute prompt cache instead of the 1-hour one, after which
   context stops surviving ordinary idle gaps and is rebuilt several times as

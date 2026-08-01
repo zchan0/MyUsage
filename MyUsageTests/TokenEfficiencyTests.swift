@@ -31,11 +31,27 @@ final class TokenEfficiencyTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(reading).effectiveRate, 2, accuracy: 1e-9)
     }
 
+    /// The headline is the latest day, not the window mean. An average over a
+    /// month is the one window guaranteed to hide the anomaly this reading
+    /// exists to catch.
+    func testHeadlineIsTheLatestDayNotTheWindowAverage() {
+        let series = (1...9).map {
+            day(String(format: "2026-08-%02d", $0), cost: 1, input: 1_000_000)
+        } + [day("2026-08-10", cost: 4, input: 1_000_000)]
+
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: series))
+
+        XCTAssertEqual(reading.effectiveRate, 4, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(reading.baselineRate), 1, accuracy: 1e-9)
+        XCTAssertEqual(try XCTUnwrap(reading.deltaPercent), 300, accuracy: 1e-6,
+                       "a 4x day must read as 4x, not as a few percent on a mean")
+    }
+
     func testRatiosAreTakenOverTheRightDenominators() {
         // 100 output + 900 prompt (100 fresh input, 700 read, 100 re-cached).
         let reading = try! XCTUnwrap(TokenEfficiency.reading(from: [
             day("2026-08-01", cost: 1,
-                input: 100, output: 100, write1h: 100, read: 700)
+                input: 100_000, output: 100_000, write1h: 100_000, read: 700_000)
         ]))
 
         XCTAssertEqual(reading.cacheHitPercent, 700.0 / 900 * 100, accuracy: 1e-6,
@@ -43,7 +59,38 @@ final class TokenEfficiencyTests: XCTestCase {
         XCTAssertEqual(reading.reCachePercent, 100.0 / 900 * 100, accuracy: 1e-6)
         XCTAssertEqual(reading.outputPercent, 10, accuracy: 1e-6,
                        "output is a share of all tokens")
-        XCTAssertEqual(reading.totalTokens, 1_000)
+        XCTAssertEqual(reading.totalTokens, 1_000_000)
+    }
+
+    /// One runaway day should not redefine what "usual" means.
+    func testBaselineIsAMedianNotAMean() {
+        let series = [1.0, 1.0, 1.0, 30.0].enumerated().map { index, cost in
+            day(String(format: "2026-08-%02d", index + 1), cost: cost, input: 1_000_000)
+        } + [day("2026-08-09", cost: 2, input: 1_000_000)]
+
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: series))
+
+        XCTAssertEqual(try XCTUnwrap(reading.baselineRate), 1, accuracy: 1e-9)
+    }
+
+    func testBaselineNeedsEnoughHistory() {
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: [
+            day("2026-08-01", cost: 1, input: 1_000_000),
+            day("2026-08-02", cost: 2, input: 1_000_000)
+        ]))
+
+        XCTAssertNil(reading.baselineRate, "two prior days is not a baseline")
+        XCTAssertNil(reading.deltaPercent)
+    }
+
+    func testThinLatestDayIsNotUsedAsTheHeadline() {
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: [
+            day("2026-08-01", cost: 2, input: 1_000_000),
+            day("2026-08-02", cost: 5, input: 1_000)      // two requests; noise
+        ]))
+
+        XCTAssertEqual(reading.effectiveRate, 2, accuracy: 1e-9,
+                       "a 1k-token day would headline at $5000/Mtok")
     }
 
     func testDaysWithoutTokenAttributionAreExcluded() {
@@ -56,7 +103,7 @@ final class TokenEfficiencyTests: XCTestCase {
                        "a costed day with no tokens would otherwise inflate the rate")
     }
 
-    func testNoAttributedDaysYieldsNoReading() {
+    func testNoUsableDaysYieldsNoReading() {
         XCTAssertNil(TokenEfficiency.reading(from: [day("2026-08-01", cost: 5)]))
         XCTAssertNil(TokenEfficiency.reading(from: []))
     }
