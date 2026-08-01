@@ -8,14 +8,16 @@ the 中文 half lives here only.
 
 ## Unreleased
 
-### Added
-- **Extra usage now shows its deadline and pace.** The row reported a running
-  total with no indication of when it resets. Claude's API carries no period
-  field for it — no `resets_at`, and `daily` / `weekly` / `cap` / `balance` all
-  return null — but the window is the UTC calendar month, so the countdown is
-  derived locally. Accounts without a `monthly_limit` have no denominator for a
-  percentage, so their pace is a projected total instead: "~$210 by reset",
-  withheld until enough of the month has elapsed for the rate to mean anything.
+### Fixed
+- **Monthly cost estimate counted rows from previous months.** The scan
+  selected log *files* by modification time but then counted every row inside
+  them, so a session resumed today charged its entire back-history to the
+  current month. On 2026-08-01 that reported ~$123 against a real August spend
+  of ~$11, pulling in 50.4M July cache-read tokens. Rows are now filtered by
+  their own timestamp; undated rows still fall back to the file's mtime. The
+  popover usually showed the correct ledger figure instead, so this was mostly
+  visible before the ledger had data for the month — a fresh install, or the
+  first refresh after a month rolls over.
 
 ### Changed
 - **Per-model weekly caps are now first-class limits.** Plans that report
@@ -36,11 +38,12 @@ the 中文 half lives here only.
 
 ### 中文
 
-- **Extra usage 补上到期时间和 pace**：这一行以前只有累计金额，看不出什么时候清零。
-  Claude API 里没有任何周期字段（无 `resets_at`，`daily`/`weekly`/`cap`/`balance`
-  全 null），但窗口就是 UTC 自然月，所以倒计时在本地推出来。没有 `monthly_limit`
-  的账号算不出百分比，pace 就改成金额预测「~$210 by reset」，并且在月初数据不足时
-  不显示——否则 1 号花 $40 会外推成一千多，纯属吓人。
+- **修复月度成本估算把往月的数据算进来**：扫描按文件修改时间筛选，却统计了文件里
+  的**全部**行——今天续上的会话会把它整段历史都算进当月。2026-08-01 实测报出
+  ~$123，而 8 月真实花费只有 ~$11，多算了 5040 万个 7 月的 cache-read token。
+  现在按每行自己的时间戳过滤，没有时间戳的行仍回落到文件 mtime。面板通常显示的是
+  ledger 的正确数字，所以这个偏差主要出现在 ledger 当月还没有数据时——新装，
+  或跨月后的第一次刷新。
 - **分模型行挪到 `Additional limits` 上方**：属于「容量」的东西现在从上到下连续排列，
   中间不再被次级条打断。
 

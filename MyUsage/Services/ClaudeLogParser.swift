@@ -132,7 +132,7 @@ enum ClaudeLogParser {
                       mtime >= since
                 else { continue }
 
-                parseFileBreakdown(url: url, into: &result)
+                parseFileBreakdown(url: url, into: &result, since: since, fallback: mtime)
             }
         }
         return result
@@ -169,9 +169,14 @@ enum ClaudeLogParser {
     }
 
     /// Parse a single JSONL file into a cost-aware breakdown.
-    static func parseFileBreakdown(url: URL, into result: inout Breakdown) {
+    static func parseFileBreakdown(
+        url: URL,
+        into result: inout Breakdown,
+        since: Date? = nil,
+        fallback: Date? = nil
+    ) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
-        parseBreakdown(data: data, into: &result)
+        parseBreakdown(data: data, into: &result, since: since, fallback: fallback)
     }
 
     // MARK: - Per-day cost breakdown (ledger)
@@ -350,26 +355,60 @@ enum ClaudeLogParser {
     }
 
     /// Parse raw JSONL bytes into a cost-aware breakdown.
-    static func parseBreakdown(data: Data, into result: inout Breakdown) {
+    /// `since` filters **rows**, not just files.
+    ///
+    /// Selecting files by modification time is not enough: a session resumed
+    /// today rewrites a file whose transcript reaches back weeks, so counting
+    /// every row in it charges the whole history to the current window. On
+    /// 2026-08-01 that put 50.4M July cache-read tokens into August and
+    /// reported ~$123 for a month whose real spend was ~$11.
+    ///
+    /// Rows with no parseable timestamp fall back to the file's mtime, which
+    /// the caller has already established is in range — the same rule
+    /// `scanDailyBreakdown` uses for day bucketing.
+    static func parseBreakdown(
+        data: Data,
+        into result: inout Breakdown,
+        since: Date? = nil,
+        fallback: Date? = nil
+    ) {
         guard let text = String(data: data, encoding: .utf8) else { return }
         let decoder = JSONDecoder()
         var acc = result
         text.enumerateLines { line, _ in
             guard !line.isEmpty, let lineData = line.data(using: .utf8) else { return }
-            Self.handleLine(lineData, decoder: decoder, result: &acc)
+            Self.handleLine(
+                lineData,
+                decoder: decoder,
+                result: &acc,
+                since: since,
+                fallback: fallback
+            )
         }
         result = acc
     }
 
     // MARK: - Single-line dispatch
 
-    private static func handleLine(_ lineData: Data, decoder: JSONDecoder, result: inout Breakdown) {
+    private static func handleLine(
+        _ lineData: Data,
+        decoder: JSONDecoder,
+        result: inout Breakdown,
+        since: Date? = nil,
+        fallback: Date? = nil
+    ) {
         guard let row = try? decoder.decode(Row.self, from: lineData) else { return }
         guard row.type == "assistant",
               let message = row.message,
               let model = message.model,
               let usage = message.usage
         else { return }
+
+        if let since,
+           let stamp = row.timestamp.flatMap(Self.parseTimestamp) ?? fallback,
+           stamp < since {
+            return
+        }
 
         // Prefer server-computed costUSD when present. Matches ccusage `auto`
         // mode and insulates us from pricing drift / prompt-cache quirks.

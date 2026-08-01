@@ -205,6 +205,83 @@ struct ClaudeLogParserTests {
         #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
     }
 
+    // MARK: - Row-level window filtering
+    //
+    // Regression cover for the monthly cost estimate reading ~$123 on
+    // 2026-08-01 when actual August spend was ~$11: a session resumed that day
+    // rewrote a file whose transcript reached back into July, and every July
+    // row was charged to August because only the *file* mtime was checked.
+
+    private static let augustStart = ISO8601DateFormatter()
+        .date(from: "2026-08-01T00:00:00Z")!
+
+    @Test("Rows older than the window are excluded even when the file is in range")
+    func rowsBeforeWindowAreDropped() {
+        let jsonl = """
+        {"type":"assistant","timestamp":"2026-07-28T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":900,"output_tokens":900}}}
+        {"type":"assistant","timestamp":"2026-08-01T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+
+        ClaudeLogParser.parseBreakdown(
+            data: jsonl,
+            into: &acc,
+            since: Self.augustStart,
+            fallback: Self.augustStart
+        )
+
+        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
+    }
+
+    @Test("Pre-window costUSD rows are excluded too")
+    func preComputedCostRespectsWindow() {
+        let jsonl = """
+        {"type":"assistant","costUSD":9.99,"timestamp":"2026-07-28T10:00:00Z","message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
+        {"type":"assistant","costUSD":0.25,"timestamp":"2026-08-02T10:00:00Z","message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+
+        ClaudeLogParser.parseBreakdown(
+            data: jsonl,
+            into: &acc,
+            since: Self.augustStart,
+            fallback: Self.augustStart
+        )
+
+        #expect(abs(acc.preComputedCost - 0.25) < 1e-9)
+    }
+
+    /// A row with no timestamp cannot be placed, so it inherits the file's
+    /// mtime — which the caller already checked is in range.
+    @Test("Undated rows fall back to the file mtime")
+    func undatedRowsUseFallback() {
+        let jsonl = """
+        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+
+        ClaudeLogParser.parseBreakdown(
+            data: jsonl,
+            into: &acc,
+            since: Self.augustStart,
+            fallback: Self.augustStart.addingTimeInterval(3_600)
+        )
+
+        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
+    }
+
+    @Test("Omitting the window keeps counting every row")
+    func noWindowCountsEverything() {
+        let jsonl = """
+        {"type":"assistant","timestamp":"2020-01-01T00:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
+        """.data(using: .utf8)!
+        var acc = ClaudeLogParser.Breakdown()
+
+        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
+
+        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
+    }
+
     @Test("Mixed rows split between cost and token buckets")
     func mixedRows() {
         let jsonl = """
