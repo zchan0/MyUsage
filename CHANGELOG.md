@@ -6,7 +6,7 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## Unreleased
+## v0.17.0 — 2026-08-01
 
 ### Added
 - **Token efficiency replaces the raw token counters.** The four counters
@@ -34,7 +34,9 @@ the 中文 half lives here only.
   TTL — was priced at the cheaper rate. Measured on one account, August to date
   moved from $92.99 to $112.10. Existing installs pick the corrected rates up
   when the 24-hour pricing cache next refreshes; pre-split history is left at
-  its recorded value rather than revalued on a guess.
+  its recorded value rather than revalued on a guess. **Expect cost figures to
+  step up by roughly 10-15% after upgrading** — that is the correction landing,
+  not new spend.
 
 ### 中文
 
@@ -50,7 +52,8 @@ the 中文 half lives here only.
   2 倍。transcript 和上游价格表都提供了这个区分，而 MyUsage 两边都丢掉了 —— Claude
   Code 用的正是 1 小时档，于是几乎所有 Claude 缓存写入都按便宜的档位计价。实测某账号
   8 月至今由 $92.99 修正为 $112.10。存量安装在 24 小时价格缓存刷新后自动生效；
-  拆分之前的历史保留原值，不做凭空重估。
+  拆分之前的历史保留原值，不做凭空重估。**升级后成本数字会上调约 10–15%**，
+  那是修正生效，不是新增花费。
 
 ## v0.16.4 — 2026-08-01
 
