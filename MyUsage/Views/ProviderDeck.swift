@@ -243,7 +243,11 @@ struct ProviderDeck: View {
                 // Fall back to the raw counters when that is unavailable.
                 if let efficiency = TokenEfficiency.reading(from: series) {
                     sectionDivider
-                    TokenEfficiencySection(kind: provider.kind, reading: efficiency)
+                    TokenEfficiencySection(
+                        kind: provider.kind,
+                        reading: efficiency,
+                        sessionResetsAt: snapshot.sessionUsage?.resetsAt
+                    )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 13)
                 } else if let tokens {

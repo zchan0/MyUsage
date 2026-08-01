@@ -15,6 +15,10 @@ import SwiftUI
 struct TokenEfficiencySection: View {
     let kind: ProviderKind
     let reading: TokenEfficiency.Reading
+    /// When the 5-hour window rolls over. The TTL notice needs it because the
+    /// downgrade lifts at that moment, which turns "wait" from vague advice
+    /// into a decision the user can actually make.
+    var sessionResetsAt: Date?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -24,7 +28,8 @@ struct TokenEfficiencySection: View {
             rateRow.padding(.top, 10)
             meter.padding(.top, 11)
             if case .downgraded(let share) = reading.cacheTTL {
-                CacheTTLNotice(sharePercent: share).padding(.top, 11)
+                CacheTTLNotice(sharePercent: share, resetsAt: sessionResetsAt)
+                    .padding(.top, 11)
             }
             footnote.padding(.top, 8)
         }
@@ -113,10 +118,16 @@ struct TokenEfficiencySection: View {
 /// server-side, invisible everywhere else, and expensive — context stops
 /// surviving normal idle gaps, so it gets rebuilt several times as often.
 ///
-/// The copy names the cause and the recovery condition, because an alert the
-/// user cannot act on is just an alarm.
+/// **The body says what to do, not what happened.** The title already carries
+/// the diagnosis, and the user cannot lift the downgrade — it is server-side.
+/// What they can do is pace around it: work without long pauses so the
+/// short-lived cache keeps getting refreshed, or stop until the window rolls
+/// over. Naming the countdown makes that a real choice rather than "wait a
+/// while". The measurement that triggered the notice moves to the tooltip,
+/// where it belongs — it explains the alert, it is not the instruction.
 private struct CacheTTLNotice: View {
     let sharePercent: Double
+    let resetsAt: Date?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -139,11 +150,25 @@ private struct CacheTTLNotice: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 8)
         .background(accent.opacity(colorScheme == .dark ? 0.13 : 0.10), in: RoundedRectangle(cornerRadius: 6))
-        .help("Exhausting the 5-hour quota makes the server grant the short-lived cache instead of the 1-hour one.")
+        .help(diagnosis)
     }
 
+    /// Imperative first. The countdown is the second half because it turns
+    /// "or wait" into a decision — a 12-minute wait and a 3-hour one call for
+    /// different behaviour, and the panel already knows which this is.
     private var detail: String {
-        "\(Int(sharePercent.rounded()))% of cache writes are short-lived — context expires after minutes, not an hour. Lifts when the 5-hour window resets."
+        guard let resetsAt, resetsAt > .now else {
+            return "Keep gaps under 5 min until the 5-hour window resets."
+        }
+        let countdown = OverviewSummary.shortCountdown(until: resetsAt)
+        return "Keep gaps under 5 min. Normal caching returns in \(countdown)."
+    }
+
+    /// Why the notice appeared, for anyone who wants to check it.
+    private var diagnosis: String {
+        "\(Int(sharePercent.rounded()))% of recent cache writes are short-lived. "
+            + "Exhausting the 5-hour quota makes the server grant the 5-minute "
+            + "cache instead of the 1-hour one, so context stops surviving idle gaps."
     }
 
     /// Lifted on the dark surface: the stock accent measures 1.78:1 there,
@@ -247,7 +272,8 @@ private struct Sparkline: View {
                 outputPercent: 0.5, totalTokens: 772_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.5, 1.9, 2.1, 2.4],
                 cacheTTL: .downgraded(sharePercent: 36)
-            )
+            ),
+            sessionResetsAt: .now.addingTimeInterval(2 * 3600 + 31 * 60)
         )
     }
     .padding(16)
