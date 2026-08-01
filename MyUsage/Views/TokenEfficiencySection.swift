@@ -121,13 +121,28 @@ struct TokenEfficiencySection: View {
             .monospacedDigit()
             .foregroundStyle(.tertiary)
             .lineLimit(1)
+            .help(footnoteExplanation)
     }
 
+    /// "Processed", not "used". The figure is the billing denominator, and on
+    /// an agentic client roughly 95% of it is one context re-read turn after
+    /// turn — reading it as "how much I made today" is wrong by two orders of
+    /// magnitude, so the word has to carry that.
     private var footnoteText: String {
         let total = TokenCountFormatter.string(reading.totalTokens)
         let output = String(format: "%.1f", reading.outputPercent)
         let reCache = String(format: "%.0f", reading.reCachePercent)
-        return "\(total) tokens today · \(output)% output · \(reCache)% re-cached"
+        return "\(total) processed today · \(output)% generated · \(reCache)% re-cached"
+    }
+
+    /// The composition is the surprising part and the reason the total looks
+    /// enormous, so it is one hover away rather than left to be guessed at.
+    private var footnoteExplanation: String {
+        let generated = Int((Double(reading.totalTokens) * reading.outputPercent / 100).rounded())
+        return "Everything the model read or wrote today — the denominator the "
+            + "rate is priced against. Most of it is the same context re-read "
+            + "each turn; only \(TokenCountFormatter.string(generated)) tokens "
+            + "were newly generated."
     }
 
     /// Sub-dollar rates need a second decimal to move at all; past $10 the
