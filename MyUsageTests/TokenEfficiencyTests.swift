@@ -60,6 +60,9 @@ final class TokenEfficiencyTests: XCTestCase {
         XCTAssertEqual(reading.outputPercent, 10, accuracy: 1e-6,
                        "output is a share of all tokens")
         XCTAssertEqual(reading.totalTokens, 1_000_000)
+        XCTAssertEqual(reading.generatedTokens, 100_000,
+                       "the footnote reports counts, so they must be carried as counts")
+        XCTAssertEqual(reading.reCachedTokens, 100_000)
     }
 
     /// One runaway day should not redefine what "usual" means.

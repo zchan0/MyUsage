@@ -60,9 +60,9 @@ struct TokenEfficiencySection: View {
                 }
                 if let delta = deltaText {
                     Text(delta)
-                        .font(.system(size: 8.5, design: .monospaced))
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Self.readableInk)
                 }
             }
             Sparkline(values: reading.dailyRates, tint: tint)
@@ -117,9 +117,9 @@ struct TokenEfficiencySection: View {
 
     private var footnote: some View {
         Text(footnoteText)
-            .font(.system(size: 9, design: .monospaced))
+            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
             .monospacedDigit()
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(Self.readableInk)
             .lineLimit(1)
             .help(footnoteExplanation)
     }
@@ -130,19 +130,18 @@ struct TokenEfficiencySection: View {
     /// magnitude, so the word has to carry that.
     private var footnoteText: String {
         let total = TokenCountFormatter.string(reading.totalTokens)
-        let output = String(format: "%.1f", reading.outputPercent)
-        let reCache = String(format: "%.0f", reading.reCachePercent)
-        return "\(total) processed today · \(output)% generated · \(reCache)% re-cached"
+        let generated = TokenCountFormatter.string(reading.generatedTokens)
+        let reCached = TokenCountFormatter.string(reading.reCachedTokens)
+        return "\(total) processed · \(generated) generated · \(reCached) re-cached"
     }
 
     /// The composition is the surprising part and the reason the total looks
     /// enormous, so it is one hover away rather than left to be guessed at.
     private var footnoteExplanation: String {
-        let generated = Int((Double(reading.totalTokens) * reading.outputPercent / 100).rounded())
         return "Everything the model read or wrote today — the denominator the "
             + "rate is priced against. Most of it is the same context re-read "
-            + "each turn; only \(TokenCountFormatter.string(generated)) tokens "
-            + "were newly generated."
+            + "each turn, which is why the total dwarfs what was generated "
+            + "(\(String(format: "%.1f", reading.outputPercent))% of it)."
     }
 
     /// Sub-dollar rates need a second decimal to move at all; past $10 the
@@ -155,6 +154,15 @@ struct TokenEfficiencySection: View {
     }
 
     private var tint: Color { kind.usageTint(for: colorScheme) }
+
+    /// Ink for the small monospaced lines that carry figures.
+    ///
+    /// `.secondary` is not enough here. Measured on the real popover surface it
+    /// renders #868686 — 3.25:1, under the 4.5:1 floor for text this size — and
+    /// neither a heavier weight nor a larger size moved it, because the
+    /// hierarchical style itself is the ceiling. An explicit opacity is the only
+    /// lever that does. Verified by sampling the rendered panel, not assumed.
+    static let readableInk = Color.primary.opacity(0.80)
 }
 
 /// The alert this section exists for. A prompt-cache TTL downgrade is
@@ -302,7 +310,8 @@ private struct Sparkline: View {
             kind: .claude,
             reading: TokenEfficiency.Reading(
                 effectiveRate: 1.30, baselineRate: 1.28, cacheHitPercent: 97, reCachePercent: 3,
-                outputPercent: 0.5, totalTokens: 52_000_000,
+                outputPercent: 0.5, generatedTokens: 260_000,
+                reCachedTokens: 1_600_000, totalTokens: 52_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.4, 1.1, 1.3, 1.3],
                 cacheTTL: .standard
             )
@@ -312,7 +321,8 @@ private struct Sparkline: View {
             kind: .claude,
             reading: TokenEfficiency.Reading(
                 effectiveRate: 1.78, baselineRate: 1.28, cacheHitPercent: 90, reCachePercent: 10,
-                outputPercent: 0.5, totalTokens: 52_000_000,
+                outputPercent: 0.5, generatedTokens: 260_000,
+                reCachedTokens: 1_600_000, totalTokens: 52_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.5, 1.9, 2.1, 2.4],
                 cacheTTL: .downgraded(sharePercent: 36)
             ),

@@ -37,6 +37,13 @@ enum TokenEfficiency {
         let reCachePercent: Double
         /// Share of all tokens that were generated rather than re-read (0–100).
         let outputPercent: Double
+        /// Tokens the model actually wrote. Reported as a count rather than a
+        /// share because the footnote's other figures are counts, and a
+        /// percentage of a number two orders of magnitude larger is arithmetic
+        /// the reader should not have to do.
+        let generatedTokens: Int
+        /// Tokens spent rebuilding cache that had expired.
+        let reCachedTokens: Int
         /// Tokens processed on the headline day — the denominator, not a
         /// headline.
         let totalTokens: Int
@@ -111,6 +118,8 @@ enum TokenEfficiency {
             cacheHitPercent: prompt > 0 ? Double(cached) / Double(prompt) * 100 : 0,
             reCachePercent: prompt > 0 ? Double(day.cacheWrite) / Double(prompt) * 100 : 0,
             outputPercent: day.total > 0 ? Double(day.output) / Double(day.total) * 100 : 0,
+            generatedTokens: day.output,
+            reCachedTokens: day.cacheWrite,
             totalTokens: day.total,
             dailyRates: dailyRates(from: usable, limit: sparklineDays),
             cacheTTL: ttlState(from: usable.suffix(ttlWindowDays))
