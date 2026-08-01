@@ -43,12 +43,44 @@ enum ClaudeLogParser {
             let outputTokens: Int?
             let cacheCreationInputTokens: Int?
             let cacheReadInputTokens: Int?
+            /// Per-TTL split of the cache-creation total. Present on current
+            /// Claude Code builds; absent on older transcripts.
+            let cacheCreation: CacheCreation?
 
             enum CodingKeys: String, CodingKey {
                 case inputTokens = "input_tokens"
                 case outputTokens = "output_tokens"
                 case cacheCreationInputTokens = "cache_creation_input_tokens"
                 case cacheReadInputTokens = "cache_read_input_tokens"
+                case cacheCreation = "cache_creation"
+            }
+
+            struct CacheCreation: Decodable {
+                let ephemeral5mInputTokens: Int?
+                let ephemeral1hInputTokens: Int?
+
+                enum CodingKeys: String, CodingKey {
+                    case ephemeral5mInputTokens = "ephemeral_5m_input_tokens"
+                    case ephemeral1hInputTokens = "ephemeral_1h_input_tokens"
+                }
+            }
+
+            /// Cache-write tokens split by TTL, which bill at different rates.
+            ///
+            /// Rows without the `cache_creation` breakdown fall back to
+            /// charging the flat total at the 5-minute rate — the cheaper one,
+            /// so an old transcript is never revalued upward on a guess.
+            var cacheWriteByTTL: (fiveMinute: Int, oneHour: Int) {
+                guard let cacheCreation,
+                      cacheCreation.ephemeral5mInputTokens != nil
+                        || cacheCreation.ephemeral1hInputTokens != nil
+                else {
+                    return (cacheCreationInputTokens ?? 0, 0)
+                }
+                return (
+                    cacheCreation.ephemeral5mInputTokens ?? 0,
+                    cacheCreation.ephemeral1hInputTokens ?? 0
+                )
             }
         }
     }
@@ -308,7 +340,8 @@ enum ClaudeLogParser {
             let tokens = TokenUsage(
                 input: usage.inputTokens ?? 0,
                 output: usage.outputTokens ?? 0,
-                cacheWrite: usage.cacheCreationInputTokens ?? 0,
+                cacheWrite5m: usage.cacheWriteByTTL.fiveMinute,
+                cacheWrite1h: usage.cacheWriteByTTL.oneHour,
                 cacheRead: usage.cacheReadInputTokens ?? 0
             )
             if !tokens.isEmpty {
@@ -420,7 +453,8 @@ enum ClaudeLogParser {
         let tokens = TokenUsage(
             input: usage.inputTokens ?? 0,
             output: usage.outputTokens ?? 0,
-            cacheWrite: usage.cacheCreationInputTokens ?? 0,
+            cacheWrite5m: usage.cacheWriteByTTL.fiveMinute,
+            cacheWrite1h: usage.cacheWriteByTTL.oneHour,
             cacheRead: usage.cacheReadInputTokens ?? 0
         )
         // Skip no-op rows that all sum to 0 (queue-ops, errors, etc.)

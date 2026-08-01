@@ -94,12 +94,17 @@ enum PricingUpdater {
 
             let cacheRead = entry["cache_read_input_token_cost"] as? Double
             let cacheWrite = entry["cache_creation_input_token_cost"] as? Double
+            // LiteLLM publishes the 1-hour cache-write rate separately. Claude
+            // Code writes with the 1-hour TTL by default, so omitting this
+            // priced most Claude cache writes at the cheaper 5-minute rate.
+            let cacheWrite1h = entry["cache_creation_input_token_cost_above_1hr"] as? Double
 
             if key.hasPrefix("claude-") {
                 models[key] = ModelPricing(
                     input: inputPerToken * 1_000_000,
                     output: outputPerToken * 1_000_000,
                     cacheWrite: cacheWrite.map { $0 * 1_000_000 },
+                    cacheWrite1h: cacheWrite1h.map { $0 * 1_000_000 },
                     cacheRead: cacheRead.map { $0 * 1_000_000 },
                     cachedInput: nil
                 )

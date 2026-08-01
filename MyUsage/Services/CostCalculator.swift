@@ -9,8 +9,14 @@ enum CostCalculator {
         var total = 0.0
         total += Double(usage.input)  * price.input  / 1_000_000
         total += Double(usage.output) * price.output / 1_000_000
+        // The two cache-write TTLs bill differently (1.25× vs 2× input), so
+        // they are priced separately. A table without the 1-hour rate falls
+        // back to the 5-minute one rather than dropping the tokens.
         if let cw = price.cacheWrite {
-            total += Double(usage.cacheWrite) * cw / 1_000_000
+            total += Double(usage.cacheWrite5m) * cw / 1_000_000
+        }
+        if let cw1h = price.cacheWrite1h ?? price.cacheWrite {
+            total += Double(usage.cacheWrite1h) * cw1h / 1_000_000
         }
         if let cr = price.cacheRead {
             total += Double(usage.cacheRead) * cr / 1_000_000
