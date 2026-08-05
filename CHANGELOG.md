@@ -6,7 +6,7 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## Unreleased
+## v0.17.1 — 2026-08-05
 
 ### Fixed
 - **The cache TTL notice was permanent.** It read the trailing two *usable
