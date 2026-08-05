@@ -246,7 +246,7 @@ struct ProviderDeck: View {
                     TokenEfficiencySection(
                         kind: provider.kind,
                         reading: efficiency,
-                        sessionResetsAt: snapshot.sessionUsage?.resetsAt
+                        session: snapshot.sessionUsage
                     )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 13)

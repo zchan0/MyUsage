@@ -76,6 +76,29 @@ struct LedgerEntryTests {
         #expect(key == expected)
     }
 
+    /// The label has to name the same day the key does. Formatting a UTC key
+    /// in local time shifts it by one for anyone west of Greenwich, which is
+    /// how a reading ends up captioned with the wrong date.
+    @Test("LedgerCalendar shortLabel names the key's own day")
+    func shortLabelIsUTC() {
+        let label = LedgerCalendar.shortLabel(for: "2026-08-01")
+
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = TimeZone(identifier: "UTC")!
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let date = cal.date(from: DateComponents(year: 2026, month: 8, day: 1))!
+
+        #expect(label == formatter.string(from: date))
+    }
+
+    @Test("LedgerCalendar shortLabel passes through an unparseable key")
+    func shortLabelFallback() {
+        #expect(LedgerCalendar.shortLabel(for: "not-a-day") == "not-a-day")
+    }
+
     @Test("LedgerCalendar monthKey and monthPrefix agree")
     func monthHelpers() {
         let dayKey = "2026-04-17"

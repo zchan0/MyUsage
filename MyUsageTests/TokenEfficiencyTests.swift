@@ -54,9 +54,6 @@ final class TokenEfficiencyTests: XCTestCase {
                 input: 100_000, output: 100_000, write1h: 100_000, read: 700_000)
         ]))
 
-        XCTAssertEqual(reading.cacheHitPercent, 700.0 / 900 * 100, accuracy: 1e-6,
-                       "hits are a share of prompt tokens, not of everything")
-        XCTAssertEqual(reading.reCachePercent, 100.0 / 900 * 100, accuracy: 1e-6)
         XCTAssertEqual(reading.outputPercent, 10, accuracy: 1e-6,
                        "output is a share of all tokens")
         XCTAssertEqual(reading.totalTokens, 1_000_000)
@@ -135,12 +132,40 @@ final class TokenEfficiencyTests: XCTestCase {
         XCTAssertEqual(rates.first, 7)
     }
 
+    // MARK: - Headline day identity
+
+    /// A quiet stretch drops every recent day below the volume floor, so the
+    /// headline falls back to the last day with real volume. Presenting that
+    /// as "today" misreports the reading.
+    func testHeadlineCarriesTheDayItActuallyDescribes() {
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(
+            from: [
+                day("2026-08-01", cost: 2, input: 1_000_000),
+                day("2026-08-05", cost: 0.01, input: 1_000)     // below the floor
+            ],
+            today: "2026-08-05"
+        ))
+
+        XCTAssertEqual(reading.day, "2026-08-01")
+        XCTAssertFalse(reading.isCurrentDay,
+                       "four-day-old numbers must not be labelled today")
+    }
+
+    func testCurrentDayIsFlaggedWhenItClearsTheFloor() {
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(
+            from: [day("2026-08-05", cost: 2, input: 1_000_000)],
+            today: "2026-08-05"
+        ))
+
+        XCTAssertTrue(reading.isCurrentDay)
+    }
+
     // MARK: - Cache TTL state
 
     func testAllOneHourWritesReadAsStandard() {
         let state = TokenEfficiency.ttlState(from: [
             day("2026-08-01", cost: 1, write1h: 1_000_000)
-        ])
+        ], today: "2026-08-01")
 
         XCTAssertEqual(state, .standard)
     }
@@ -148,7 +173,7 @@ final class TokenEfficiencyTests: XCTestCase {
     func testSustainedShortLivedWritesReadAsDowngraded() {
         let state = TokenEfficiency.ttlState(from: [
             day("2026-08-01", cost: 1, write5m: 400_000, write1h: 600_000)
-        ])
+        ], today: "2026-08-01")
 
         XCTAssertEqual(state, .downgraded(sharePercent: 40))
     }
@@ -158,7 +183,7 @@ final class TokenEfficiencyTests: XCTestCase {
     func testSliverOfShortLivedWritesStaysStandard() {
         let state = TokenEfficiency.ttlState(from: [
             day("2026-08-01", cost: 1, write5m: 50_000, write1h: 1_000_000)
-        ])
+        ], today: "2026-08-01")
 
         XCTAssertEqual(state, .standard)
     }
@@ -166,24 +191,82 @@ final class TokenEfficiencyTests: XCTestCase {
     /// Transcripts predating the per-TTL split land wholly in the 5-minute
     /// bucket. Reporting that as a downgrade would alarm every user on old
     /// data, so it is explicitly not knowable.
-    func testLegacyDataWithNoOneHourVolumeIsUnknown() {
+    func testAllShortLivedWritesWithNoSplitAnywhereIsUnknown() {
         let state = TokenEfficiency.ttlState(from: [
+            day("2026-05-31", cost: 1, write5m: 2_000_000),
             day("2026-06-01", cost: 1, write5m: 1_000_000)
-        ])
+        ], today: "2026-06-01")
 
         XCTAssertEqual(state, .unknown)
     }
 
+    /// ...but once the account has produced 1-hour writes, its transcripts
+    /// demonstrably carry the split, so an all-5m day is a real all-day
+    /// downgrade rather than missing data.
+    func testAllShortLivedWritesAreADowngradeOnceTheSplitIsObservable() {
+        let state = TokenEfficiency.ttlState(from: [
+            day("2026-07-30", cost: 1, write1h: 2_000_000),
+            day("2026-08-01", cost: 1, write5m: 1_000_000)
+        ], today: "2026-08-01")
+
+        XCTAssertEqual(state, .downgraded(sharePercent: 100))
+    }
+
     func testNoCacheWritesIsUnknown() {
         XCTAssertEqual(
-            TokenEfficiency.ttlState(from: [day("2026-08-01", cost: 1, input: 500)]),
+            TokenEfficiency.ttlState(from: [day("2026-08-01", cost: 1, input: 500)],
+                                     today: "2026-08-01"),
             .unknown
         )
     }
 
-    /// Regression: the notice answers "am I degraded now". Averaged over a
-    /// month, a live downgrade dilutes below the threshold and the alert
-    /// silently never fires — which is exactly what happened on first build.
+    /// A day that has barely started carries too few writes for the ratio to
+    /// mean anything — one context rebuild can be the whole sample.
+    func testTooFewWritesToJudgeIsUnknown() {
+        XCTAssertEqual(
+            TokenEfficiency.ttlState(from: [
+                day("2026-08-01", cost: 1, write5m: 80_000, write1h: 20_000)
+            ], today: "2026-08-01"),
+            .unknown
+        )
+    }
+
+    // MARK: - Cache TTL staleness
+
+    /// Regression: the notice answers "am I degraded **now**", and the window
+    /// that answers it was "the last two rows of the series" — rows, not days.
+    /// A gap in usage pinned the verdict to whenever the user last worked hard,
+    /// so a downgrade from four days ago stayed on screen indefinitely.
+    func testDowngradeOnAnEarlierDayDoesNotSurviveIntoToday() {
+        let series = [
+            day("2026-07-31", cost: 1, input: 1_000_000, write5m: 1_500_000, write1h: 1_700_000),
+            day("2026-08-01", cost: 1, input: 1_000_000, write5m: 2_600_000, write1h: 5_000_000),
+            // Three days off, then a clean day.
+            day("2026-08-05", cost: 1, input: 1_000_000, write1h: 600_000)
+        ]
+
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: series, today: "2026-08-05"))
+
+        XCTAssertEqual(reading.cacheTTL, .standard,
+                       "today has no short-lived writes; the alert is about today")
+    }
+
+    /// The same staleness bug in its other form: the old window summed write
+    /// volume across days, so a heavy downgraded day outweighed a light clean
+    /// one by 50:1 and the verdict could not be cleared by working normally.
+    func testCleanCurrentDayIsNotOutweighedByAHeavierDowngradedOne() {
+        let series = [
+            day("2026-08-01", cost: 1, input: 1_000_000, write5m: 2_600_000, write1h: 5_000_000),
+            day("2026-08-02", cost: 1, input: 1_000_000, write1h: 600_000)
+        ]
+
+        XCTAssertEqual(
+            TokenEfficiency.ttlState(from: series, today: "2026-08-02"), .standard
+        )
+    }
+
+    /// A live downgrade must still be reported, and must not be diluted by a
+    /// month of healthy history behind it.
     func testLiveDowngradeIsNotDilutedByAMonthOfHealthyHistory() {
         var series = (1...28).map {
             day(String(format: "2026-07-%02d", $0), cost: 1,
@@ -191,15 +274,26 @@ final class TokenEfficiencyTests: XCTestCase {
         }
         series.append(day("2026-07-31", cost: 1, input: 1_000_000,
                           write5m: 400_000, write1h: 600_000))
-        series.append(day("2026-08-01", cost: 1, input: 1_000_000,
-                          write5m: 400_000, write1h: 600_000))
 
-        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: series))
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: series, today: "2026-07-31"))
 
         XCTAssertEqual(reading.cacheTTL, .downgraded(sharePercent: 40))
-        XCTAssertEqual(
-            TokenEfficiency.ttlState(from: series), .standard,
-            "the whole-window view is what dilutes it — that is why reading() scopes to recent days"
-        )
+    }
+
+    /// The current day may be too thin to headline the rate and still carry
+    /// plenty of cache writes. The TTL verdict has its own floor and must not
+    /// inherit the rate's.
+    func testTTLVerdictIsNotGatedOnTheRateVolumeFloor() {
+        let series = [
+            day("2026-08-01", cost: 5, input: 5_000_000, write1h: 2_000_000),
+            // No cost recorded yet, so this day never enters `usable`.
+            day("2026-08-02", cost: 0, write5m: 900_000, write1h: 100_000)
+        ]
+
+        let reading = try! XCTUnwrap(TokenEfficiency.reading(from: series, today: "2026-08-02"))
+
+        XCTAssertEqual(reading.day, "2026-08-01", "the rate still comes from the last real day")
+        XCTAssertEqual(reading.cacheTTL, .downgraded(sharePercent: 90),
+                       "but the TTL verdict is read off today")
     }
 }

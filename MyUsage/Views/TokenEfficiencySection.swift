@@ -3,22 +3,26 @@ import SwiftUI
 /// Replaces the four raw token counters with the readings that actually move.
 ///
 /// Design decisions and their reasons live in
-/// `docs/ui-mockups/token-efficiency-v17.html`. The load-bearing ones:
+/// `docs/ui-mockups/token-efficiency-v17.html`, which records the layout as
+/// first shipped. The load-bearing ones:
 ///
 /// - The rate is a **stat tile**, not a hero — the detail page already leads
 ///   with the 5-hour percentage, and a view gets one hero.
-/// - The meter's track is a lighter step of the provider's own hue rather than
-///   a neutral gray, so the reading carries across the whole bar.
 /// - The TTL notice pairs an icon and a sentence with the accent colour. It
 ///   never leans on hue alone — which also sidesteps a measured weakness in the
 ///   app's warn/crit pair (ΔE 11.1 unsimulated, below the legibility floor).
+///
+/// One departure from that mockup: the cache-hit meter it shows is gone. On
+/// real data the ratio never leaves 91–98%, so the bar was always nearly full
+/// and no reading of it changed anything. See `TokenEfficiency`.
 struct TokenEfficiencySection: View {
     let kind: ProviderKind
     let reading: TokenEfficiency.Reading
-    /// When the 5-hour window rolls over. The TTL notice needs it because the
-    /// downgrade lifts at that moment, which turns "wait" from vague advice
-    /// into a decision the user can actually make.
-    var sessionResetsAt: Date?
+    /// The current 5-hour window. The TTL notice needs both halves of it: the
+    /// reset time, because the downgrade lifts at that moment and naming the
+    /// countdown turns "wait" into a decision; and the percentage, because
+    /// exhausting this window is what causes the downgrade in the first place.
+    var session: UsageWindow?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -26,13 +30,25 @@ struct TokenEfficiencySection: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             rateRow.padding(.top, 10)
-            meter.padding(.top, 11)
-            if case .downgraded(let share) = reading.cacheTTL {
-                CacheTTLNotice(sharePercent: share, resetsAt: sessionResetsAt)
+            if case .downgraded(let share) = reading.cacheTTL, sessionIsSpent {
+                CacheTTLNotice(sharePercent: share, resetsAt: session?.resetsAt)
                     .padding(.top, 11)
             }
-            footnote.padding(.top, 8)
+            footnote.padding(.top, 9)
         }
+    }
+
+    /// The server grants the 5-minute TTL *because* the 5-hour quota ran out,
+    /// so a window nowhere near its cap is proof the downgrade is not live —
+    /// whatever short-lived writes are sitting in today's totals came from a
+    /// window that has since rolled over. Without this gate the notice can
+    /// claim the quota is exhausted directly below a bar reading 0% used.
+    ///
+    /// Not 100%: the reported percentage lags the transcript, and the notice
+    /// is worth showing while the cap is being approached.
+    private var sessionIsSpent: Bool {
+        guard let session else { return false }
+        return session.percentUsed >= 80
     }
 
     private var header: some View {
@@ -41,10 +57,23 @@ struct TokenEfficiencySection: View {
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
-            Text("today · all accounts")
+            Text("\(dayLabel) · all accounts")
                 .font(.system(size: 8.5))
                 .foregroundStyle(.tertiary)
         }
+    }
+
+    /// A quiet day falls below the volume floor and the headline falls back to
+    /// the last day that clears it, which can be a week old. Saying "today"
+    /// over that is simply false — and it is the kind of false a user only
+    /// catches by recognising their own numbers from last week.
+    private var dayLabel: String {
+        reading.isCurrentDay ? "today" : LedgerCalendar.shortLabel(for: reading.day)
+    }
+
+    /// The same day, worded to sit inside a sentence.
+    private var dayPhrase: String {
+        reading.isCurrentDay ? "today" : "on \(dayLabel)"
     }
 
     private var rateRow: some View {
@@ -71,36 +100,12 @@ struct TokenEfficiencySection: View {
         .help(rateExplanation)
     }
 
-    private var meter: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Cache hits")
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(Int(reading.cacheHitPercent.rounded()))%")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(tint.opacity(0.18))
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: geo.size.width * min(1, reading.cacheHitPercent / 100))
-                }
-            }
-            .frame(height: 5)
-        }
-        .help("Share of prompt tokens served from cache. Reads cost a tenth of fresh input.")
-    }
-
     /// What the number is and why it moves. Nothing else in the popover
     /// states a unit price, so it cannot be inferred from context.
     private var rateExplanation: String {
-        var text = "What a million tokens of work cost you today: spend divided "
-            + "by tokens processed. It rises when a pricier model does more of "
-            + "the work, or when less of the context comes from cache."
+        var text = "What a million tokens of work cost you \(dayPhrase): spend "
+            + "divided by tokens processed. It rises when a pricier model does "
+            + "more of the work, or when less of the context comes from cache."
         if let baseline = reading.baselineRate {
             text += String(format: " Your recent median is $%.2f.", baseline)
         }
@@ -138,8 +143,8 @@ struct TokenEfficiencySection: View {
     /// The composition is the surprising part and the reason the total looks
     /// enormous, so it is one hover away rather than left to be guessed at.
     private var footnoteExplanation: String {
-        return "Everything the model read or wrote today — the denominator the "
-            + "rate is priced against. Most of it is the same context re-read "
+        return "Everything the model read or wrote \(dayPhrase) — the denominator "
+            + "the rate is priced against. Most of it is the same context re-read "
             + "each turn, which is why the total dwarfs what was generated "
             + "(\(String(format: "%.1f", reading.outputPercent))% of it)."
     }
@@ -306,27 +311,51 @@ private struct Sparkline: View {
 #if DEBUG
 #Preview("Token efficiency") {
     VStack(spacing: 0) {
+        // Healthy, current day.
         TokenEfficiencySection(
             kind: .claude,
             reading: TokenEfficiency.Reading(
-                effectiveRate: 1.30, baselineRate: 1.28, cacheHitPercent: 97, reCachePercent: 3,
+                effectiveRate: 1.30, baselineRate: 1.28,
+                day: LedgerCalendar.dayKey(for: .now), isCurrentDay: true,
                 outputPercent: 0.5, generatedTokens: 260_000,
                 reCachedTokens: 1_600_000, totalTokens: 52_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.4, 1.1, 1.3, 1.3],
                 cacheTTL: .standard
-            )
+            ),
+            session: UsageWindow(percentUsed: 12, resetsAt: .now.addingTimeInterval(4 * 3600))
         )
         Divider()
+        // Live downgrade: today's writes are short-lived *and* the window
+        // that causes it is nearly spent. Both halves are required.
         TokenEfficiencySection(
             kind: .claude,
             reading: TokenEfficiency.Reading(
-                effectiveRate: 1.78, baselineRate: 1.28, cacheHitPercent: 90, reCachePercent: 10,
+                effectiveRate: 1.78, baselineRate: 1.28,
+                day: LedgerCalendar.dayKey(for: .now), isCurrentDay: true,
                 outputPercent: 0.5, generatedTokens: 260_000,
                 reCachedTokens: 1_600_000, totalTokens: 52_000_000,
                 dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 1.2, 1.5, 1.9, 2.1, 2.4],
                 cacheTTL: .downgraded(sharePercent: 36)
             ),
-            sessionResetsAt: .now.addingTimeInterval(2 * 3600 + 31 * 60)
+            session: UsageWindow(
+                percentUsed: 97,
+                resetsAt: .now.addingTimeInterval(2 * 3600 + 31 * 60)
+            )
+        )
+        Divider()
+        // Quiet stretch: the headline falls back to the last day with volume,
+        // and says so rather than calling week-old numbers "today".
+        TokenEfficiencySection(
+            kind: .claude,
+            reading: TokenEfficiency.Reading(
+                effectiveRate: 0.76, baselineRate: 1.28,
+                day: "2026-08-01", isCurrentDay: false,
+                outputPercent: 0.2, generatedTokens: 425_000,
+                reCachedTokens: 7_600_000, totalTokens: 212_000_000,
+                dailyRates: [1.2, 1.5, 1.1, 1.9, 1.0, 1.4, 0.9, 1.3, 1.6, 0.76],
+                cacheTTL: .unknown
+            ),
+            session: UsageWindow(percentUsed: 0, resetsAt: .now.addingTimeInterval(4 * 3600))
         )
     }
     .padding(16)

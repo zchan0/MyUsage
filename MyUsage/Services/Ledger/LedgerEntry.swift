@@ -191,6 +191,25 @@ enum LedgerCalendar {
         String(day.prefix(7))
     }
 
+    /// "Jul 12" for a day key. Formatted in UTC so the label names the same
+    /// day the key does — rendering a UTC key in local time shifts it by one
+    /// for anyone west of Greenwich. Returns the key unchanged if unparseable.
+    static func shortLabel(for day: String) -> String {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return day }
+        var comps = DateComponents()
+        comps.year = parts[0]
+        comps.month = parts[1]
+        comps.day = parts[2]
+        guard let date = utc.date(from: comps) else { return day }
+
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = utc.timeZone
+        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        return formatter.string(from: date)
+    }
+
     /// First instant of the calendar month containing `date`, in UTC.
     static func startOfMonthUTC(for date: Date) -> Date {
         let comps = utc.dateComponents([.year, .month], from: date)

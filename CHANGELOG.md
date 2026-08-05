@@ -6,6 +6,48 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## Unreleased
+
+### Fixed
+- **The cache TTL notice was permanent.** It read the trailing two *usable
+  rows* of the ledger series rather than the trailing two calendar days, so a
+  gap in usage pinned the verdict to whenever the user last worked hard: a
+  downgrade measured on 2026-08-01 was still on screen four days later, beside
+  a 5-hour bar reading 0% used. The share was volume-weighted across those
+  rows too, so a clean current day contributing 2% of the writes could not
+  clear it. The verdict is now read off the current day only, needs 500k cache
+  writes before it will call one, and is drawn only while the 5-hour window is
+  actually near its cap — which is the condition that causes the downgrade in
+  the first place.
+- **"Today" was frequently not today.** A quiet day falls below the volume
+  floor and the headline falls back to the last day that clears it. That day
+  was still captioned "today", so week-old numbers read as current. The
+  section now names the day it is describing.
+
+### Removed
+- **The cache-hit meter.** Across this app's own ledger the ratio never leaves
+  91–98% on any day with real volume, while the effective rate over the same
+  days swings 5×. The bar was always nearly full, no reading of it changed
+  anything, and the rate already absorbs it — a cache that stops working shows
+  up as a more expensive million tokens. The absolute re-cached count stays in
+  the footnote.
+
+### 中文
+
+- **修复缓存 TTL 提示常驻不消**：判定窗口取的是 ledger 序列的最后两个**有效行**，
+  而不是最后两个日历日。中间几天不用，结论就会一直钉在你上次重度使用的那天：
+  2026-08-01 测到的降级，四天后仍然挂在面板上，旁边的 5-hour 却写着 0% used。
+  份额还是按写入量跨日加权的，于是干净的当天只占 2% 写入量，根本压不下去。
+  现在只读当天，且要求当天至少有 50 万缓存写入才下结论，并且只在 5 小时窗口
+  确实接近打满时才显示 —— 那正是触发降级的前提条件。
+- **修复「today」经常不是今天**：清闲的一天达不到volume门槛，头条会回退到最近一个
+  达标的日子，但标签仍写着 today，于是一周前的数字被当成当前数据读。现在标注的是
+  它真正描述的那一天。
+- **删除缓存命中率条**：用本 app 自己的 ledger 实测，任何有真实用量的一天，命中率
+  都在 91%–98% 之间，而同期等效单价摆动 5 倍。那根条永远接近满格，怎么读都不改变
+  任何决定，而且单价本来就已经吸收了它 —— 缓存失效会直接表现为「每百万 token 更贵」。
+  re-cached 的绝对值仍保留在注脚里。
+
 ## v0.17.0 — 2026-08-01
 
 ### Added
