@@ -1,125 +1,39 @@
-# AGENTS.md — MyUsage Development Guide
+# MyUsage Development Guide
 
-## Project Overview
+## Project overview
 
-**MyUsage** is a native macOS menu bar app (Swift/SwiftUI, macOS 14+) that monitors AI coding tool usage across Claude Code, Codex, Cursor, and Antigravity.
+MyUsage is a native macOS 14+ menu-bar app that aggregates usage from Claude Code, Codex, Cursor, and Antigravity, including user-owned multi-device sync.
 
-- Repo: https://github.com/zchan0/MyUsage.git
-- Language: Swift 6, SwiftUI
-- Target: macOS 14+ (Sonoma)
-- Dependencies: None (built-in SQLite3, Security.framework, Foundation)
+- `README.md` is the source of truth for shipped behavior and local usage.
+- `docs/architecture.md` describes the current architecture; verify details against code when they differ.
+- `specs/` records feature decisions and acceptance criteria. Numbered specs are not an active implementation queue unless the user names one as current.
+- The Swift package, implementation, and tests are authoritative for current APIs and file layout.
 
-## Version Control — jj Workflow
+## Build and verification
 
-We use **jj** (Jujutsu) for version control, feature-by-feature development.
+Use the same checks as CI, starting with the narrowest relevant tests:
 
-### Per-Feature Flow
-
-```bash
-# 1. Start a new feature
-jj new -m "feat: <feature-name>"
-
-# 2. Develop + test locally
-# ... write code, write/run unit tests ...
-
-# 3. When done, squash into a clean commit
-jj squash
-
-# 4. Push to GitHub
-jj git push --create  # creates remote branch if needed
+```sh
+swift test
+xcodebuild build -scheme MyUsage -destination 'platform=macOS' -skipPackagePluginValidation
 ```
 
-### Branch / Bookmark Naming
+Use `./Scripts/package_app.sh` only when the task needs an app bundle. For user-visible behavior, run the relevant manual checklist from the active spec when one exists. Add or update tests for deterministic parsing, mapping, calculations, refresh behavior, and provider availability; do not make live credentials or network state a unit-test requirement.
 
-- `main` — stable, always buildable
-- `feat/<feature-name>` — feature branches (e.g. `feat/codex-provider`)
+## Version control
 
-### Commit Message Convention
+The repository is colocated `jj + git`; use `jj status`, `jj diff`, and `jj log` for inspection. Work in the existing working-copy change unless the user asks for a new change or bookmark.
 
-```
-feat: short description       # new feature
-fix: short description        # bug fix
-docs: short description       # documentation only
-test: short description       # adding/updating tests
-refactor: short description   # code restructuring
-chore: short description      # build, config, deps
-```
+- Preserve unrelated working-copy changes.
+- Do not create/split/describe commits, move bookmarks, push, tag, or release unless the user explicitly asks.
+- Before handoff, show the changed files and verification results so the user can review the diff.
+- Never bypass hooks or checks, force-push, or rewrite published history without explicit approval.
 
-### Commit & Push Authority
+## Code conventions
 
-The agent owns the commit + push lifecycle by default. When a task is done
-and verified locally (build + tests green), the agent should, without
-asking for per-operation approval:
-
-1. Split the work into coherent commits using `jj describe` + `jj split`.
-   Granularity is at the agent's discretion — prefer cohesion over hitting
-   an arbitrary commit count, and keep each commit buildable.
-2. Create or move the feature bookmark (`feat/<feature-name>`).
-3. Push with `jj git push` (use `--create` when the remote bookmark
-   doesn't exist yet).
-
-Pushing to `main` is allowed without per-push approval as long as it is a
-**fast-forward** merge of commits that already pass build + tests locally.
-If a merge would not be fast-forward (diverged main), stop and ask.
-
-The agent **must** still ask for explicit approval before any of the
-following, because they are hard to undo or affect shared history:
-
-- Force push (`--force`, `--force-with-lease`).
-- Creating or moving a release tag (`vX.Y.Z`) or triggering a release workflow.
-- Deleting remote bookmarks / branches / tags that the agent did not create.
-- Changing git config, skipping hooks, or rewriting already-pushed history.
-
-If pre-push tests fail, fix the cause and try again — never bypass the check.
-
-## Testing Strategy
-
-### Unit Tests (XCTest)
-
-All logic that doesn't require network or system state must have unit tests:
-
-- Token/credential file parsing
-- API response JSON → model mapping
-- OAuth token refresh logic (with mock responses)
-- Progress percentage calculations
-- Reset time formatting
-- Provider availability detection
-
-Run tests:
-```bash
-xcodebuild test -scheme MyUsage -destination 'platform=macOS'
-```
-
-### BDD Manual Tests
-
-Each feature spec (`specs/*.md`) contains a **Manual Verification Checklist**. After implementing a feature:
-
-1. Build and run the app
-2. Walk through the checklist items
-3. Mark each item ✅ or ❌
-4. All items must pass before pushing
-
-### SwiftUI Previews
-
-All views must have `#Preview` blocks with mock data so UI can be verified without live API calls.
-
-## Feature Development Order
-
-| # | Feature | Spec File |
-|---|---------|-----------|
-| 1 | Project Skeleton | `specs/01-project-skeleton.md` |
-| 2 | Claude Code Provider | `specs/02-claude-provider.md` |
-| 3 | Codex Provider | `specs/03-codex-provider.md` |
-| 4 | Cursor Provider | `specs/04-cursor-provider.md` |
-| 5 | Antigravity Provider | `specs/05-antigravity-provider.md` |
-| 6 | Settings & Auto-Refresh | `specs/06-settings-refresh.md` |
-| 7 | Polish & Launch | `specs/07-polish.md` |
-
-## Code Conventions
-
-- **SwiftUI first**: All UI in SwiftUI, minimal AppKit (only `NSStatusItem`)
-- **Async/await**: Use structured concurrency, no Combine
-- **@Observable**: Use Observation framework (macOS 14+), not `ObservableObject`
-- **No 3rd-party deps**: Everything uses system frameworks
-- **Error handling**: Providers never crash; surface errors as UI states
-- **File organization**: Group by layer (Models / Providers / Services / Views / Utilities)
+- Prefer SwiftUI and Observation (`@Observable`); use AppKit where menu-bar, window, event-monitoring, keychain, or system integration requires it.
+- Use structured concurrency and follow the existing layer boundaries under `Models`, `Providers`, `Services`, `Views`, `MenuBar`, and `Utilities`.
+- Keep the package free of third-party dependencies unless the user explicitly approves one.
+- Providers must surface missing credentials, unavailable tools, API failures, and stale data as recoverable UI states rather than crashing.
+- Never log, commit, or include real credentials, OAuth tokens, local database contents, or user-specific sync data in fixtures.
+- Add `#Preview` coverage when it materially helps review a changed view and follow adjacent preview patterns; it is not required for every small helper view.
