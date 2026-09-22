@@ -82,6 +82,8 @@ xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
 
 详情展示可读取的预算与消费，以及可选的 UTC 月初至今天的费用、模型别名和 token 历史。权限不足只影响对应区块；缺失字段不当作 0，未完整读取会标记部分数据。网关上报费用不参与本地估价和设备同步求和。真实部署的版本与权限需要自行验证。
 
+模型名称与分模型统计读取 `breakdown.model_groups`，对应 Codex、Claude Code 等客户端可见的别名。缺少该字段时模型明细保持不可用，不回退到部署级 `models`，避免显示内部模型名或使用可能遗漏失败请求的统计。
+
 ## 本地构建与打包
 
 ```bash

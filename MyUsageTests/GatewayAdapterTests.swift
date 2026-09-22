@@ -108,14 +108,81 @@ final class GatewayAdapterTests: XCTestCase, @unchecked Sendable {
     }
 
     func testPagedHistoryDoesNotAddCacheToTotalAndKeepsMissingFieldsUnknown() async throws {
-        let a = #"{"results":[{"date":"2026-09-01","metrics":{"spend":1.25,"total_tokens":100,"prompt_tokens":80,"completion_tokens":20,"cache_read_input_tokens":60},"breakdown":{"models":{"alias-a":{"spend":1.25,"total_tokens":100}}}}],"metadata":{"has_more":true}}"#
-        let b = #"{"results":[{"date":"2026-09-02","metrics":{"spend":2.50,"total_tokens":200,"prompt_tokens":180,"completion_tokens":20},"breakdown":{"models":{"alias-a":{"metrics":{"spend":2.5,"total_tokens":200}}}}}],"metadata":{"has_more":false}}"#
+        let a = #"{"results":[{"date":"2026-09-01","metrics":{"spend":1.25,"total_tokens":100,"prompt_tokens":80,"completion_tokens":20,"cache_read_input_tokens":60},"breakdown":{"model_groups":{"alias-a":{"spend":1.25,"total_tokens":100}}}}],"metadata":{"has_more":true}}"#
+        let b = #"{"results":[{"date":"2026-09-02","metrics":{"spend":2.50,"total_tokens":200,"prompt_tokens":180,"completion_tokens":20},"breakdown":{"model_groups":{"alias-a":{"metrics":{"spend":2.5,"total_tokens":200}}}}}],"metadata":{"has_more":false}}"#
         let transport = FixtureGatewayTransport([.init(json: a), .init(json: b)])
         let block = try await LiteLLMAdapter(transport: transport).fetchHistory(context(scope: .init(kind: .user, id: "fixture-user")), start: "2026-09-01", end: "2026-09-22", probe: false)
         let history = try XCTUnwrap(block.value)
         XCTAssertTrue(history.complete); XCTAssertEqual(history.totals.cost, Decimal(string: "3.75"))
         XCTAssertEqual(history.totals.totalTokens, 300); XCTAssertNil(history.totals.cacheReadTokens)
         XCTAssertEqual(history.models.first?.name, "alias-a"); XCTAssertEqual(history.models.first?.metrics.totalTokens, 300)
+    }
+
+    func testHistoryUsesModelGroupsForAliasesAndRequestsIncludingFailures() async throws {
+        let json = #"""
+        {"results":[{"date":"2026-09-01",
+          "metrics":{"spend":1.25,"total_tokens":100,"api_requests":6},
+          "breakdown":{
+            "model_groups":{
+              "codex-alias":{"metrics":{"spend":1.25,"total_tokens":100,"api_requests":4,"successful_requests":3,"failed_requests":1}},
+              "cc-alias":{"metrics":{"spend":0,"total_tokens":0,"api_requests":2,"successful_requests":0,"failed_requests":2}}
+            },
+            "models":{"custom-model-b12":{"metrics":{"spend":1.25,"total_tokens":100,"api_requests":3,"successful_requests":3,"failed_requests":0}}}
+          }
+        }],"metadata":{"has_more":false}}
+        """#
+        let adapter = LiteLLMAdapter(transport: FixtureGatewayTransport([.init(json: json)]))
+        let block = try await adapter.fetchHistory(context(scope: .init(kind: .user, id: "fixture-user")), start: "2026-09-01", end: "2026-09-22")
+        let history = try XCTUnwrap(block.value)
+        XCTAssertNil(block.issue)
+        XCTAssertTrue(history.hasCompleteModelBreakdown)
+        let day = try XCTUnwrap(history.days.first)
+        XCTAssertEqual(Set(day.models.keys), ["codex-alias", "cc-alias"])
+        XCTAssertEqual(day.models["codex-alias"]?.requests, 4)
+        XCTAssertEqual(day.models["cc-alias"]?.requests, 2, "Failed-only groups remain in the mapped history")
+        XCTAssertEqual(history.models.map(\.name), ["codex-alias"], "Existing zero-cost row filtering still applies")
+        XCTAssertEqual(history.models.first?.metrics.requests, 4)
+        XCTAssertEqual(history.totals.requests, 6)
+        XCTAssertEqual(history.totals.cost, Decimal(string: "1.25"))
+        XCTAssertEqual(history.totals.totalTokens, 100)
+    }
+
+    func testMissingOrNullModelGroupsDoNotUseDeploymentModels() async throws {
+        for groupField in ["", #""model_groups":null,"#] {
+            let json = """
+            {"results":[{"date":"2026-09-01","metrics":{"spend":1,"api_requests":2},
+              "breakdown":{\(groupField)"models":{"custom-model-b12":{"metrics":{"spend":1,"api_requests":1}}}}
+            }],"metadata":{"has_more":false}}
+            """
+            let adapter = LiteLLMAdapter(transport: FixtureGatewayTransport([.init(json: json)]))
+            let block = try await adapter.fetchHistory(context(scope: .init(kind: .user, id: "fixture-user")), start: "2026-09-01", end: "2026-09-22")
+            let history = try XCTUnwrap(block.value)
+            XCTAssertNil(block.issue)
+            XCTAssertTrue(history.complete)
+            XCTAssertFalse(history.hasCompleteModelBreakdown)
+            XCTAssertTrue(history.models.isEmpty)
+            XCTAssertEqual(history.days.first?.modelsReported, false)
+            XCTAssertEqual(history.totals.requests, 2)
+            XCTAssertEqual(history.totals.cost, 1)
+        }
+    }
+
+    func testEmptyModelGroupsAreReportedWithoutFallingBackToDeploymentModels() async throws {
+        let json = #"{"results":[{"date":"2026-09-01","metrics":{"spend":1},"breakdown":{"model_groups":{},"models":{"custom-model-b12":{"spend":1}}}}],"metadata":{"has_more":false}}"#
+        let adapter = LiteLLMAdapter(transport: FixtureGatewayTransport([.init(json: json)]))
+        let block = try await adapter.fetchHistory(context(scope: .init(kind: .user, id: "fixture-user")), start: "2026-09-01", end: "2026-09-22")
+        let history = try XCTUnwrap(block.value)
+        XCTAssertTrue(history.hasCompleteModelBreakdown)
+        XCTAssertTrue(history.models.isEmpty)
+        XCTAssertEqual(history.totals.cost, 1)
+    }
+
+    func testUnusedDeploymentModelsCannotInvalidateModelGroups() async throws {
+        let json = #"{"results":[{"date":"2026-09-01","metrics":{"spend":1},"breakdown":{"model_groups":{"codex-alias":{"spend":1}},"models":{"custom-model-b12":{"spend":"invalid"}}}}],"metadata":{"has_more":false}}"#
+        let adapter = LiteLLMAdapter(transport: FixtureGatewayTransport([.init(json: json)]))
+        let block = try await adapter.fetchHistory(context(scope: .init(kind: .user, id: "fixture-user")), start: "2026-09-01", end: "2026-09-22")
+        XCTAssertNil(block.issue)
+        XCTAssertEqual(block.value?.models.map(\.name), ["codex-alias"])
     }
 
     func testHistoryPaginationFailureIsPartialNotFullMonth() async throws {
@@ -159,7 +226,7 @@ final class GatewayAdapterTests: XCTestCase, @unchecked Sendable {
     }
 
     func testTokenOnlyModelsSortByUsageAndMissingModelBreakdownStaysPartial() async throws {
-        let json = #"{"results":[{"date":"2026-09-01","metrics":{"total_tokens":300},"breakdown":{"models":{"smaller":{"total_tokens":100},"bigger":{"total_tokens":200}}}},{"date":"2026-09-02","metrics":{"total_tokens":50}}],"metadata":{"has_more":false}}"#
+        let json = #"{"results":[{"date":"2026-09-01","metrics":{"total_tokens":300},"breakdown":{"model_groups":{"smaller":{"total_tokens":100},"bigger":{"total_tokens":200}}}},{"date":"2026-09-02","metrics":{"total_tokens":50}}],"metadata":{"has_more":false}}"#
         let adapter = LiteLLMAdapter(transport: FixtureGatewayTransport([.init(json: json)]))
         let result = try await adapter.fetchHistory(context(scope: .init(kind: .user, id: "fixture-user")), start: "2026-09-01", end: "2026-09-22")
         let history = try XCTUnwrap(result.value)

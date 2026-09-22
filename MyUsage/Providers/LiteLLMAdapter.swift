@@ -85,8 +85,8 @@ struct LiteLLMAdapter: GatewayAdapter {
                     guard row.date >= start, row.date <= end, dates.insert(row.date).inserted,
                           GatewayCalendar.parseDay(row.date) != nil else { throw GatewayIssue.invalidResponse }
                     days.append(.init(date: row.date, metrics: try row.metrics.mapped(),
-                                      models: try (row.breakdown?.models ?? [:]).mapValues { try $0.mapped() },
-                                      modelsReported: row.breakdown?.models != nil))
+                                      models: try (row.breakdown?.modelGroups ?? [:]).mapValues { try $0.mapped() },
+                                      modelsReported: row.breakdown?.modelGroups != nil))
                 }
                 let hasMore = result.metadata?.hasMore ?? result.metadata?.hasMorePages
                     ?? result.metadata?.totalPages.map { page < $0 }
@@ -217,7 +217,12 @@ private struct HistoryEnvelope: Decodable, Sendable {
         let metrics: Metrics
         let breakdown: Breakdown?
     }
-    struct Breakdown: Decodable, Sendable { let models: [String: ModelMetrics]? }
+    struct Breakdown: Decodable, Sendable {
+        // Client-facing aliases and their request counts live in model_groups.
+        // Deployment-level models are not a fallback: they can omit failed requests.
+        let modelGroups: [String: ModelMetrics]?
+        enum CodingKeys: String, CodingKey { case modelGroups = "model_groups" }
+    }
     struct Metadata: Decodable, Sendable {
         let totalPages: Int?
         let hasMore: Bool?

@@ -101,6 +101,8 @@ The check reads your own `/key/info`, then `/user/info?user_id=…` when your id
 
 Account history comes from `/user/daily/activity`, from the first day of the current month through today in UTC. Availability depends on the deployment and key permissions. Key-only scope currently shows its summary without borrowing account history. Budget-period spend and monthly logged usage can differ. Missing values stay unknown; incomplete pagination/model breakdowns are labeled. Gateway-reported costs are separate from local estimates and multi-device sync, and are not summed across instances.
 
+Model names and per-model metrics come from `breakdown.model_groups`, using the aliases visible in clients such as Codex and Claude Code. If model groups are missing, model details remain unavailable; deployment-level `models` are not used as a fallback because their names and request coverage can differ.
+
 ## Build from Source
 
 ```bash

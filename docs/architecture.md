@@ -71,6 +71,8 @@ Runtime identity is `ProviderID`: stable `builtin:<kind>` IDs for installed tool
 
 The `GatewayAdapter` protocol defines usage-access checks, summary reads and history reads. Only `LiteLLMAdapter` is registered: self `/key/info`, explicitly scoped `/user/info`, and optional `/user/daily/activity`. It maps amounts to Decimal, distinguishes absent/unlimited/zero budgets and preserves missing counts. User history is UTC month-to-date; key history is unsupported until filtering is verified. Pagination, permissions and partial results belong to the adapter. Shared transport uses an ephemeral session, refuses redirects and caps each host at two requests.
 
+LiteLLM model history maps `breakdown.model_groups` to client-facing aliases and their metrics, including the group's reported request count. Deployment-level `breakdown.models` is ignored because its names and failed-request coverage differ. Missing/null model groups mark the model breakdown incomplete while preserving daily totals; a reported empty group dictionary remains distinct from missing data.
+
 Gateway refresh coalesces duplicate requests and rejects results from cancelled/obsolete configuration revisions. History loads on demand with a five-minute in-memory TTL; manual refresh updates the visible detail. Retry-After suppresses immediate retries. Only usable finite budgets feed pressure/notification calculations. See [gateway design](gateway-provider-design.md) and [validation](gateway-provider-validation.md) for the implementation boundaries and remaining live checks.
 
 ## Provider Data Sources
