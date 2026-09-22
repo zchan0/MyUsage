@@ -6,6 +6,42 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.17.2 — 2026-09-22
+
+### Added
+- **LiteLLM gateway providers.** Add a named connection in Settings → Providers
+  with your host and API key. Each connection can be enabled, ordered, edited,
+  and tracked in the menu bar independently. Keys stay in the macOS Keychain.
+  Check Usage Access verifies the gateway's read-only usage APIs.
+- **Gateway budgets and monthly usage.** View account or key budget usage and,
+  where supported by the deployment, UTC month-to-date costs, model breakdowns,
+  and tokens. Budget periods remain distinct from calendar-month history;
+  missing permissions, incomplete data, and failed refreshes have explicit
+  states. Gateway costs stay separate from local estimates and device sync.
+
+### Changed
+- **Provider tabs scroll horizontally.** Overview stays fixed, the selected
+  provider stays visible, and an overflow menu gives direct access to longer
+  provider lists.
+- **Compact gateway details.** One refresh timestamp, four token counters,
+  and no duplicate budget-spend row. Zero-cost models are hidden without
+  changing token totals; positive costs below one cent display as `<$0.01`.
+  A train icon based on LiteLLM's mark adapts to light and dark menu bars.
+
+### 中文
+
+- **新增 LiteLLM 网关 provider**：在 Settings → Providers 配置名称、host 和
+  API key；每个连接独立启停、排序、编辑和菜单栏追踪。凭据保存在 macOS
+  Keychain，Check Usage Access 通过只读用量 API 检查访问权限。
+- **展示网关额度与本月用量**：支持账户或 key 的预算消费，以及部署允许读取的
+  UTC 月累计费用、模型分解和 token。预算周期与自然月历史分别展示；权限不足、
+  数据不完整和刷新失败明确提示。网关费用不与本地估价或设备同步数据求和。
+- **顶部 provider 横向滚动**：Overview 固定，当前选中项自动进入可见范围；
+  内容溢出时可从全部 provider 菜单直接跳转。
+- **精简网关详情**：更新时间只保留一处，token 只保留四列，删除重复预算消费行。
+  零费用模型隐藏但保留其 token 总量，非零微额费用显示 `<$0.01`；LiteLLM
+  列车图标适配菜单栏明暗外观。
+
 ## v0.17.1 — 2026-08-05
 
 ### Fixed

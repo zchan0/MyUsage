@@ -60,12 +60,12 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 | Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h + weekly limits · reserve/deficit outcome · reset-credit inventory · 30-day model cost + token totals · monthly cost |
 | Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota + on-demand budget bars · billing-cycle countdown |
 | Antigravity | Local language server process probe | Per-model quota bars · IDE running indicator |
-| LiteLLM gateway (source build) | Configured host + API key; read-only usage APIs | User/key budget and spend · optional UTC month-to-date cost, model and token history |
+| LiteLLM gateway | Configured host + API key; read-only usage APIs | User/key budget and spend · optional UTC month-to-date cost, model and token history |
 
 ## Requirements
 
 - macOS 14+ (Sonoma)
-- A supported tool installed and signed in, or a configured LiteLLM gateway (source build)
+- A supported tool installed and signed in, or a configured LiteLLM gateway
 
 ## Install
 
@@ -93,7 +93,7 @@ Each release includes a `.sha256` file for checksum verification.
    - `Devices`: inspect aggregated monthly cost by device and forget stale peers
    - `About`: app version and project link
 
-## LiteLLM gateways (source build)
+## LiteLLM gateways
 
 Open **Settings → Providers → Add Gateway…**. Enter a name, your gateway's HTTPS base URL, and API key, then **Check Usage Access** and **Add Provider**. Vendor is currently fixed to LiteLLM. Multiple connections to the same vendor remain independent; keys are stored in this Mac's Keychain. Changing the host requires re-entering a key.
 

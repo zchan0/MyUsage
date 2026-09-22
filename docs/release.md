@@ -15,7 +15,8 @@ Internal docs for cutting a new MyUsage release. End users want
 5. `git push origin main && git push origin vX.Y.Z`.
 6. The `Release` workflow runs on tag push:
    - `swift test`
-   - `./Scripts/prepare_release.sh --version X.Y.Z --no-update-plist`
+   - `./Scripts/prepare_release.sh --version X.Y.Z --build N --no-update-plist`
+     using the build number from the tagged `Info.plist`, without incrementing it again.
    - Composes release notes by extracting the matching CHANGELOG section
      and appending the install block (`.github/workflows/release.yml`).
    - Publishes the GitHub Release with `MyUsage-X.Y.Z.zip` +

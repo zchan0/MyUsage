@@ -37,7 +37,8 @@ jobs:
       - name: Package .app bundle
         run: |
           chmod +x ./Scripts/prepare_release.sh ./Scripts/package_app.sh
-          ./Scripts/prepare_release.sh --version "${{ steps.version.outputs.version }}" --no-update-plist
+          BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" MyUsage/Resources/Info.plist)
+          ./Scripts/prepare_release.sh --version "${{ steps.version.outputs.version }}" --build "$BUILD_NUMBER" --no-update-plist
           echo "ZIP_NAME=MyUsage-${{ steps.version.outputs.version }}.zip" >> "$GITHUB_ENV"
 
       - name: Compose release notes from CHANGELOG.md

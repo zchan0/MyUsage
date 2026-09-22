@@ -74,7 +74,7 @@ xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
   - `Devices`：查看设备聚合成本、忘记旧设备
   - `About`：版本与项目链接
 
-## LiteLLM 网关（源码版本）
+## LiteLLM 网关
 
 在 **Settings → Providers → Add Gateway…** 填写名称、HTTPS host 和 API key，点击 **Check Usage Access** 检查后添加。当前 Vendor 仅有 LiteLLM；同一供应商可创建多个独立实例，分别排序、启停和编辑。凭据仅保存在本机 Keychain；更换 host 需要重新输入 key。
 
