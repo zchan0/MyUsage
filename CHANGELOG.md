@@ -6,7 +6,7 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## v0.17.2 — 2026-09-22
+## v0.18.0 — 2026-09-22
 
 ### Added
 - **LiteLLM gateway providers.** Add a named connection in Settings → Providers
@@ -41,6 +41,17 @@ the 中文 half lives here only.
 - **精简网关详情**：更新时间只保留一处，token 只保留四列，删除重复预算消费行。
   零费用模型隐藏但保留其 token 总量，非零微额费用显示 `<$0.01`；LiteLLM
   列车图标适配菜单栏明暗外观。
+
+## v0.17.2 — 2026-09-22
+
+The LiteLLM gateway release was initially published under this patch version.
+It is superseded by **v0.18.0**, which uses the minor version appropriate for
+these new features. The application features are the same; use v0.18.0.
+
+### 中文
+
+LiteLLM 网关功能最初误用了此补丁版本号发布。新增功能应升级次版本号，
+现由 **v0.18.0** 接替；功能内容相同，请使用 v0.18.0。
 
 ## v0.17.1 — 2026-08-05
 
