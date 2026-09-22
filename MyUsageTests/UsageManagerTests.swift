@@ -4,7 +4,7 @@ import Foundation
 
 final class UsageManagerTests: XCTestCase {
     @MainActor
-    private final class TriggerRecordingProvider: UsageProvider {
+    private final class TriggerRecordingProvider: BuiltinUsageProvider {
         let kind = ProviderKind.claude
         let isAvailable = true
         var isEnabled = true

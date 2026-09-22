@@ -11,17 +11,17 @@ enum UsageRefreshTrigger: Sendable, Equatable {
 /// Protocol that all usage providers must conform to.
 @MainActor
 protocol UsageProvider: AnyObject {
-    /// The kind of provider.
-    var kind: ProviderKind { get }
+    var id: ProviderID { get }
+    var source: ProviderSource { get }
+    var displayName: String { get }
+    var shortName: String { get }
+    var payload: ProviderPayload? { get }
 
     /// Whether credentials are found on the device.
     var isAvailable: Bool { get }
 
     /// User-controlled toggle.
     var isEnabled: Bool { get set }
-
-    /// Latest usage data, nil if never fetched.
-    var snapshot: UsageSnapshot? { get }
 
     /// Last error message, nil if last fetch succeeded.
     var error: String? { get }
@@ -35,6 +35,21 @@ protocol UsageProvider: AnyObject {
     /// Refresh with the initiating context. The default implementation keeps
     /// existing providers source-compatible and delegates to `refresh()`.
     func refresh(trigger: UsageRefreshTrigger) async
+}
+
+/// Existing local/OAuth providers retain their original data model and parsers.
+@MainActor
+protocol BuiltinUsageProvider: UsageProvider {
+    var kind: ProviderKind { get }
+    var snapshot: UsageSnapshot? { get }
+}
+
+extension BuiltinUsageProvider {
+    var id: ProviderID { .builtin(kind) }
+    var source: ProviderSource { .builtin(kind) }
+    var displayName: String { kind.displayName }
+    var shortName: String { kind.shortName }
+    var payload: ProviderPayload? { snapshot.map(ProviderPayload.builtin) }
 }
 
 extension UsageProvider {

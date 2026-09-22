@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var installer = UpdateInstaller.shared
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var crashLogStatus: String?
+    @State private var gatewayEditor: GatewayEditorTarget?
 
     var body: some View {
         @Bindable var mgr = manager
@@ -30,6 +31,7 @@ struct SettingsView: View {
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 540, height: 460)
+        .sheet(item: $gatewayEditor) { target in GatewayConnectionEditor(connection: target.connection) }
     }
 
     // MARK: - General
@@ -74,8 +76,8 @@ struct SettingsView: View {
                             SettingsRow("Tracked provider", caption: "Drives the icon's tint and percentage.") {
                                 Picker("", selection: $mgr.iconTrackProvider) {
                                     Text("None").tag("")
-                                    ForEach(manager.providers, id: \.kind) { provider in
-                                        Text(provider.kind.displayName).tag(provider.kind.rawValue)
+                                    ForEach(manager.orderedProviders, id: \.id) { provider in
+                                        Text(provider.displayName).tag(provider.id.rawValue)
                                     }
                                 }
                                 .labelsHidden()
@@ -258,16 +260,22 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsCard("Providers") {
                     VStack(alignment: .leading, spacing: 0) {
-                        let kinds = manager.providerOrder.compactMap { raw in
-                            manager.providers.first { $0.kind.rawValue == raw }
-                        }
-                        ForEach(Array(kinds.enumerated()), id: \.element.kind) { index, provider in
+                        let kinds = manager.orderedProviders
+                        ForEach(Array(kinds.enumerated()), id: \.element.id) { index, provider in
                             providerRow(provider, at: index, total: kinds.count)
                             if index < kinds.count - 1 {
                                 CardDivider()
                             }
                         }
                     }
+                }
+
+                HStack {
+                    if let error = manager.gatewaySettingsError {
+                        Text(error).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Add Gateway…") { gatewayEditor = .init(connection: nil) }
                 }
 
                 Text("Use the arrow buttons to reorder. Toggle providers off to hide them from the menu-bar popover.")
@@ -282,23 +290,28 @@ struct SettingsView: View {
 
     private func providerRow(_ provider: any UsageProvider, at index: Int, total: Int) -> some View {
         HStack(spacing: 12) {
-            ProviderIconTile(kind: provider.kind, size: 24, glyph: 14)
+            ProviderInstanceIcon(source: provider.source, size: 24, glyph: 14)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(provider.kind.displayName)
+                Text(provider.displayName)
+                    .lineLimit(1).help(provider.displayName)
                     .font(.system(size: 12.5, weight: .semibold))
                 detectionLabel(provider)
             }
 
             Spacer(minLength: 12)
 
+            if let gateway = provider as? GatewayProvider {
+                Button { gatewayEditor = .init(connection: gateway.connection) } label: {
+                    Image(systemName: "pencil").font(.system(size: 11))
+                }.buttonStyle(.plain).help("Edit \(provider.displayName)")
+            }
             reorderButtons(at: index, total: total)
 
             Toggle("", isOn: Binding(
                 get: { provider.isEnabled },
                 set: { newValue in
-                    provider.isEnabled = newValue
-                    UserDefaults.standard.set(newValue, forKey: "provider.\(provider.kind.rawValue).enabled")
+                    manager.setEnabled(newValue, for: provider)
                 }
             ))
             .toggleStyle(.switch)
@@ -345,7 +358,10 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func detectionLabel(_ provider: any UsageProvider) -> some View {
-        if provider.isAvailable {
+        if let gateway = provider as? GatewayProvider {
+            Text("\(gateway.connection.vendor.displayName) · \(gateway.connection.baseURL.host ?? "")")
+                .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+        } else if provider.isAvailable {
             HStack(spacing: 4) {
                 Circle()
                     .fill(Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55))

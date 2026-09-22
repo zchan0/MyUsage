@@ -61,6 +61,18 @@ MyUsage/
         └── TokenRefresherTests.swift
 ```
 
+## Provider identity and gateways
+
+Runtime identity is `ProviderID`: stable `builtin:<kind>` IDs for installed tools and `gateway:<uuid>` IDs for saved connections. `ProviderSource` carries branding; names, URLs and API keys are not instance identity. The manager migrates legacy order/tracked-provider values to `.v2` keys and reads legacy built-in enabled flags. Existing built-in notification IDs are preserved.
+
+`UsageProvider` exposes identity, availability, state, refresh and a typed `ProviderPayload`. `BuiltinUsageProvider` retains `ProviderKind` and `UsageSnapshot`, so its parsers and ledger queries keep their existing behavior. `GatewayProvider` owns an independent `GatewaySnapshot` with separately refreshed summary/history blocks. `ProviderDeck` dispatches to the built-in or gateway view; shared navigation/settings use instance IDs.
+
+`GatewayConnectionStore` saves a versioned local configuration document in UserDefaults; it stores only a Keychain reference. A credential update stages a fresh Keychain item before swapping that reference. A host change requires a supplied key. Delete removes just that connection and local credential. No gateway configuration or server aggregate is added to `LedgerSync`.
+
+The `GatewayAdapter` protocol defines usage-access checks, summary reads and history reads. Only `LiteLLMAdapter` is registered: self `/key/info`, explicitly scoped `/user/info`, and optional `/user/daily/activity`. It maps amounts to Decimal, distinguishes absent/unlimited/zero budgets and preserves missing counts. User history is UTC month-to-date; key history is unsupported until filtering is verified. Pagination, permissions and partial results belong to the adapter. Shared transport uses an ephemeral session, refuses redirects and caps each host at two requests.
+
+Gateway refresh coalesces duplicate requests and rejects results from cancelled/obsolete configuration revisions. History loads on demand with a five-minute in-memory TTL; manual refresh updates the visible detail. Retry-After suppresses immediate retries. Only usable finite budgets feed pressure/notification calculations. See [gateway design](gateway-provider-design.md) and [validation](gateway-provider-validation.md) for the implementation boundaries and remaining live checks.
+
 ## Provider Data Sources
 
 ### Claude Code

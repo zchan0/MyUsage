@@ -1,0 +1,325 @@
+<div id="myusage-gateway-proposal" aria-label="MyUsage 设置中新增网关 provider 与 Overview 联动草图">
+  <style>
+    /* Geometry and typography follow PopoverStyle, ProviderTabBar, ProviderDeck,
+       DailyCostChart and TokenUsageSummary. Static surface approximates native material. */
+    #myusage-gateway-proposal { --mu-surface:light-dark(#f5f5f6,#292b30); --mu-text:light-dark(#383838,#ededee); --mu-secondary:light-dark(#747474,#b5b6ba); --mu-tertiary:light-dark(#989898,#94969c); --mu-line:light-dark(#00000014,#ffffff14); --mu-track:light-dark(#0000000d,#ffffff0f); --mu-tint:light-dark(#579f8c,#73b9a1); --mu-brand:light-dark(#565c64,#565c64); --mu-warning:light-dark(#985821,#e0ac76); --mu-mono:"SFMono-Regular",Menlo,Consolas,monospace; color:var(--mu-text); font:11px -apple-system,BlinkMacSystemFont,system-ui,sans-serif; width:100%; }
+    #myusage-gateway-proposal * { box-sizing:border-box; }
+    #myusage-gateway-proposal [hidden] { display:none !important; }
+    #myusage-gateway-proposal .mu-stage { width:330px; max-width:100%; margin:24px auto 0; padding:7px 0; }
+    #myusage-gateway-proposal .mu-caption { font-size:11px; color:var(--mu-secondary); margin:0 0 9px; line-height:1.5; }
+    #myusage-gateway-proposal .mu-window { background:var(--mu-surface); border-radius:10px; overflow:hidden; box-shadow:0 0 0 .5px var(--mu-line),0 4px 14px light-dark(#00000010,#00000035); }
+    #myusage-gateway-proposal button { font:inherit; color:inherit; background:transparent; border:0; }
+    #myusage-gateway-proposal .mu-nav { display:flex; height:46px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-tab { position:relative; flex:1; min-width:0; padding:0 3px; display:flex; justify-content:center; align-items:center; gap:4px; font-size:9.5px; font-weight:600; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-tab:first-child { font-size:11px; }
+    #myusage-gateway-proposal .mu-tab[aria-pressed="true"] { color:var(--mu-text); }
+    #myusage-gateway-proposal .mu-tab[aria-pressed="true"]::after { content:""; position:absolute; width:44px; max-width:70%; height:2px; border-radius:2px; bottom:0; background:var(--mu-text); opacity:.86; }
+    #myusage-gateway-proposal .mu-tile { flex-shrink:0; width:27px; height:27px; border-radius:6px; display:grid; place-items:center; background:linear-gradient(140deg,#ffffff28,transparent),var(--mu-brand); color:#fff; box-shadow:inset 0 0 0 .5px #ffffff2e,0 1px 2px #00000018; }
+    #myusage-gateway-proposal .mu-tile svg { width:15px; height:15px; }
+    #myusage-gateway-proposal .mu-tab .mu-tile { width:16px; height:16px; border-radius:5px; }
+    #myusage-gateway-proposal .mu-tab .mu-tile svg { width:9.5px; height:9.5px; }
+    #myusage-gateway-proposal .mu-identity { display:flex; align-items:center; gap:9px; min-height:54px; padding:10px 16px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-title { font-size:11.5px; font-weight:600; margin-bottom:2px; }
+    #myusage-gateway-proposal .mu-sub { font-size:9.5px; color:var(--mu-tertiary); overflow-wrap:anywhere; }
+    #myusage-gateway-proposal .mu-row { display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
+    #myusage-gateway-proposal .mu-label { font-size:10.5px; font-weight:600; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-number { font-family:var(--mu-mono); font-variant-numeric:tabular-nums; }
+    #myusage-gateway-proposal .mu-limit { padding:12px 16px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-limit .mu-label { font-size:11.5px; }
+    #myusage-gateway-proposal .mu-limit-reading { display:flex; gap:5px; align-items:baseline; white-space:nowrap; }
+    #myusage-gateway-proposal .mu-limit-reading strong { font-size:14px; font-weight:600; }
+    #myusage-gateway-proposal .mu-unit { font-size:9px; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-track { height:6px; background:var(--mu-track); border-radius:4px; margin-top:8px; overflow:hidden; }
+    #myusage-gateway-proposal .mu-fill { height:100%; width:32.1%; background:var(--mu-tint); border-radius:4px; }
+    #myusage-gateway-proposal .mu-limit-meta { margin-top:6px; font-size:9px; color:var(--mu-tertiary); }
+    #myusage-gateway-proposal .mu-limit-amount { margin-top:9px; font-size:10px; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-cost-row { padding:14px 16px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-cost-row strong { font-size:12px; font-weight:600; }
+    #myusage-gateway-proposal .mu-history { padding:14px 16px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-history-total { font-size:10.5px; font-weight:600; }
+    #myusage-gateway-proposal .mu-scope { font-size:8.5px; font-weight:400; color:var(--mu-tertiary); margin-left:5px; }
+    #myusage-gateway-proposal .mu-chart { display:flex; height:78px; margin:8px 12px 0 18px; align-items:end; justify-content:space-between; gap:2px; }
+    #myusage-gateway-proposal .mu-bar { width:6px; min-width:0; flex-shrink:1; display:flex; flex-direction:column-reverse; border-radius:1.5px 1.5px 0 0; overflow:hidden; }
+    #myusage-gateway-proposal .mu-segment { background:var(--mu-tint); }
+    #myusage-gateway-proposal .mu-dates { display:flex; justify-content:space-between; padding:5px 5px 0 18px; font-size:8.5px; color:var(--mu-tertiary); height:18px; }
+    #myusage-gateway-proposal .mu-models { margin-top:8px; display:grid; gap:4px; }
+    #myusage-gateway-proposal .mu-model-row { display:flex; align-items:center; height:14px; gap:4px; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-dot { width:6px; height:6px; border-radius:50%; background:var(--mu-tint); flex-shrink:0; }
+    #myusage-gateway-proposal .mu-model-name { font-size:9px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #myusage-gateway-proposal .mu-model-value { margin-left:auto; font-size:8.5px; font-weight:500; white-space:nowrap; }
+    #myusage-gateway-proposal .mu-note { font-size:9.5px; color:var(--mu-secondary); line-height:1.5; margin-top:8px; }
+    #myusage-gateway-proposal .mu-tokens { padding:13px 16px; }
+    #myusage-gateway-proposal .mu-token-grid { display:flex; margin-top:9px; }
+    #myusage-gateway-proposal .mu-token-stat { flex:1; min-width:0; padding-left:9px; border-left:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-token-stat:first-child { border:0; padding-left:0; }
+    #myusage-gateway-proposal .mu-token-stat strong { display:block; font-size:10.5px; font-weight:600; }
+    #myusage-gateway-proposal .mu-token-stat span { display:block; margin-top:2px; font-size:8.5px; color:var(--mu-tertiary); }
+    #myusage-gateway-proposal .mu-footer { display:flex; align-items:center; min-height:44px; padding:0 14px; border-top:.5px solid var(--mu-line); gap:2px; }
+    #myusage-gateway-proposal .mu-updated { font-size:10px; color:var(--mu-tertiary); margin-right:auto; }
+    #myusage-gateway-proposal .mu-footer button, #myusage-gateway-proposal .mu-footer-placeholder { width:28px; height:28px; padding:6px; color:var(--mu-secondary); display:grid; place-items:center; }
+    #myusage-gateway-proposal .mu-footer svg { width:14px; height:14px; }
+    #myusage-gateway-proposal .mu-overview-row { display:block; text-align:left; width:100%; padding:14px 16px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-overview-row strong { font-size:12.5px; font-weight:600; }
+    #myusage-gateway-proposal .mu-overview-row .mu-sub { display:block; margin-top:3px; }
+    #myusage-gateway-proposal .mu-overview-row .mu-track { height:4px; }
+    #myusage-gateway-proposal { --mu-card:light-dark(#fcfcfc,#33353a); --mu-control:light-dark(#ffffff,#46484d); --mu-selected:light-dark(#e1e2e4,#484a50); --mu-blue:light-dark(#007aff,#0a84ff); --mu-knob:light-dark(#fff,#fff); --mu-danger:light-dark(#b83c35,#ff9a91); }
+    #myusage-gateway-proposal .mu-settings-stage { max-width:540px; margin:auto; padding-top:7px; }
+    #myusage-gateway-proposal .mu-settings-window { min-height:460px; }
+    #myusage-gateway-proposal .mu-settings-toolbar { padding:12px 16px 10px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-window-title { text-align:center; font-size:13px; font-weight:600; margin-bottom:10px; }
+    #myusage-gateway-proposal .mu-settings-tabs { display:flex; justify-content:center; gap:8px; }
+    #myusage-gateway-proposal .mu-settings-tab { display:grid; justify-items:center; gap:3px; min-width:60px; border-radius:6px; padding:5px 8px; font-size:11px; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-settings-tab svg { width:20px; height:20px; }
+    #myusage-gateway-proposal .mu-settings-tab.is-selected { background:var(--mu-selected); color:var(--mu-text); }
+    #myusage-gateway-proposal .mu-settings-body { display:grid; }
+    #myusage-gateway-proposal .mu-settings-content { grid-area:1 / 1; padding:16px; align-self:start; }
+    #myusage-gateway-proposal .mu-settings-content[inert] { opacity:.28; }
+    #myusage-gateway-proposal .mu-card-heading { font-size:10px; font-weight:600; letter-spacing:.6px; color:var(--mu-secondary); padding-left:2px; margin-bottom:8px; }
+    #myusage-gateway-proposal .mu-settings-card { padding:10px 13px; background:var(--mu-card); border-radius:11px; border:.5px solid var(--mu-line); box-shadow:0 1px 1.5px light-dark(#0000000a,#0000000a); }
+    #myusage-gateway-proposal .mu-provider-row { display:flex; gap:12px; align-items:center; padding:8px 0; min-height:51px; border-bottom:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-provider-row:last-child { border:0; }
+    #myusage-gateway-proposal .mu-provider-row .mu-tile { width:24px; height:24px; }
+    #myusage-gateway-proposal .mu-provider-label { flex:1; min-width:0; }
+    #myusage-gateway-proposal .mu-provider-name { font-size:12.5px; font-weight:600; overflow-wrap:anywhere; }
+    #myusage-gateway-proposal .mu-provider-caption { font-size:10.5px; line-height:1.4; color:var(--mu-secondary); margin-top:2px; overflow-wrap:anywhere; }
+    #myusage-gateway-proposal .mu-detection { display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--mu-tint); margin-right:4px; }
+    #myusage-gateway-proposal .mu-provider-controls { display:flex; gap:9px; align-items:center; flex-shrink:0; }
+    #myusage-gateway-proposal .mu-reorder { display:flex; gap:2px; }
+    #myusage-gateway-proposal .mu-small-icon { display:grid; place-items:center; width:18px; height:22px; padding:1px; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-small-icon svg { width:12px; height:12px; }
+    #myusage-gateway-proposal button:disabled { opacity:.35; }
+    #myusage-gateway-proposal .mu-switch { appearance:none; position:relative; width:28px; height:16px; margin:0; border-radius:9px; background:var(--mu-selected); border:.5px solid var(--mu-line); flex-shrink:0; }
+    #myusage-gateway-proposal .mu-switch::after { content:""; position:absolute; top:1px; left:1px; width:12px; height:12px; border-radius:50%; background:var(--mu-knob); box-shadow:0 1px 2px #00000030; }
+    #myusage-gateway-proposal .mu-switch:checked { background:var(--mu-blue); }
+    #myusage-gateway-proposal .mu-switch:checked::after { left:13px; }
+    #myusage-gateway-proposal .mu-list-footer { display:flex; align-items:start; justify-content:space-between; gap:14px; margin-top:14px; }
+    #myusage-gateway-proposal .mu-help { font-size:10.5px; color:var(--mu-secondary); line-height:1.45; margin:0; }
+    #myusage-gateway-proposal .mu-button { background:var(--mu-control); box-shadow:0 0 0 .5px var(--mu-line),0 1px 2px #00000010; border-radius:5px; padding:4px 9px; white-space:nowrap; font-size:11px; min-height:23px; }
+    #myusage-gateway-proposal .mu-primary { background:var(--mu-blue); color:var(--mu-knob); }
+    #myusage-gateway-proposal .mu-sheet { grid-area:1 / 1; position:relative; z-index:1; align-self:start; margin:16px; padding:18px; border-radius:11px; background:var(--mu-card); box-shadow:0 0 0 .5px var(--mu-line),0 8px 26px light-dark(#00000020,#00000055); }
+    #myusage-gateway-proposal .mu-sheet-title { font-size:13px; font-weight:600; margin:0 0 16px; }
+    #myusage-gateway-proposal .mu-fields { display:grid; grid-template-columns:86px minmax(0,1fr); align-items:center; gap:12px; }
+    #myusage-gateway-proposal .mu-field-label { font-size:12px; }
+    #myusage-gateway-proposal .mu-field { width:100%; min-width:0; border:.5px solid var(--mu-line); border-radius:5px; background:var(--mu-control); color:var(--mu-text); font:12px -apple-system,BlinkMacSystemFont,system-ui,sans-serif; padding:5px 7px; min-height:27px; }
+    #myusage-gateway-proposal .mu-field[readonly] { color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-field-help { grid-column:2; margin-top:-6px; }
+    #myusage-gateway-proposal .mu-probe { margin-top:16px; display:flex; gap:10px; align-items:center; }
+    #myusage-gateway-proposal .mu-probe-result { font-size:10.5px; line-height:1.45; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-form-actions { display:flex; gap:8px; justify-content:flex-end; padding-top:16px; margin-top:16px; border-top:.5px solid var(--mu-line); }
+    #myusage-gateway-proposal .mu-remove { margin-right:auto; color:var(--mu-danger); }
+    #myusage-gateway-proposal .mu-tab-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #myusage-gateway-proposal .mu-more-list { padding:6px 16px; border-bottom:.5px solid var(--mu-line); background:var(--mu-card); }
+    #myusage-gateway-proposal .mu-more-list button { display:block; width:100%; text-align:left; padding:8px 0; overflow-wrap:anywhere; }
+    #myusage-gateway-proposal .mu-overview-identity { display:flex; gap:9px; align-items:center; }
+    #myusage-gateway-proposal .mu-overview-identity .mu-tile { width:25px; height:25px; }
+    #myusage-gateway-proposal .mu-overview-identity .mu-title-group { min-width:0; flex:1; overflow-wrap:anywhere; }
+    #myusage-gateway-proposal .mu-overview-reading { white-space:nowrap; }
+    #myusage-gateway-proposal .mu-overview-meta { display:flex; justify-content:space-between; margin-top:7px; gap:7px; font-size:9px; color:var(--mu-tertiary); }
+    #myusage-gateway-proposal .mu-status { height:34px; padding:0 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:.5px solid var(--mu-line); font-size:10.5px; color:var(--mu-secondary); }
+    #myusage-gateway-proposal .mu-empty { padding:22px 16px; font-size:11px; color:var(--mu-secondary); }
+    @media(max-width:420px) { #myusage-gateway-proposal .mu-provider-row { gap:8px; } #myusage-gateway-proposal .mu-provider-controls { gap:5px; } #myusage-gateway-proposal .mu-list-footer { flex-wrap:wrap; } #myusage-gateway-proposal .mu-sheet { margin:10px; padding:14px; } #myusage-gateway-proposal .mu-fields { grid-template-columns:72px minmax(0,1fr); gap:10px; } }
+    @media(pointer:coarse) { #myusage-gateway-proposal .mu-footer button, #myusage-gateway-proposal .mu-small-icon { width:44px; height:44px; } #myusage-gateway-proposal .mu-button, #myusage-gateway-proposal .mu-field { min-height:44px; } #myusage-gateway-proposal .mu-field { font-size:16px; } #myusage-gateway-proposal .mu-provider-row { flex-wrap:wrap; } #myusage-gateway-proposal .mu-provider-controls { width:100%; justify-content:flex-end; } #myusage-gateway-proposal .mu-switch { width:44px; height:26px; border-radius:15px; } #myusage-gateway-proposal .mu-switch::after { width:22px; height:22px; } #myusage-gateway-proposal .mu-switch:checked::after { left:19px; } }
+  </style>
+  <div class="mu-settings-stage">
+    <div class="mu-caption">Settings · Providers　交互草图 / 虚构配置 / 占位图标</div>
+    <div class="mu-window mu-settings-window">
+      <div class="mu-settings-toolbar">
+        <div class="mu-window-title">MyUsage Settings</div>
+        <div class="mu-settings-tabs" aria-label="Settings sections; Providers preview">
+          <span class="mu-settings-tab"><i data-lucide="settings" aria-hidden="true"></i>General</span>
+          <span class="mu-settings-tab is-selected" aria-current="page"><i data-lucide="layers" aria-hidden="true"></i>Providers</span>
+          <span class="mu-settings-tab"><i data-lucide="monitor-smartphone" aria-hidden="true"></i>Devices</span>
+          <span class="mu-settings-tab"><i data-lucide="info" aria-hidden="true"></i>About</span>
+        </div>
+      </div>
+      <div class="mu-settings-body">
+        <div id="mu-settings-content" class="mu-settings-content">
+          <div class="mu-card-heading">PROVIDERS</div>
+          <div id="mu-provider-list" class="mu-settings-card" aria-label="All configured providers"></div>
+          <div class="mu-list-footer">
+            <p class="mu-help">Use the arrows to reorder. Turn providers off to hide them from the menu-bar popover.</p>
+            <button id="mu-add" type="button" class="mu-button cursor-interaction">Add Gateway…</button>
+          </div>
+        </div>
+        <form id="mu-editor" class="mu-sheet" role="dialog" aria-labelledby="mu-editor-title" hidden>
+          <h2 id="mu-editor-title" class="mu-sheet-title">Add Gateway</h2>
+          <div class="mu-fields">
+            <label class="mu-field-label" for="mu-vendor">Vendor</label>
+            <input id="mu-vendor" class="mu-field" value="LiteLLM" readonly>
+            <label class="mu-field-label" for="mu-connection-name">Name</label><input id="mu-connection-name" class="mu-field" maxlength="60" required autocomplete="off">
+            <label class="mu-field-label" for="mu-host">Base URL</label><input id="mu-host" class="mu-field" type="url" required autocomplete="off" spellcheck="false">
+            <label class="mu-field-label" for="mu-key">API key</label><input id="mu-key" class="mu-field" type="password" value="demo-key-placeholder" readonly aria-describedby="mu-key-help" autocomplete="off">
+            <p id="mu-key-help" class="mu-help mu-field-help">Preview key only · no network requests</p>
+            <label id="mu-scope-label" class="mu-field-label" for="mu-config-scope" hidden>Usage for</label><select id="mu-config-scope" class="mu-field" aria-describedby="mu-scope-help" hidden><option value="account">My account</option><option value="key">This API key</option></select>
+            <p id="mu-scope-help" class="mu-help mu-field-help" hidden>My account includes usage across its linked keys.</p>
+          </div>
+          <div class="mu-probe"><button id="mu-check" type="button" class="mu-button cursor-interaction">Check Usage Access</button><span id="mu-probe-result" class="mu-probe-result" aria-live="polite">Reads usage from your gateway.</span></div>
+          <div class="mu-form-actions"><button id="mu-remove" type="button" class="mu-button mu-remove cursor-interaction" hidden>Remove…</button><button id="mu-cancel" type="button" class="mu-button cursor-interaction">Cancel</button><button id="mu-save" type="button" class="mu-button mu-primary cursor-interaction" disabled>Add Provider</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="mu-stage">
+    <div class="mu-caption">Menu bar · 已启用的 provider 实例</div>
+    <div class="mu-window">
+      <nav id="mu-nav" class="mu-nav" aria-label="Configured provider navigation"></nav>
+      <div id="mu-more-list" class="mu-more-list" hidden></div>
+      <div id="mu-overview"></div>
+      <div id="mu-detail" aria-live="polite" hidden>
+        <div class="mu-identity"><span id="mu-icon" class="mu-tile"><i data-lucide="network" aria-hidden="true"></i></span><div><div id="mu-name" class="mu-title">公司网关</div><div id="mu-caption" class="mu-sub">LiteLLM · ai.example.com · Personal</div></div></div>
+        <section class="mu-limit" aria-label="Budget or balance">
+          <div class="mu-row"><span id="mu-quota-label" class="mu-label">Monthly budget</span><span class="mu-limit-reading"><strong id="mu-reading" class="mu-number">32%</strong><span id="mu-unit" class="mu-unit">used</span></span></div>
+          <div id="mu-track" class="mu-track"><div id="mu-fill" class="mu-fill"></div></div>
+          <div class="mu-row mu-limit-meta mu-number"><span id="mu-reset">Resets Oct 1</span><span id="mu-remaining">$135.80 left</span></div>
+          <div id="mu-budget-detail" class="mu-limit-amount mu-number">$64.20 / $200.00</div>
+        </section>
+        <section class="mu-cost-row mu-row" aria-label="Reported spend"><span id="mu-cost-label" class="mu-label">Calendar month spend</span><strong id="mu-cost" class="mu-number">$64.20</strong></section>
+        <section id="mu-history" class="mu-history" aria-label="History and model breakdown">
+          <div class="mu-row"><span><span id="mu-history-label" class="mu-label">Rolling 30-day cost</span><span id="mu-scope" class="mu-scope">personal</span></span><span id="mu-history-total" class="mu-history-total mu-number">$78.60</span></div>
+          <div id="mu-chart" class="mu-chart" role="img" aria-label="Illustrative daily model cost, 30 days"></div>
+          <div id="mu-dates" class="mu-dates mu-number"><span>Aug 24</span><span>Sep 7</span><span>Today</span></div>
+          <div id="mu-models" class="mu-models"></div>
+          <div id="mu-history-note" class="mu-note" hidden></div>
+        </section>
+        <section id="mu-tokens" class="mu-tokens" aria-label="Token usage">
+          <div class="mu-row"><span class="mu-label">Token usage</span><span id="mu-token-period" class="mu-scope">30 days · personal</span></div>
+          <div id="mu-token-grid" class="mu-token-grid"></div>
+        </section>
+      </div>
+      <footer class="mu-footer"><span id="mu-updated" class="mu-updated mu-number">Updated 6 sec ago</span><button type="button" id="mu-refresh" aria-label="Refresh demonstration" class="cursor-interaction"><i data-lucide="rotate-cw" aria-hidden="true"></i></button><button type="button" id="mu-open-settings" aria-label="Open Settings" class="cursor-interaction"><i data-lucide="settings" aria-hidden="true"></i></button><span class="mu-footer-placeholder" aria-label="More icon, visual reference"><i data-lucide="ellipsis" aria-hidden="true"></i></span></footer>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const root=document.getElementById('myusage-gateway-proposal');
+      const q=id=>root.querySelector('#'+id);
+      const esc=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const vendors={litellm:{name:'LiteLLM',icon:'network'}};
+      const companyID='gateway:11111111-1111-4111-8111-111111111111';
+      const initialProviders=[
+        {id:'builtin:claude',source:'builtin',name:'Claude Code',short:'Claude',icon:'asterisk',enabled:true,percent:41,quota:'5-hour limit',reset:'Resets in 3h 24m',cost:'$18.40'},
+        {id:'builtin:codex',source:'builtin',name:'Codex',icon:'terminal',enabled:true,percent:18,quota:'Weekly limit',reset:'Resets in 4d 12h',cost:'$24.80'},
+        {id:'builtin:cursor',source:'builtin',name:'Cursor',icon:'mouse-pointer-2',enabled:false,percent:24,quota:'Included usage',reset:'Resets Oct 1',cost:'$12.00'},
+        {id:'builtin:antigravity',source:'builtin',name:'Antigravity',icon:'orbit',enabled:false,percent:12,quota:'Model quota',reset:'Resets in 2h',cost:'$8.00'},
+        {id:companyID,source:'gateway',name:'公司网关',vendor:'litellm',host:'https://ai.example.com',scope:'account',enabled:true,percent:32.1,cost:'$64.20'}
+      ];
+      const initialIDs=new Set(initialProviders.map(p=>p.id));
+      const state={page:'overview',providers:initialProviders.map(p=>({...p})),stale:false,editing:null,more:false};
+      const icon=p=>p.source==='gateway'?vendors[p.vendor].icon:p.icon;
+      const tile=p=>'<span class="mu-tile"><i data-lucide="'+icon(p)+'" aria-hidden="true"></i></span>';
+      const hostLabel=p=>p.host.replace(/^https?:\/\//,'').replace(/\/$/,'');
+      const scopeLabel=p=>p.scope==='key'?'API key':'My account';
+      const description=p=>p.source==='gateway'?vendors[p.vendor].name+' · '+hostLabel(p):'Detected';
+      const quota=p=>p.source==='gateway'?(p.scope==='key'?'Monthly key budget':'Monthly account budget'):p.quota;
+      const reset=p=>p.source==='gateway'?'Resets Oct 1':p.reset;
+      function restore(saved){
+        if(saved?.version!==2)return;
+        if(saved.page==='overview'||state.providers.some(p=>p.id===saved.page))state.page=saved.page;
+        if(Array.isArray(saved.enabled))state.providers.forEach(p=>{if(initialIDs.has(p.id))p.enabled=saved.enabled.includes(p.id);});
+      }
+      restore(window.openai?.widgetState?.privateContent);
+      function save(){
+        // Form values, credentials and newly created mock connections remain transient.
+        if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{version:2,view:state.page==='overview'?'overview':'provider',gatewayCount:state.providers.filter(p=>p.source==='gateway').length},privateContent:{version:2,page:state.page,enabled:state.providers.filter(p=>p.enabled&&initialIDs.has(p.id)).map(p=>p.id)}}).catch(()=>{});
+      }
+      function renderSettings(){
+        q('mu-provider-list').innerHTML=state.providers.map((p,i)=>'<div class="mu-provider-row" data-provider-id="'+esc(p.id)+'">'+tile(p)+'<div class="mu-provider-label"><div class="mu-provider-name">'+esc(p.name)+'</div><div class="mu-provider-caption">'+(p.source==='builtin'?'<span class="mu-detection"></span>':'')+esc(description(p))+'</div></div><div class="mu-provider-controls">'+(p.source==='gateway'?'<button type="button" data-action="edit" class="mu-small-icon cursor-interaction" aria-label="Edit '+esc(p.name)+'"><i data-lucide="pencil" aria-hidden="true"></i></button>':'')+'<div class="mu-reorder"><button type="button" data-action="up" class="mu-small-icon cursor-interaction" aria-label="Move '+esc(p.name)+' up" '+(i===0?'disabled':'')+'><i data-lucide="chevron-up" aria-hidden="true"></i></button><button type="button" data-action="down" class="mu-small-icon cursor-interaction" aria-label="Move '+esc(p.name)+' down" '+(i===state.providers.length-1?'disabled':'')+'><i data-lucide="chevron-down" aria-hidden="true"></i></button></div><input type="checkbox" role="switch" class="mu-switch cursor-interaction" aria-label="Enable '+esc(p.name)+'" '+(p.enabled?'checked':'')+'></div></div>').join('');
+      }
+      function renderDetail(p){
+        const gateway=p.source==='gateway';
+        q('mu-name').textContent=p.name;q('mu-caption').textContent=gateway?description(p)+' · '+scopeLabel(p):'Detected · Local usage';
+        q('mu-icon').innerHTML='<i data-lucide="'+icon(p)+'" aria-hidden="true"></i>';
+        q('mu-quota-label').textContent=quota(p);q('mu-reading').textContent=Math.round(p.percent)+'%';q('mu-unit').textContent='used';
+        q('mu-track').hidden=false;q('mu-fill').style.width=p.percent+'%';q('mu-reset').textContent=reset(p);
+        q('mu-remaining').textContent=gateway?'$'+(200-p.percent*2).toFixed(2)+' left':'';
+        q('mu-budget-detail').hidden=!gateway;q('mu-budget-detail').textContent=p.cost+' / $200.00';
+        q('mu-cost-label').textContent=gateway?'Calendar month spend':'Estimated monthly cost';q('mu-cost').textContent=p.cost;
+        q('mu-history').hidden=!gateway||p.scope==='key';q('mu-tokens').hidden=!gateway||p.scope==='key';
+        q('mu-scope').textContent=scopeLabel(p);q('mu-token-period').textContent='30 days · '+scopeLabel(p);
+        const heights=[22,16,34,13,40,26,47,19,52,33,49,56,32,68,44,54,38,74,50,69,47,61,42,76,54,65,43,59,37,52];
+        q('mu-chart').innerHTML=heights.map(h=>'<span class="mu-bar" style="height:'+h+'px"><span class="mu-segment" style="height:62%"></span><span class="mu-segment" style="height:28%;opacity:.64"></span><span class="mu-segment" style="height:10%;opacity:.38"></span></span>').join('');
+        q('mu-models').innerHTML=[['claude-sonnet','$48.60'],['gpt-4.1','$22.00'],['gemini-pro','$8.00']].map((m,i)=>'<div class="mu-model-row"><span class="mu-dot" style="opacity:'+([1,.64,.38][i])+'"></span><span class="mu-model-name">'+m[0]+'</span><span class="mu-model-value mu-number">'+m[1]+'</span></div>').join('');
+        q('mu-token-grid').innerHTML=['12.8M','10.2M','2.6M','8.0M'].map((n,i)=>'<div class="mu-token-stat"><strong class="mu-number">'+n+'</strong><span>'+['Total','Input','Output','Cache'][i]+'</span></div>').join('');
+      }
+      function render(){
+        renderSettings();
+        const enabled=state.providers.filter(p=>p.enabled);
+        if(!enabled.some(p=>p.id===state.page))state.page='overview';
+        const overview=state.page==='overview';
+        const tab=(id,label,p)=>'<button type="button" data-provider="'+esc(id)+'" class="mu-tab cursor-interaction" aria-pressed="'+(state.page===id)+'" aria-label="'+esc(label)+'">'+(p?tile(p):'')+'<span class="mu-tab-name">'+esc(label)+'</span></button>';
+        q('mu-nav').innerHTML=tab('overview','Overview')+enabled.slice(0,3).map(p=>tab(p.id,p.short||p.name,p)).join('')+(enabled.length>3?'<button type="button" id="mu-more" class="mu-tab cursor-interaction" aria-expanded="'+state.more+'">More</button>':'');
+        q('mu-more-list').hidden=!state.more||enabled.length<=3;
+        q('mu-more-list').innerHTML=enabled.slice(3).map(p=>'<button type="button" data-provider="'+esc(p.id)+'" class="cursor-interaction">'+esc(p.name)+'</button>').join('');
+        q('mu-overview').hidden=!overview;q('mu-detail').hidden=overview;
+        const ordered=enabled.slice().sort((a,b)=>b.percent-a.percent);
+        q('mu-overview').innerHTML=enabled.length?'<div class="mu-status"><span><span class="mu-detection"></span>0 need attention</span><span>'+enabled.length+' on track</span></div>'+ordered.map(p=>'<button type="button" data-provider="'+esc(p.id)+'" class="mu-overview-row cursor-interaction"><span class="mu-overview-identity">'+tile(p)+'<span class="mu-title-group"><strong>'+esc(p.name)+'</strong><span class="mu-sub">'+(p.source==='gateway'?esc(vendors[p.vendor].name)+' · ':'')+esc(quota(p))+'</span></span><strong class="mu-number mu-overview-reading">'+Math.round(p.percent)+'% <span class="mu-unit">used</span></strong></span><div class="mu-track"><div class="mu-fill" style="width:'+p.percent+'%"></div></div><span class="mu-overview-meta"><span class="mu-number">'+esc(reset(p))+'</span><span><span class="mu-number">'+p.cost+'</span> '+(p.source==='gateway'?'this month':'est. month')+'</span></span></button>').join(''):'<div class="mu-empty">No enabled providers</div>';
+        if(!overview)renderDetail(enabled.find(p=>p.id===state.page));
+        q('mu-updated').textContent=state.stale?'Update failed · 20m ago':'Updated 6 sec ago';
+        q('mu-updated').style.color=state.stale?'var(--mu-warning)':'var(--mu-tertiary)';
+        if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:15,height:15}});
+      }
+      function closeEditor(){q('mu-editor').hidden=true;q('mu-settings-content').inert=false;state.editing=null;q('mu-add').focus();}
+      function showScope(visible){
+        ['mu-scope-label','mu-config-scope','mu-scope-help'].forEach(id=>q(id).hidden=!visible);
+        q('mu-scope-help').textContent=q('mu-config-scope').value==='key'?'Only usage charged to this API key.':'My account includes usage across its linked keys.';
+      }
+      function openEditor(p){
+        state.editing=p?.id||'new';
+        q('mu-editor-title').textContent=p?'Edit Gateway':'Add Gateway';
+        q('mu-vendor').value=vendors.litellm.name;
+        q('mu-connection-name').value=p?.name||'实验环境';q('mu-connection-name').setCustomValidity('');
+        q('mu-host').value=p?.host||'https://lab.example.com';q('mu-config-scope').value=p?.scope||'account';
+        showScope(Boolean(p));
+        q('mu-remove').hidden=!p;q('mu-save').textContent=p?'Save':'Add Provider';q('mu-save').disabled=!p;
+        q('mu-probe-result').textContent=p?'Usage access verified · '+scopeLabel(p):'Reads usage from your gateway.';
+        q('mu-editor').hidden=false;q('mu-settings-content').inert=true;
+        q('mu-connection-name').focus();
+      }
+      q('mu-add').addEventListener('click',()=>openEditor());
+      q('mu-cancel').addEventListener('click',closeEditor);
+      q('mu-editor').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeEditor();}else if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();q('mu-save').click();}});
+      q('mu-editor').addEventListener('submit',e=>e.preventDefault());
+      q('mu-connection-name').addEventListener('input',()=>q('mu-connection-name').setCustomValidity(''));
+      q('mu-host').addEventListener('input',()=>{q('mu-save').disabled=true;q('mu-probe-result').textContent='Check access at the new address.';q('mu-config-scope').value='account';showScope(false);});
+      q('mu-config-scope').addEventListener('input',()=>{q('mu-save').disabled=true;q('mu-probe-result').textContent='Check access for this selection.';showScope(true);});
+      q('mu-check').addEventListener('click',()=>{
+        if(!q('mu-editor').reportValidity())return;
+        showScope(true);
+        q('mu-probe-result').textContent=q('mu-config-scope').value==='key'?'Key budget and spend available · model history unavailable':'Account budget, spend and model history available';q('mu-save').disabled=false;
+      });
+      q('mu-save').addEventListener('click',()=>{
+        if(q('mu-save').disabled||!q('mu-editor').reportValidity())return;
+        const name=q('mu-connection-name').value.trim();
+        if(!name){q('mu-connection-name').setCustomValidity('Enter a provider name.');q('mu-connection-name').reportValidity();return;}
+        const values={name,host:q('mu-host').value.trim(),scope:q('mu-config-scope').value};
+        if(state.editing==='new')state.providers.push({id:'gateway:'+crypto.randomUUID(),source:'gateway',vendor:'litellm',enabled:true,percent:19.2,cost:'$38.40',...values});
+        else Object.assign(state.providers.find(p=>p.id===state.editing),values);
+        closeEditor();render();save();
+      });
+      q('mu-remove').addEventListener('click',()=>{state.providers=state.providers.filter(p=>p.id!==state.editing);closeEditor();render();save();});
+      q('mu-provider-list').addEventListener('click',e=>{
+        const button=e.target.closest('[data-action]');if(!button)return;
+        const id=button.closest('[data-provider-id]').dataset.providerId,index=state.providers.findIndex(p=>p.id===id);
+        if(button.dataset.action==='edit'){openEditor(state.providers[index]);return;}
+        const to=index+(button.dataset.action==='up'?-1:1);
+        if(to<0||to>=state.providers.length)return;
+        [state.providers[index],state.providers[to]]=[state.providers[to],state.providers[index]];render();save();
+      });
+      q('mu-provider-list').addEventListener('change',e=>{
+        if(!e.target.matches('[role="switch"]'))return;
+        const id=e.target.closest('[data-provider-id]').dataset.providerId;
+        state.providers.find(p=>p.id===id).enabled=e.target.checked;render();save();
+      });
+      root.addEventListener('click',e=>{
+        const button=e.target.closest('[data-provider]');
+        if(button){state.page=button.dataset.provider;state.more=false;render();save();}
+        else if(e.target.closest('#mu-more')){state.more=!state.more;render();}
+      });
+      q('mu-refresh').addEventListener('click',()=>{state.stale=false;render();});
+      q('mu-open-settings').addEventListener('click',()=>q('mu-add').focus());
+      window.addEventListener('openai:set_globals',e=>{restore(e.detail?.globals?.widgetState?.privateContent);render();});
+      render();
+      if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addToggle(state,'stale',{label:'演示刷新失败'});}
+    })();
+  </script>
+</div>

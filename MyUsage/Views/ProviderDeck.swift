@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Provider detail follows one stable axis: account identity, provider limits,
 /// provider-specific inventory, then cost/model history and token totals.
-struct ProviderDeck: View {
-    let provider: any UsageProvider
+struct BuiltinProviderDeck: View {
+    let provider: any BuiltinUsageProvider
 
     @Environment(UsageManager.self) private var manager
     @Environment(\.colorScheme) private var colorScheme
@@ -586,14 +586,14 @@ enum TokenCountFormatter {
 #if DEBUG
 #Preview("Claude Detail") {
     let manager = PreviewFixtures.manager(providerCount: 4)
-    ProviderDeck(provider: manager.orderedProviders.first { $0.kind == .claude }!)
+    ProviderDeck(provider: manager.orderedProviders.first { $0.id == .builtin(.claude) }!)
         .environment(manager)
         .frame(width: PopoverLayout.width)
 }
 
 #Preview("Codex Detail") {
     let manager = PreviewFixtures.manager(providerCount: 4)
-    ProviderDeck(provider: manager.orderedProviders.first { $0.kind == .codex }!)
+    ProviderDeck(provider: manager.orderedProviders.first { $0.id == .builtin(.codex) }!)
         .environment(manager)
         .frame(width: PopoverLayout.width)
 }

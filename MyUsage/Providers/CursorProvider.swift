@@ -61,7 +61,7 @@ struct CursorTokenRefreshResponse: Codable, Sendable {
 /// Cursor usage provider.
 @Observable
 @MainActor
-final class CursorProvider: UsageProvider {
+final class CursorProvider: BuiltinUsageProvider {
 
     let kind = ProviderKind.cursor
     private(set) var isAvailable = false

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Main popover content shown when clicking the menu bar icon.
 ///
-/// The merged menu-bar popover. Width is stable at 348pt while height remains
+/// The merged menu-bar popover. Width is stable at 330pt while height remains
 /// content-driven. A single enabled provider opens directly into its Deck;
 /// Overview and navigation exist only when they add value (2+ providers).
 struct UsagePopover: View {
@@ -17,9 +17,13 @@ struct UsagePopover: View {
     /// Overview, the normal entry point.
     private static var initialTab: PopoverTab {
         #if DEBUG
+        if ProcessInfo.processInfo.environment["MYUSAGE_TAB"] == "gateway" {
+            let index = ProcessInfo.processInfo.environment["MYUSAGE_PREVIEW_GATEWAY_INDEX"].flatMap(Int.init) ?? 0
+            return .provider(.gateway(GatewayPreviewFixtures.id(index: max(0, min(index, 49)))))
+        }
         if let raw = ProcessInfo.processInfo.environment["MYUSAGE_TAB"],
            let kind = ProviderKind(rawValue: raw) {
-            return .provider(kind)
+            return .provider(.builtin(kind))
         }
         #endif
         return .overview
@@ -30,19 +34,19 @@ struct UsagePopover: View {
             if enabledProviders.isEmpty {
                 emptyState
             } else if enabledProviders.count == 1, let provider = enabledProviders.first {
-                ProviderDeck(provider: provider)
+                PopoverPage { ProviderDeck(provider: provider) }
             } else {
                 tabBar
 
                 switch effectiveTab {
                 case .overview:
-                    FocusOverview(providers: enabledProviders, selection: $selectedTab)
+                    PopoverPage { FocusOverview(providers: enabledProviders, selection: $selectedTab) }
                 case .provider(let kind):
-                    detailPage(kind: kind)
+                    detailPage(id: kind)
                 }
             }
 
-            PopoverFooterBar()
+            PopoverFooterBar(provider: activeProvider)
         }
         .frame(width: PopoverLayout.width)
         .background { PopoverGlassSurface() }
@@ -58,7 +62,7 @@ struct UsagePopover: View {
     private var tabBar: some View {
         ProviderTabBar(
             items: enabledProviders.map { provider in
-                .init(kind: provider.kind)
+                .init(provider: provider)
             },
             selection: $selectedTab
         )
@@ -66,9 +70,9 @@ struct UsagePopover: View {
 
     /// Provider tab: one card, expanded with the hero stat row.
     @ViewBuilder
-    private func detailPage(kind: ProviderKind) -> some View {
-        if let provider = enabledProviders.first(where: { $0.kind == kind }) {
-            ProviderDeck(provider: provider)
+    private func detailPage(id: ProviderID) -> some View {
+        if let provider = enabledProviders.first(where: { $0.id == id }) {
+            PopoverPage { ProviderDeck(provider: provider) }
         }
     }
 
@@ -82,7 +86,7 @@ struct UsagePopover: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Text("Install Claude Code, Codex, Cursor, or Antigravity to get started.")
+            Text("Enable a provider or add a gateway in Settings to get started.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -93,6 +97,12 @@ struct UsagePopover: View {
 
     // MARK: - Helpers
 
+    private var activeProvider: (any UsageProvider)? {
+        if enabledProviders.count == 1 { return enabledProviders.first }
+        guard case .provider(let id) = effectiveTab else { return nil }
+        return enabledProviders.first { $0.id == id }
+    }
+
     private var enabledProviders: [any UsageProvider] {
         manager.orderedProviders.filter { $0.isEnabled }
     }
@@ -102,7 +112,7 @@ struct UsagePopover: View {
     /// Settings).
     private var effectiveTab: PopoverTab {
         if case .provider(let kind) = selectedTab,
-           !enabledProviders.contains(where: { $0.kind == kind }) {
+           !enabledProviders.contains(where: { $0.id == kind }) {
             return .overview
         }
         return selectedTab

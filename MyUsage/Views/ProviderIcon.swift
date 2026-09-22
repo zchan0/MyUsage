@@ -64,9 +64,22 @@ struct ProviderIconTile: View {
     var glyph: CGFloat = 13
 
     var body: some View {
+        ProviderIconTileSurface(color: kind.brandTileColor, size: size) {
+            ProviderIcon(kind: kind, size: glyph, fillHex: "#FFFFFF")
+        }
+    }
+}
+
+/// Shared tile finish for built-in providers and gateway vendors.
+struct ProviderIconTileSurface<Glyph: View>: View {
+    let color: Color
+    let size: CGFloat
+    @ViewBuilder let glyph: () -> Glyph
+
+    var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(kind.brandTileColor)
+                .fill(color)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
@@ -83,7 +96,7 @@ struct ProviderIconTile: View {
                 )
                 .shadow(color: .black.opacity(0.12), radius: 1.5, x: 0, y: 1)
 
-            ProviderIcon(kind: kind, size: glyph, fillHex: "#FFFFFF")
+            glyph()
         }
         .frame(width: size, height: size)
     }

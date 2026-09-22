@@ -21,7 +21,7 @@ final class UsageManager {
 
     var refreshInterval: RefreshInterval {
         didSet {
-            UserDefaults.standard.set(refreshInterval.rawValue, forKey: "refreshInterval")
+            defaults.set(refreshInterval.rawValue, forKey: "refreshInterval")
             restartTimer()
         }
     }
@@ -29,7 +29,7 @@ final class UsageManager {
     /// Which provider to show usage for in the menu bar. Empty string = none.
     /// Merged mode only — separate mode gives every provider its own icon.
     var iconTrackProvider: String {
-        didSet { UserDefaults.standard.set(iconTrackProvider, forKey: "iconTrackProvider") }
+        didSet { defaults.set(iconTrackProvider, forKey: "iconTrackProvider.v2") }
     }
 
     /// How status items appear in the menu bar (CodexBar-style).
@@ -43,14 +43,14 @@ final class UsageManager {
     }
 
     var menuBarMode: MenuBarMode {
-        didSet { UserDefaults.standard.set(menuBarMode.rawValue, forKey: "menuBarMode") }
+        didSet { defaults.set(menuBarMode.rawValue, forKey: "menuBarMode") }
     }
 
     /// Adopt an externally written `menuBarMode` (e.g. `defaults write`)
     /// into the live property so the menu bar rebuilds without a relaunch.
     /// Called from a `UserDefaults.didChangeNotification` observer.
     func syncMenuBarModeFromDefaults() {
-        guard let raw = UserDefaults.standard.string(forKey: "menuBarMode"),
+        guard let raw = defaults.string(forKey: "menuBarMode"),
               let mode = MenuBarMode(rawValue: raw),
               mode != menuBarMode else { return }
         menuBarMode = mode
@@ -58,17 +58,17 @@ final class UsageManager {
 
     /// Custom display order for providers.
     var providerOrder: [String] {
-        didSet { UserDefaults.standard.set(providerOrder, forKey: "providerOrder") }
+        didSet { defaults.set(providerOrder, forKey: "providerOrder.v2") }
     }
 
     /// Whether provider cards display the estimated monthly spend row.
     var showEstimatedCost: Bool {
-        didSet { UserDefaults.standard.set(showEstimatedCost, forKey: "showEstimatedCost") }
+        didSet { defaults.set(showEstimatedCost, forKey: "showEstimatedCost") }
     }
 
     /// Master toggle for limit-pressure notifications.
     var notificationsEnabled: Bool {
-        didSet { UserDefaults.standard.set(notificationsEnabled, forKey: "notificationsEnabled") }
+        didSet { defaults.set(notificationsEnabled, forKey: "notificationsEnabled") }
     }
 
     /// Percent threshold at which a "warn"-level notification fires the
@@ -76,17 +76,21 @@ final class UsageManager {
     /// visual `LimitSafety.warnThreshold` (75) so the bar turns amber
     /// before users get pinged.
     var notifyWarnThreshold: Double {
-        didSet { UserDefaults.standard.set(notifyWarnThreshold, forKey: "notifyWarnThreshold") }
+        didSet { defaults.set(notifyWarnThreshold, forKey: "notifyWarnThreshold") }
     }
 
     /// Percent threshold for the "crit" notification (default 95).
     var notifyCritThreshold: Double {
-        didSet { UserDefaults.standard.set(notifyCritThreshold, forKey: "notifyCritThreshold") }
+        didSet { defaults.set(notifyCritThreshold, forKey: "notifyCritThreshold") }
     }
 
 
     // MARK: - Private
 
+    private let defaults: UserDefaults
+    private let backgroundServicesEnabled: Bool
+    let gatewayStore: GatewayConnectionStore
+    private(set) var gatewaySettingsError: String?
     private var refreshTask: Task<Void, Never>?
 
     // MARK: - Init
@@ -94,22 +98,26 @@ final class UsageManager {
     init(
         ledger: LedgerSync = LedgerSync(),
         providers initialProviders: [any UsageProvider]? = nil,
-        startsLedger: Bool = true
+        startsLedger: Bool = true,
+        defaults: UserDefaults = .standard,
+        gatewayStore: GatewayConnectionStore? = nil
     ) {
-        let savedInterval = UserDefaults.standard.string(forKey: "refreshInterval")
+        self.defaults = defaults
+        self.backgroundServicesEnabled = startsLedger
+        self.gatewayStore = gatewayStore ?? GatewayConnectionStore(defaults: defaults)
+        let savedInterval = defaults.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
-        let storedOrder = UserDefaults.standard.stringArray(forKey: "providerOrder")
-        self.providerOrder = storedOrder ?? ProviderKind.allCases.map(\.rawValue)
-        self.iconTrackProvider = UserDefaults.standard.string(forKey: "iconTrackProvider")
-            ?? storedOrder?.first
-            ?? ProviderKind.allCases.first?.rawValue
-            ?? ""
-        self.menuBarMode = UserDefaults.standard.string(forKey: "menuBarMode")
+        let storedOrder = defaults.stringArray(forKey: "providerOrder.v2")
+            ?? defaults.stringArray(forKey: "providerOrder")
+        self.providerOrder = (storedOrder ?? ProviderKind.allCases.map(\.rawValue)).map { ProviderID.migrated($0).rawValue }
+        self.iconTrackProvider = ProviderID.migrated(defaults.string(forKey: "iconTrackProvider.v2")
+            ?? defaults.string(forKey: "iconTrackProvider") ?? storedOrder?.first ?? "claude").rawValue
+        self.menuBarMode = defaults.string(forKey: "menuBarMode")
             .flatMap(MenuBarMode.init(rawValue:)) ?? .merged
-        self.showEstimatedCost = UserDefaults.standard.object(forKey: "showEstimatedCost") as? Bool ?? true
-        self.notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
-        self.notifyWarnThreshold = (UserDefaults.standard.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
-        self.notifyCritThreshold = (UserDefaults.standard.object(forKey: "notifyCritThreshold") as? Double) ?? 95
+        self.showEstimatedCost = defaults.object(forKey: "showEstimatedCost") as? Bool ?? true
+        self.notificationsEnabled = defaults.object(forKey: "notificationsEnabled") as? Bool ?? true
+        self.notifyWarnThreshold = (defaults.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
+        self.notifyCritThreshold = (defaults.object(forKey: "notifyCritThreshold") as? Double) ?? 95
         self.ledger = ledger
 
         if let initialProviders {
@@ -121,6 +129,11 @@ final class UsageManager {
             register(CodexProvider(ledger: ledger))
             register(CursorProvider())
             register(AntigravityProvider())
+            do {
+                for connection in try self.gatewayStore.load() {
+                    register(GatewayProvider(connection: connection, credentials: self.gatewayStore.credentials))
+                }
+            } catch { gatewaySettingsError = error.localizedDescription }
         }
 
         // One-time cleanup: the multi-account registry was removed.
@@ -128,19 +141,16 @@ final class UsageManager {
         // best-effort so we don't leave dead state behind. Harmless if
         // already gone. The ledger (which still carries account_id rows
         // for spec 13 cross-device sync) is untouched.
-        Self.removeOrphanedAccountStore()
+        if startsLedger { Self.removeOrphanedAccountStore() }
 
         // Pick up `defaults write MyUsage menuBarMode …` while running —
         // used by automated testing and handy for scripting. KVO (not
         // didChangeNotification) because only KVO sees writes made by
         // OTHER processes via cfprefsd.
-        menuBarModeObserver = DefaultsKeyObserver(key: "menuBarMode") { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.syncMenuBarModeFromDefaults()
-            }
-        }
-
         if startsLedger {
+            menuBarModeObserver = DefaultsKeyObserver(key: "menuBarMode") { [weak self] in
+                Task { @MainActor [weak self] in self?.syncMenuBarModeFromDefaults() }
+            }
             Task { await ledger.start() }
         }
     }
@@ -161,6 +171,31 @@ final class UsageManager {
 
     // MARK: - Public API
 
+    func setEnabled(_ enabled: Bool, for provider: any UsageProvider) {
+        provider.isEnabled = enabled
+        defaults.set(enabled, forKey: "provider.\(provider.id.rawValue).enabled")
+        if !enabled, let gateway = provider as? GatewayProvider { gateway.invalidate() }
+    }
+
+    func saveGateway(_ draft: GatewayConnection, newKey: String?, initial: GatewayScopeCheck?) throws {
+        let connection = try gatewayStore.save(draft, newKey: newKey)
+        if let provider = providers.first(where: { $0.id == connection.providerID }) as? GatewayProvider {
+            provider.update(connection, initial: initial)
+        } else {
+            register(GatewayProvider(connection: connection, credentials: gatewayStore.credentials, initial: initial))
+        }
+        gatewaySettingsError = nil
+    }
+
+    func removeGateway(_ connection: GatewayConnection) throws {
+        try gatewayStore.remove(connection.id)
+        (providers.first { $0.id == connection.providerID } as? GatewayProvider)?.invalidate()
+        providers.removeAll { $0.id == connection.providerID }
+        providerOrder.removeAll { $0 == connection.providerID.rawValue }
+        defaults.removeObject(forKey: "provider.\(connection.providerID.rawValue).enabled")
+        if iconTrackProvider == connection.providerID.rawValue { iconTrackProvider = "" }
+    }
+
     /// Refresh all enabled providers.
     func refreshAll(trigger: UsageRefreshTrigger = .automatic) async {
         guard !isRefreshing else { return }
@@ -173,7 +208,9 @@ final class UsageManager {
         // Keep the pricing catalog fresh (LiteLLM, ≤ once per 24h).
         // Fire-and-forget: cost estimates for THIS refresh use whatever
         // catalog is installed; the swap benefits the next one.
-        Task.detached(priority: .utility) { await PricingUpdater.refreshIfStale() }
+        if backgroundServicesEnabled {
+            Task.detached(priority: .utility) { await PricingUpdater.refreshIfStale() }
+        }
 
         // Refresh providers concurrently so a slow one (e.g. Claude
         // waiting on the network) doesn't hold up the others. Each
@@ -187,13 +224,12 @@ final class UsageManager {
         // refresh() suspends at every network `await`, freeing the main
         // actor for the others — so the HTTP round-trips overlap instead of
         // running strictly one-after-another (which made Codex/Cursor
-        // visibly lag behind the first provider). Capturing `self`
-        // (a @MainActor class is Sendable) + an index keeps the closures
-        // free of non-Sendable captures.
-        let enabledIndices = providers.indices.filter { providers[$0].isEnabled }
-        let tasks: [Task<Void, Never>] = enabledIndices.map { index in
+        // visibly lag behind the first provider). Capture instance references
+        // so removing/reordering settings during refresh cannot change a target.
+        let enabled = providers.filter { $0.isEnabled }
+        let tasks: [Task<Void, Never>] = enabled.map { provider in
             Task { @MainActor in
-                await self.providers[index].refresh(trigger: trigger)
+                await provider.refresh(trigger: trigger)
             }
         }
         for task in tasks {
@@ -204,34 +240,43 @@ final class UsageManager {
         // tier upgrades observed since the previous refresh. Idempotent
         // by ID, so no duplicates within the same window.
         let observations = LimitNotifier.observations(from: providers)
-        await LimitNotifier.shared.evaluate(
-            observations: observations,
-            warnThreshold: notifyWarnThreshold,
-            critThreshold: notifyCritThreshold,
-            enabled: notificationsEnabled
-        )
+        if backgroundServicesEnabled {
+            await LimitNotifier.shared.evaluate(
+                observations: observations,
+                warnThreshold: notifyWarnThreshold,
+                critThreshold: notifyCritThreshold,
+                enabled: notificationsEnabled
+            )
+        }
     }
 
     /// Register a provider, restoring persisted enabled state.
     func register(_ provider: any UsageProvider) {
-        let key = "provider.\(provider.kind.rawValue).enabled"
-        if UserDefaults.standard.object(forKey: key) != nil {
-            provider.isEnabled = UserDefaults.standard.bool(forKey: key)
+        let key = "provider.\(provider.id.rawValue).enabled"
+        if defaults.object(forKey: key) != nil {
+            provider.isEnabled = defaults.bool(forKey: key)
         }
+        if let builtin = provider as? any BuiltinUsageProvider, defaults.object(forKey: key) == nil,
+           let legacy = defaults.object(forKey: "provider.\(builtin.kind.rawValue).enabled") as? Bool {
+            provider.isEnabled = legacy
+        }
+        guard !providers.contains(where: { $0.id == provider.id }) else { return }
         providers.append(provider)
+        if !providerOrder.contains(provider.id.rawValue) { providerOrder.append(provider.id.rawValue) }
     }
 
     /// Providers sorted by user-defined order.
     var orderedProviders: [any UsageProvider] {
         providers.sorted { a, b in
-            let ai = providerOrder.firstIndex(of: a.kind.rawValue) ?? Int.max
-            let bi = providerOrder.firstIndex(of: b.kind.rawValue) ?? Int.max
+            let ai = providerOrder.firstIndex(of: a.id.rawValue) ?? Int.max
+            let bi = providerOrder.firstIndex(of: b.id.rawValue) ?? Int.max
             return ai < bi
         }
     }
 
     /// Move a provider from one position to another.
     func moveProvider(from source: IndexSet, to destination: Int) {
+        providerOrder = orderedProviders.map(\.id.rawValue)
         providerOrder.move(fromOffsets: source, toOffset: destination)
     }
 
@@ -239,23 +284,37 @@ final class UsageManager {
     var worstUsagePercent: Double {
         providers
             .filter { $0.isEnabled }
-            .compactMap { $0.snapshot?.worstUsagePercent }
+            .compactMap { provider -> Double? in
+                switch provider.payload {
+                case .builtin(let snapshot): snapshot.worstUsagePercent
+                case .gateway(let snapshot): snapshot.summary.issue == nil ? snapshot.summary.value?.percentUsed : nil
+                case nil: nil
+                }
+            }
             .max() ?? 0
     }
 
     /// Short text for the menu bar label, based on tracked provider.
     var menuBarDisplayText: String? {
         guard !iconTrackProvider.isEmpty,
-              let provider = providers.first(where: { $0.kind.rawValue == iconTrackProvider })
+              let provider = providers.first(where: { $0.id.rawValue == iconTrackProvider })
         else { return nil }
-        return menuBarText(for: provider.kind)
+        return menuBarText(for: provider.id)
     }
 
     /// Short menu-bar label text for one provider — used by the merged
     /// icon (via `menuBarDisplayText`) and by each per-provider status
     /// item in separate-icons mode.
-    func menuBarText(for kind: ProviderKind) -> String? {
-        guard let provider = providers.first(where: { $0.kind == kind }),
+    func menuBarText(for kind: ProviderKind) -> String? { menuBarText(for: .builtin(kind)) }
+
+    func menuBarText(for id: ProviderID) -> String? {
+        guard let instance = providers.first(where: { $0.id == id }) else { return nil }
+        if case .gateway(let snapshot) = instance.payload {
+            guard snapshot.summary.issue == nil, let summary = snapshot.summary.value else { return nil }
+            if let percent = summary.percentUsed { return "\(Int(min(percent, 999)))%" }
+            return summary.spend.map { GatewayFormatting.money($0, currency: summary.currency) }
+        }
+        guard let provider = instance as? any BuiltinUsageProvider,
               let snapshot = provider.snapshot else { return nil }
 
         switch provider.kind {

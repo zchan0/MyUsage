@@ -170,6 +170,15 @@ final class LimitNotifier {
     static func observations(
         from provider: any UsageProvider
     ) -> [LimitObservation] {
+        if let gateway = provider as? GatewayProvider {
+            guard gateway.isEnabled, gateway.snapshot.summary.issue == nil,
+                  let summary = gateway.snapshot.summary.value, let percent = summary.percentUsed else { return [] }
+            let period = summary.resetsAt.map { String(Int($0.timeIntervalSince1970)) } ?? "unreported"
+            return [.init(id: "\(gateway.id.rawValue).budget.\(summary.scope.kind.rawValue).\(summary.scope.id).\(period)",
+                          providerName: gateway.displayName, accountLabel: nil,
+                          limitName: "Budget", percent: percent, resetCountdown: nil)]
+        }
+        guard let provider = provider as? any BuiltinUsageProvider else { return [] }
         guard provider.isEnabled, let snap = provider.snapshot else { return [] }
         let display = provider.kind.displayName
         let kindRaw = provider.kind.rawValue

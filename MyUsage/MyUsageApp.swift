@@ -29,7 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let raw = ProcessInfo.processInfo.environment["MYUSAGE_PREVIEW_PROVIDERS"],
            let count = Int(raw),
            (1...4).contains(count) {
-            usageManager = PreviewFixtures.manager(providerCount: count)
+            usageManager = PreviewFixtures.manager(
+                providerCount: count,
+                gateway: ProcessInfo.processInfo.environment["MYUSAGE_PREVIEW_GATEWAY"].flatMap(GatewayPreviewFixtures.Shape.init(rawValue:)),
+                gatewayCount: ProcessInfo.processInfo.environment["MYUSAGE_PREVIEW_GATEWAY_COUNT"].flatMap(Int.init) ?? 1
+            )
         } else {
             usageManager = UsageManager()
         }
@@ -93,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await step("done") {}
             }
         }
+        #endif
+        #if DEBUG
+        // Fixtures render the native UI without contacting real services or asking for permissions.
+        if ProcessInfo.processInfo.environment["MYUSAGE_PREVIEW_PROVIDERS"] != nil { return }
         #endif
         // Fire-and-forget — debounced inside UpdateChecker so this is
         // safe even if the app launches multiple times in 24h.

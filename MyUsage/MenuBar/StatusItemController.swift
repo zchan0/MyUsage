@@ -17,22 +17,22 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private let panel: PopoverPanel
     /// nil = merged mode item.
-    private let kind: ProviderKind?
+    private let id: ProviderID?
 
     private var localMonitor: LocalEventMonitor?
     private var globalMonitor: GlobalEventMonitor?
     private var fallbackIcon: NSImage?
     private var isTornDown = false
 
-    init(manager: UsageManager, updateChecker: UpdateChecker, kind: ProviderKind? = nil) {
+    init(manager: UsageManager, updateChecker: UpdateChecker, id: ProviderID? = nil) {
         self.manager = manager
-        self.kind = kind
+        self.id = id
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let kind {
+        if let id {
             self.panel = PopoverPanel(
                 manager: manager,
                 updateChecker: updateChecker,
-                rootView: AnyView(ProviderPopover(kind: kind))
+                rootView: AnyView(ProviderPopover(id: id))
             )
         } else {
             self.panel = PopoverPanel(manager: manager, updateChecker: updateChecker)
@@ -98,14 +98,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func updateButton() {
         guard !isTornDown, let button = statusItem.button else { return }
-        if let kind {
+        if let id {
             // Separate mode: this item IS one provider — fixed icon, that
             // provider's own label text.
-            button.image = ProviderTemplateIcon.image(for: kind) ?? fallbackIcon
-            button.title = manager.menuBarText(for: kind) ?? ""
+            button.image = manager.providers.first { $0.id == id }.flatMap { ProviderTemplateIcon.image(for: $0.source) } ?? fallbackIcon
+            button.title = manager.menuBarText(for: id) ?? ""
         } else {
-            let providerImage = ProviderKind(rawValue: manager.iconTrackProvider)
-                .flatMap { ProviderTemplateIcon.image(for: $0) }
+            let providerImage = manager.providers.first { $0.id.rawValue == manager.iconTrackProvider }
+                .flatMap { ProviderTemplateIcon.image(for: $0.source) }
             button.image = providerImage ?? fallbackIcon
             button.title = manager.menuBarDisplayText ?? ""
         }
@@ -130,7 +130,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     // MARK: Panel toggle
 
-    private var label: String { kind?.rawValue ?? "merged" }
+    private var label: String { id?.rawValue ?? "merged" }
 
     #if DEBUG
     /// Test hook — drives the same path as a status-item click, and logs
@@ -186,6 +186,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // may dismiss our panel as a "menu that never appeared" — which
         // manifests as needing several clicks to keep the popover open.
         DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
+        panel.presentation.isVisible = true
         panel.makeKeyAndOrderFront(nil)
         globalMonitor?.start()
         Logger.general.info("StatusItem[\(self.label, privacy: .public)] showPanel; frame=\(String(describing: self.panel.frame), privacy: .public) visible=\(self.panel.isVisible, privacy: .public)")
@@ -200,6 +201,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // HIToolbox's menu-tracking state — after which freshly shown panels
         // get dismissed as "menus that never appeared" (clicks appear dead)
         // and normal windows fight to stay key.
+        panel.presentation.isVisible = false
         guard panel.isVisible else { return }
         DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
         globalMonitor?.stop()

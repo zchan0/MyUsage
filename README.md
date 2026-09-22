@@ -40,7 +40,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 ## Highlights
 
 - **Multi-device aggregation, BYO sync transport.** Each Mac drops a per-device JSONL snapshot into `<sync-folder>/devices/<id>/`. Use iCloud, Syncthing, Dropbox, NAS, or anything else that keeps a folder in sync. The Devices tab in Settings lets you forget retired peers.
-- **Four providers in one popover** — Claude Code, Codex, Cursor, Antigravity. Reorder and enable/disable per provider in Settings.
+- **Built-in tools and custom gateways in one popover** — Claude Code, Codex, Cursor, Antigravity, plus named LiteLLM gateway instances. Reorder and enable/disable each instance in Settings.
 - **Pressure-ordered Overview + clean provider detail.** Overview promotes the limit that needs attention and keeps every provider comparable on one reading axis. Open a provider for account identity, capacity, reset credits, costs, and tokens in a compact clean-glass layout.
 - **Actionable pace, in familiar units.** Every rolling limit compares usage with its pace marker as `N% in reserve`, `N% in deficit`, or `On pace`. Once the projection is reliable, MyUsage adds `Runs out in…` or `Lasts until reset`. A conservative early-window fallback catches obvious acceleration without letting one large prompt create a false alarm.
 - **30-day model costs with hover inspection.** Claude and Codex get a stacked daily chart plus a stable vertical model-cost breakdown. By default it shows each model's rolling cost; hover a day to see that day's total and per-model costs without the legend changing order.
@@ -60,11 +60,12 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 | Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h + weekly limits · reserve/deficit outcome · reset-credit inventory · 30-day model cost + token totals · monthly cost |
 | Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota + on-demand budget bars · billing-cycle countdown |
 | Antigravity | Local language server process probe | Per-model quota bars · IDE running indicator |
+| LiteLLM gateway (source build) | Configured host + API key; read-only usage APIs | User/key budget and spend · optional UTC month-to-date cost, model and token history |
 
 ## Requirements
 
 - macOS 14+ (Sonoma)
-- At least one supported tool installed and signed in
+- A supported tool installed and signed in, or a configured LiteLLM gateway (source build)
 
 ## Install
 
@@ -88,9 +89,17 @@ Each release includes a `.sha256` file for checksum verification.
 3. Hover a cost-chart day to inspect its total and per-model costs; use the refresh button for manual sync.
 4. Open Settings for:
    - `General`: refresh interval, menu bar tracking, estimated cost toggle, sync folder, launch at login
-   - `Providers`: reorder providers and toggle each provider on/off
+   - `Providers`: reorder, toggle, and add/edit named LiteLLM gateways
    - `Devices`: inspect aggregated monthly cost by device and forget stale peers
    - `About`: app version and project link
+
+## LiteLLM gateways (source build)
+
+Open **Settings → Providers → Add Gateway…**. Enter a name, your gateway's HTTPS base URL, and API key, then **Check Usage Access** and **Add Provider**. Vendor is currently fixed to LiteLLM. Multiple connections to the same vendor remain independent; keys are stored in this Mac's Keychain. Changing the host requires re-entering a key.
+
+The check reads your own `/key/info`, then `/user/info?user_id=…` when your identity is known. If the key cannot identify a user, an optional User ID field appears. If both scopes are readable, choose **My account** (all linked keys) or **This API key**. The check also probes one short page of account history; history permission failures do not discard a readable budget. Unverified settings can be saved for later.
+
+Account history comes from `/user/daily/activity`, from the first day of the current month through today in UTC. Availability depends on the deployment and key permissions. Key-only scope currently shows its summary without borrowing account history. Budget-period spend and monthly logged usage can differ. Missing values stay unknown; incomplete pagination/model breakdowns are labeled. Gateway-reported costs are separate from local estimates and multi-device sync, and are not summed across instances.
 
 ## Build from Source
 

@@ -92,7 +92,7 @@ final class MenuBarCoordinator {
             StatusItemController(
                 manager: manager,
                 updateChecker: updateChecker,
-                kind: ProviderKind(rawValue: slot)
+                id: slot == "merged" ? nil : ProviderID(rawValue: slot)
             )
         }
     }
@@ -106,7 +106,7 @@ final class MenuBarCoordinator {
         case .merged:
             return ["merged"]
         case .separate:
-            let enabled = manager.orderedProviders.filter(\.isEnabled).map(\.kind.rawValue)
+            let enabled = manager.orderedProviders.filter(\.isEnabled).map(\.id.rawValue)
             // Fall back to the merged item rather than zero icons — an
             // app with no menu-bar presence is unrecoverable without
             // relaunching into Settings.

@@ -3,18 +3,18 @@ import SwiftUI
 /// Panel content for one provider in separate-icons mode. The same account-
 /// first Detail used by merged mode opens directly, without Overview or tabs.
 struct ProviderPopover: View {
-    let kind: ProviderKind
+    let id: ProviderID
 
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
 
     var body: some View {
         VStack(spacing: 0) {
-            if let provider = manager.orderedProviders.first(where: { $0.kind == kind }) {
-                ProviderDeck(provider: provider)
+            if let provider = manager.orderedProviders.first(where: { $0.id == id }) {
+                PopoverPage { ProviderDeck(provider: provider) }
             }
 
-            PopoverFooterBar()
+            PopoverFooterBar(provider: manager.orderedProviders.first { $0.id == id })
         }
         .frame(width: PopoverLayout.width)
         .background { PopoverGlassSurface() }
@@ -47,18 +47,19 @@ struct RelativeTimestampLabel: View {
 /// from the previous vertical menu without spending roughly a quarter of the
 /// panel height on app chrome.
 struct PopoverFooterBar: View {
+    var provider: (any UsageProvider)? = nil
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
 
     var body: some View {
         HStack(spacing: 2) {
-            if let lastRefreshed = manager.lastRefreshed {
+            if let lastRefreshed = displayUpdatedAt {
                 HStack(spacing: 4) {
-                    Text("Updated")
+                    Text(gatewaySnapshot?.hasDisplayIssue == true ? "Data from" : "Updated")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(.tertiary)
                     RelativeTimestampLabel(date: lastRefreshed)
-                }
+                }.help(timestampHelp)
             } else {
                 Text("Not refreshed")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -109,6 +110,26 @@ struct PopoverFooterBar: View {
         .overlay(alignment: .top) {
             Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
         }
+    }
+
+    private var gatewaySnapshot: GatewaySnapshot? {
+        guard let provider, case .gateway(let snapshot) = provider.payload else { return nil }
+        return snapshot
+    }
+    private var displayUpdatedAt: Date? {
+        if let gatewaySnapshot { return gatewaySnapshot.displayUpdatedAt }
+        return manager.lastRefreshed
+    }
+    private var timestampHelp: String {
+        guard let snapshot = gatewaySnapshot else { return "Last refresh" }
+        var details: [String] = []
+        if snapshot.summary.value != nil, let date = snapshot.summary.updatedAt {
+            details.append("Budget: " + date.formatted(date: .abbreviated, time: .standard))
+        }
+        if snapshot.history.value != nil, let date = snapshot.history.updatedAt {
+            details.append("Monthly usage: " + date.formatted(date: .abbreviated, time: .standard))
+        }
+        return details.joined(separator: "\n")
     }
 
     private var settingsButton: some View {
@@ -163,7 +184,7 @@ struct PopoverFooterBar: View {
 }
 
 #Preview {
-    ProviderPopover(kind: .claude)
+    ProviderPopover(id: .builtin(.claude))
         .environment(UsageManager())
         .environment(UpdateChecker())
 }

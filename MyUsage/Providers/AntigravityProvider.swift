@@ -46,7 +46,7 @@ struct AntigravityModelConfigsResponse: Codable, Sendable {
 /// Antigravity usage provider — discovers local language server process.
 @Observable
 @MainActor
-final class AntigravityProvider: UsageProvider {
+final class AntigravityProvider: BuiltinUsageProvider {
 
     let kind = ProviderKind.antigravity
     private(set) var isAvailable = false

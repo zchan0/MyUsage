@@ -19,8 +19,8 @@ struct MenuBarIcon: View {
 
     @ViewBuilder
     private var icon: some View {
-        if let kind = ProviderKind(rawValue: usageManager.iconTrackProvider),
-           let image = ProviderTemplateIcon.image(for: kind) {
+        if let provider = usageManager.providers.first(where: { $0.id.rawValue == usageManager.iconTrackProvider }),
+           let image = ProviderTemplateIcon.image(for: provider.source) {
             Image(nsImage: image)
         } else {
             Image(systemName: "chart.bar.fill")
@@ -33,24 +33,35 @@ struct MenuBarIcon: View {
 ///
 /// Template images are auto-tinted by AppKit to match the menu bar's light/dark
 /// appearance, and accept SwiftUI `.foregroundStyle()` tinting. We cache one
-/// instance per kind because `NSImage` loading from SVG isn't free.
+/// instance per resource because `NSImage` loading from SVG isn't free.
 @MainActor
 enum ProviderTemplateIcon {
     private static let size = NSSize(width: 18, height: 18)
-    private static var cache: [ProviderKind: NSImage] = [:]
+    private static var cache: [String: NSImage] = [:]
 
     static func image(for kind: ProviderKind) -> NSImage? {
-        if let cached = cache[kind] { return cached }
+        image(resource: "ProviderIcon-\(kind.rawValue)")
+    }
+
+    static func image(for source: ProviderSource) -> NSImage? {
+        switch source {
+        case .builtin(let kind): image(for: kind)
+        case .gateway(let vendor): image(resource: "ProviderIcon-\(vendor.rawValue)")
+        }
+    }
+
+    private static func image(resource: String) -> NSImage? {
+        if let cached = cache[resource] { return cached }
 
         guard let url = AppResources.url(
-            forResource: "ProviderIcon-\(kind.rawValue)",
+            forResource: resource,
             withExtension: "svg",
             subdirectory: "Icons"
         ), let image = NSImage(contentsOf: url) else { return nil }
 
         image.size = size
         image.isTemplate = true
-        cache[kind] = image
+        cache[resource] = image
         return image
     }
 }

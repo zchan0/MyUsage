@@ -315,7 +315,7 @@ struct ClaudeProfile: Codable, Sendable {
 /// Claude Code usage provider.
 @Observable
 @MainActor
-final class ClaudeProvider: UsageProvider {
+final class ClaudeProvider: BuiltinUsageProvider {
 
     let kind = ProviderKind.claude
     private(set) var isAvailable = false

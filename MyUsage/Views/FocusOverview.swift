@@ -14,14 +14,18 @@ struct FocusOverview: View {
         VStack(alignment: .leading, spacing: 0) {
             statusSummary
 
-            ForEach(orderedProviders, id: \.kind) { provider in
+            ForEach(orderedProviders, id: \.id) { provider in
                 Button {
-                    selection = .provider(provider.kind)
+                    selection = .provider(provider.id)
                 } label: {
-                    providerRow(provider)
+                    if let builtin = provider as? any BuiltinUsageProvider {
+                        providerRow(builtin)
+                    } else if let gateway = provider as? GatewayProvider {
+                        GatewayOverviewRow(provider: gateway)
+                    }
                 }
                 .buttonStyle(OverviewProviderRowStyle())
-                .help("Open \(provider.kind.displayName)")
+                .help("Open \(provider.displayName)")
             }
         }
     }
@@ -47,7 +51,7 @@ struct FocusOverview: View {
         .overlay(alignment: .bottom) { divider }
     }
 
-    private func providerRow(_ provider: any UsageProvider) -> some View {
+    private func providerRow(_ provider: any BuiltinUsageProvider) -> some View {
         let metric = primaryMetric(for: provider)
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -179,21 +183,26 @@ struct FocusOverview: View {
     }
 
     private var attentionCount: Int {
-        providers
-            .compactMap { primaryMetric(for: $0) }
-            .filter { requiresAttention($0) }
-            .count
+        providers.filter { provider in
+            if let gateway = provider as? GatewayProvider {
+                return gateway.snapshot.summary.issue == nil && (gateway.snapshot.summary.value?.percentUsed ?? -1) >= 90
+            }
+            return primaryMetric(for: provider).map(requiresAttention) ?? false
+        }.count
     }
 
     private var onTrackCount: Int {
-        providers
-            .compactMap { primaryMetric(for: $0) }
-            .filter { !requiresAttention($0) }
-            .count
+        providers.filter { provider in
+            if let gateway = provider as? GatewayProvider {
+                guard gateway.snapshot.summary.issue == nil, let percent = gateway.snapshot.summary.value?.percentUsed else { return false }
+                return percent < 90
+            }
+            return primaryMetric(for: provider).map { !requiresAttention($0) } ?? false
+        }.count
     }
 
     private func primaryMetric(for provider: any UsageProvider) -> CapacityFocus.Metric? {
-        guard let snapshot = provider.snapshot else { return nil }
+        guard let provider = provider as? any BuiltinUsageProvider, let snapshot = provider.snapshot else { return nil }
         return CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
             .max { lhs, rhs in
                 if lhs.riskScore != rhs.riskScore { return lhs.riskScore < rhs.riskScore }
@@ -202,7 +211,10 @@ struct FocusOverview: View {
     }
 
     private func pressure(of provider: any UsageProvider) -> Double {
-        primaryMetric(for: provider)?.riskScore ?? -1
+        if let gateway = provider as? GatewayProvider {
+            return gateway.snapshot.summary.issue == nil ? (gateway.snapshot.summary.value?.percentUsed ?? -1) : -1
+        }
+        return primaryMetric(for: provider)?.riskScore ?? -1
     }
 
     /// Overview reserves "needs attention" for an imminent or predicted
@@ -222,7 +234,7 @@ struct FocusOverview: View {
         }
     }
 
-    private func unavailableLabel(_ provider: any UsageProvider) -> String {
+    private func unavailableLabel(_ provider: any BuiltinUsageProvider) -> String {
         provider.snapshot?.planName ?? "Not reported"
     }
 
@@ -232,7 +244,7 @@ struct FocusOverview: View {
     }
 
     private func secondaryCaption(
-        _ provider: any UsageProvider,
+        _ provider: any BuiltinUsageProvider,
         excluding primary: CapacityFocus.Metric
     ) -> String? {
         guard let snapshot = provider.snapshot else { return nil }
@@ -248,7 +260,7 @@ struct FocusOverview: View {
         return pieces.isEmpty ? nil : pieces.joined(separator: " · ")
     }
 
-    private func extraSpendCaption(_ provider: any UsageProvider) -> String? {
+    private func extraSpendCaption(_ provider: any BuiltinUsageProvider) -> String? {
         guard provider.kind == .claude,
               let extra = provider.snapshot?.onDemandSpend
         else { return nil }
@@ -260,7 +272,7 @@ struct FocusOverview: View {
         let scope: String
     }
 
-    private func spendCaption(_ provider: any UsageProvider) -> SpendCaption? {
+    private func spendCaption(_ provider: any BuiltinUsageProvider) -> SpendCaption? {
         guard manager.showEstimatedCost, let snapshot = provider.snapshot else { return nil }
 
         switch provider.kind {

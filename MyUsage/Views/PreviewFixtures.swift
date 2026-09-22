@@ -4,7 +4,7 @@ import Observation
 
 @Observable
 @MainActor
-final class PreviewUsageProvider: UsageProvider {
+final class PreviewUsageProvider: BuiltinUsageProvider {
     let kind: ProviderKind
     let isAvailable = true
     var isEnabled = true
@@ -23,13 +23,20 @@ final class PreviewUsageProvider: UsageProvider {
 
 @MainActor
 enum PreviewFixtures {
-    static func manager(providerCount: Int = 2) -> UsageManager {
-        let providers = Array(allProviders.prefix(max(1, min(providerCount, allProviders.count))))
+    static func manager(providerCount: Int = 2, gateway: GatewayPreviewFixtures.Shape? = nil, gatewayCount: Int = 1) -> UsageManager {
+        var providers = Array(allProviders.prefix(max(1, min(providerCount, allProviders.count))))
+        if let gateway {
+            for index in 0..<max(1, min(gatewayCount, 50)) {
+                providers.append(GatewayPreviewFixtures.provider(gateway, index: index))
+            }
+        }
         let store = try! LedgerStore(path: LedgerStore.inMemoryPath)
         seedLedger(store)
         let ledger = LedgerSync(store: store, syncRoot: PreviewSyncRoot())
         ledger.reloadForPreview()
-        let manager = UsageManager(ledger: ledger, providers: providers, startsLedger: false)
+        let defaults = UserDefaults(suiteName: "MyUsage.preview.\(UUID().uuidString)")!
+        defaults.set(false, forKey: "notificationsEnabled")
+        let manager = UsageManager(ledger: ledger, providers: providers, startsLedger: false, defaults: defaults)
         manager.providers.forEach { $0.isEnabled = true }
         return manager
     }

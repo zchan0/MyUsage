@@ -16,6 +16,7 @@ import SwiftUI
 /// SwiftUI content visible at the corner cutouts.
 @MainActor
 final class PopoverPanel: NSPanel {
+    let presentation = PopoverPresentation()
     /// Invoked when the hosted SwiftUI content reports a new size. The owner
     /// (StatusItemController) re-anchors and resizes the window in response.
     var onContentResize: ((CGSize) -> Void)?
@@ -99,6 +100,7 @@ final class PopoverPanel: NSPanel {
         // is the inner ideal (taken before the flexible frame), the window
         // tracks the true content height without a feedback loop.
         let content = rootView
+            .environment(\.popoverPresentation, presentation)
             .environment(manager)
             .environment(updateChecker)
             .onSizeChange { [weak self] size in

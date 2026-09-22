@@ -197,7 +197,7 @@ struct CodexTokenRefreshResponse: Codable, Sendable {
 /// Codex (OpenAI) usage provider.
 @Observable
 @MainActor
-final class CodexProvider: UsageProvider {
+final class CodexProvider: BuiltinUsageProvider {
 
     let kind = ProviderKind.codex
     private(set) var isAvailable = false
