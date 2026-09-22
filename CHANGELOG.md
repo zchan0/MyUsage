@@ -6,6 +6,23 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.18.1 — 2026-09-22
+
+### Fixed
+- **LiteLLM model aliases and usage.** Model details now read aliases and
+  metrics from `model_groups`, matching the names used in Codex and Claude
+  Code and preserving request totals that include failures. Deployment-level
+  `models` could show internal names such as `custom-model-b12` and omit
+  failed requests. Missing model groups leave model details unavailable
+  while preserving daily totals.
+
+### 中文
+
+- **修复 LiteLLM 模型别名与统计来源**：模型明细改读 `model_groups`，展示
+  Codex、Claude Code 中使用的别名，并保留该分组上报的含失败请求的请求总数。
+  原先读取的部署级 `models` 可能显示 `custom-model-b12` 等内部名称并遗漏
+  失败请求。缺少模型分组时不回退到部署级数据，每日总量仍保留。
+
 ## v0.18.0 — 2026-09-22
 
 ### Added
