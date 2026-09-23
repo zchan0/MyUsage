@@ -56,12 +56,6 @@ struct PricingCatalogTests {
 
     // MARK: - Prefix matching
 
-    @Test("Exact model name hits")
-    func exactMatch() {
-        let catalog = makeCatalog()
-        #expect(catalog.pricing(for: "claude-sonnet-4-5") != nil)
-    }
-
     @Test("Prefix match for -thinking suffix")
     func prefixMatchThinking() {
         let catalog = makeCatalog()

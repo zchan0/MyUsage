@@ -50,15 +50,6 @@ struct ClaudeDelegatedRefreshTests {
         b.removePersistentDomain(forName: suite)
     }
 
-    @Test("Binary resolution checks well-known locations plus PATH")
-    func binaryResolution() {
-        // Environment-dependent by nature: assert only that resolution
-        // doesn't crash and, when it finds something, it's executable.
-        if let url = ClaudeDelegatedRefresh.resolveBinary() {
-            #expect(FileManager.default.isExecutableFile(atPath: url.path))
-        }
-    }
-
     /// Opt-in end-to-end check: actually spawns `claude /status` on a PTY
     /// and terminates it. Excluded from normal runs (spawns a real CLI
     /// session); run with PTY_E2E=1 when touching the runner.
@@ -66,17 +57,19 @@ struct ClaudeDelegatedRefreshTests {
         "PTY runner spawns and terminates the real CLI",
         .enabled(if: ProcessInfo.processInfo.environment["PTY_E2E"] == "1")
     )
-    func ptyEndToEnd() async {
+    func ptyEndToEnd() async throws {
+        try #require(ClaudeDelegatedRefresh.resolveBinary() != nil,
+                     "PTY_E2E=1 requires an installed Claude CLI")
         let defaults = scratchDefaults()
         let outcome = await ClaudeDelegatedRefresh.attempt(
             timeout: 6,
             defaults: defaults,
             now: .now
         )
-        #expect(outcome == .attempted || outcome == .cliUnavailable)
+        #expect(outcome == .attempted)
 
         // Second call inside the cooldown must not spawn again.
         let second = await ClaudeDelegatedRefresh.attempt(defaults: defaults, now: .now)
-        #expect(second == .skippedByCooldown || second == .cliUnavailable)
+        #expect(second == .skippedByCooldown)
     }
 }

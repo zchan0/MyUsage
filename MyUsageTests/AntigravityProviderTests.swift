@@ -129,17 +129,4 @@ struct AntigravityProviderTests {
         #expect(snapshot.worstUsagePercent == 90.0)
     }
 
-    // MARK: - Process Helper
-
-    @Test("Extract flag from command line")
-    func extractFlag() {
-        // This is tested implicitly via findAntigravityProcess
-        // Direct unit test for the CLI flag extraction pattern
-        let line = "12345 /path/to/language_server_macos --csrf_token abc123 --extension_server_port 8080 --app_data_dir antigravity"
-
-        // Simulate the extraction logic
-        let parts = line.split(separator: " ", maxSplits: 1)
-        #expect(parts.count == 2)
-        #expect(Int(parts[0]) == 12345)
-    }
 }

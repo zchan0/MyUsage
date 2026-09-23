@@ -5,6 +5,13 @@ import Foundation
 @Suite("Claude / Codex per-day ledger parsers")
 struct LedgerParserTests {
 
+    // Fixed fixture prices: these parser tests must not depend on a user's
+    // cached catalog or silently pass when a real model is absent from it.
+    private let catalog = PricingCatalog(file: PricingFile(version: 1, updated: nil, models: [
+        "claude-sonnet-4-5": ModelPricing(input: 2, output: 8),
+        "gpt-5-codex": ModelPricing(input: 4, output: 12),
+    ]))
+
     // MARK: - Claude
 
     @Test("Claude scanDailyCost buckets rows by UTC day from timestamp")
@@ -23,7 +30,7 @@ struct LedgerParserTests {
         """
         try jsonl.write(to: file, atomically: true, encoding: .utf8)
 
-        let result = ClaudeLogParser.scanDailyCost(roots: [root], since: .distantPast)
+        let result = ClaudeLogParser.scanDailyCost(roots: [root], since: .distantPast, catalog: catalog)
         #expect(abs((result["2026-04-17"] ?? 0) - 1.50) < 1e-9)
         #expect(abs((result["2026-04-18"] ?? 0) - 2.00) < 1e-9)
     }
@@ -55,16 +62,8 @@ struct LedgerParserTests {
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
 
-        // Choose a model that's in the bundled pricing.json.
         let model = "claude-sonnet-4-5"
-        let catalog = PricingCatalog.shared
-        guard let price = catalog.pricing(for: model) else {
-            // Bundled pricing missing — skip rather than fail.
-            return
-        }
         let tokens = TokenUsage(input: 1_000_000, output: 500_000)
-        let expected = Double(tokens.input) * price.input / 1_000_000
-                     + Double(tokens.output) * price.output / 1_000_000
 
         let file = root.appendingPathComponent("s.jsonl")
         let jsonl = """
@@ -77,7 +76,7 @@ struct LedgerParserTests {
             since: .distantPast,
             catalog: catalog
         )
-        #expect(abs((result["2026-04-17"] ?? 0) - expected) < 1e-6)
+        #expect(abs((result["2026-04-17"] ?? 0) - 6) < 1e-6)
     }
 
     @Test("Claude missing timestamp falls back to file mtime")
@@ -97,7 +96,7 @@ struct LedgerParserTests {
         let mtime = Date(timeIntervalSince1970: 1_776_000_000) // 2026-04-12
         try fm.setAttributes([.modificationDate: mtime], ofItemAtPath: file.path)
 
-        let result = ClaudeLogParser.scanDailyCost(roots: [root], since: .distantPast)
+        let result = ClaudeLogParser.scanDailyCost(roots: [root], since: .distantPast, catalog: catalog)
         let expectedDay = LedgerCalendar.dayKey(for: mtime)
         #expect(result[expectedDay] == 1.23)
     }
@@ -113,7 +112,6 @@ struct LedgerParserTests {
         defer { try? fm.removeItem(at: root) }
 
         let model = "gpt-5-codex"
-        guard let price = PricingCatalog.shared.pricing(for: model) else { return }
 
         let file = root.appendingPathComponent("rollout.jsonl")
         let jsonl = """
@@ -127,15 +125,11 @@ struct LedgerParserTests {
         let result = CodexLogParser.scanDailyCost(
             roots: [root],
             since: .distantPast,
-            catalog: PricingCatalog.shared
+            catalog: catalog
         )
 
-        let d17 = Double(1_000_000) * price.input / 1_000_000
-                + Double(500_000) * price.output / 1_000_000
-        let d18 = Double(500_000) * price.input / 1_000_000
-                + Double(250_000) * price.output / 1_000_000
-        #expect(abs((result["2026-04-17"] ?? 0) - d17) < 1e-6)
-        #expect(abs((result["2026-04-18"] ?? 0) - d18) < 1e-6)
+        #expect(abs((result["2026-04-17"] ?? 0) - 10) < 1e-6)
+        #expect(abs((result["2026-04-18"] ?? 0) - 5) < 1e-6)
     }
 
     @Test("Codex falls back to sessions/YYYY/MM/DD folder when row has no timestamp")
@@ -148,7 +142,6 @@ struct LedgerParserTests {
         defer { try? fm.removeItem(at: root) }
 
         let model = "gpt-5-codex"
-        guard let price = PricingCatalog.shared.pricing(for: model) else { return }
 
         let file = sub.appendingPathComponent("rollout.jsonl")
         let jsonl = """
@@ -157,9 +150,7 @@ struct LedgerParserTests {
         """
         try jsonl.write(to: file, atomically: true, encoding: .utf8)
 
-        let result = CodexLogParser.scanDailyCost(roots: [root], since: .distantPast)
-        let expected = Double(100_000) * price.input / 1_000_000
-                     + Double(50_000)  * price.output / 1_000_000
-        #expect(abs((result["2026-04-22"] ?? 0) - expected) < 1e-6)
+        let result = CodexLogParser.scanDailyCost(roots: [root], since: .distantPast, catalog: catalog)
+        #expect(abs((result["2026-04-22"] ?? 0) - 1) < 1e-6)
     }
 }

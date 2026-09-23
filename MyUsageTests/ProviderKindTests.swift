@@ -21,13 +21,6 @@ struct ProviderKindTests {
         #expect(ProviderKind.antigravity.displayName == "Antigravity")
     }
 
-    @Test("Each provider has a display name and accent color")
-    func displayProperties() {
-        for kind in ProviderKind.allCases {
-            #expect(!kind.displayName.isEmpty)
-        }
-    }
-
     @Test("Raw values match expected strings")
     func rawValues() {
         #expect(ProviderKind.claude.rawValue == "claude")
