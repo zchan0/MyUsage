@@ -6,6 +6,26 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.18.2 — 2026-09-23
+
+### Fixed
+- **Recover saved gateway keys after app updates.** Updating or rebuilding
+  an ad-hoc signed app can require Keychain authorization again. MyUsage now
+  distinguishes this from a missing key. Click **Refresh**, or leave the key
+  empty in **Edit Gateway → Check Usage Access**, and choose **Always Allow**
+  in the system dialog to restore access without re-entering the API key.
+  Background refreshes stay silent, and cancelling authorization preserves
+  the saved key and connection. A later build may require authorization again.
+
+### 中文
+
+- **修复更新后已保存的网关 key 无法读取**：更新或重新编译 ad-hoc 签名应用后，
+  Keychain 可能要求重新授权。现在会明确区分授权失败和 key 缺失；点击
+  **Refresh**，或在 **Edit Gateway** 中将 key 留空并点击 **Check Usage Access**，
+  然后在系统弹窗中选择 **Always Allow（始终允许）**，即可恢复访问，无须重填
+  API key。后台刷新不弹窗，取消授权会保留原 key 和连接；后续更换构建仍可能
+  需要再次授权。
+
 ## v0.18.1 — 2026-09-22
 
 ### Fixed
