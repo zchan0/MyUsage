@@ -78,6 +78,8 @@ xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
 
 在 **Settings → Providers → Add Gateway…** 填写名称、HTTPS host 和 API key，点击 **Check Usage Access** 检查后添加。当前 Vendor 仅有 LiteLLM；同一供应商可创建多个独立实例，分别排序、启停和编辑。凭据仅保存在本机 Keychain；更换 host 需要重新输入 key。
 
+已保存的 key 会跨应用重启保留。MyUsage 使用 ad-hoc 签名，更新或本地重新编译后，macOS 可能要求重新授权 Keychain 访问。点击 **Refresh**，或在 **Edit Gateway** 中将 key 留空并点击 **Check Usage Access**，然后在系统弹窗中选择 **Always Allow（始终允许）**，为当前构建保留访问权限。后台刷新不会弹窗；拒绝授权会保留原 key，并显示需要授权的提示。
+
 检查读取当前 key 的 `/key/info`，确认用户 ID 后读取 `/user/info?user_id=…`，并探测一页用户历史。无法识别身份时会出现可选 User ID 输入。若账户和 key 均可读，再选择统计范围；账户包括关联的全部 key，单 key 不混入账户历史。
 
 详情展示可读取的预算与消费，以及可选的 UTC 月初至今天的费用、模型别名和 token 历史。权限不足只影响对应区块；缺失字段不当作 0，未完整读取会标记部分数据。网关上报费用不参与本地估价和设备同步求和。真实部署的版本与权限需要自行验证。

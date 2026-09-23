@@ -128,7 +128,7 @@ struct GatewayConnectionEditor: View {
         invalidate()
         do {
             let draft = try draft()
-            let secret = key.isEmpty ? try manager.gatewayStore.credentials.read(draft.credentialReference) : key
+            let secret = key.isEmpty ? try manager.gatewayStore.credentials.read(draft.credentialReference, allowUI: true) : key
             let current = revision
             checking = true
             task = Task {

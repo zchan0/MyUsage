@@ -78,3 +78,25 @@
 本次新增网关 provider，按次版本升级发布 0.18.0 (44)。更正时 v0.17.2 已完成 GitHub 发布，因此保留其 tag 和发布历史，新增 v0.18.0 作为最新版本；v0.17.2 的发布说明将引导至 v0.18.0。应用功能与已验收的版本一致，本次仅调整版本元数据及发布文档。
 
 0.18.0 (44) 本地 release 打包、ad-hoc 签名、ZIP 完整性和 SHA-256 校验通过；功能代码未变，原 444 项测试与 macOS CI 均已通过，新 tag 继续执行发布测试。
+
+## 2026-09-23 更新或重新编译后 Keychain 访问恢复
+
+用户确认触发条件是更新或重新编译应用后打开。旧实现始终禁止 Keychain 授权交互，并把所有读取失败映射成 missing credential，因此已存 key 被 ACL 拒绝时，只能通过重新输入 key 新建条目来恢复。
+
+修复先进行静默读取；仅手动 Refresh 或编辑页 Check Usage Access 才可对授权失败重试一次系统授权。取消后保留原 key、配置引用和旧用量；自动刷新及历史加载不弹窗。缺失、授权失败、其他系统错误和无效存储数据分别报告。`MYUSAGE_NO_PROMPT=1` / `MYUSAGE_AUTOPILOT` 仍禁止弹窗。ad-hoc 签名的后续构建仍可能再次需要授权，不承诺跨构建免授权；Apple 对此身份边界的说明见 [TN3127](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)。
+
+修改文件：
+
+- 凭据与运行态：`MyUsage/Services/GatewayConnectionStore.swift`、`MyUsage/Models/GatewayUsage.swift`、`MyUsage/Providers/GatewayProvider.swift`。
+- 编辑页及预览适配：`MyUsage/Views/GatewayConnectionEditor.swift`、`MyUsage/Views/GatewayPreviewFixtures.swift`。
+- 回归测试：`MyUsageTests/GatewayKeychainTests.swift`（新增）、`MyUsageTests/GatewayStateTests.swift`。
+- 文档：`README.md`、`README.zh-CN.md`、`docs/architecture.md`、本文。
+
+已执行验证：
+
+- 独立进程使用真实 `KeychainHelper` 和随机测试服务名写入虚构 key：写入成功；同一二进制两次重新启动读取均为 `status=0`，数据匹配。另一个重新编译的二进制读同一条目返回 `-25308`，元数据确认条目仍存在。测试条目随后由原二进制成功删除。未读取真实网关 key，也未修改真实条目的 ACL。
+- 相关测试 26 项通过；完整 `swift test` 为 171 项 XCTest + 287 项 Swift Testing，共 458 项通过。新增 10 项测试覆盖授权恢复、取消、静默读取、错误分类、配置恢复和旧数据保留；授权交互使用注入结果，不等同于真实系统弹窗验收。
+- `xcodebuild build -scheme MyUsage -destination 'platform=macOS' -skipPackagePluginValidation -derivedDataPath /tmp/myusage-gateway-keychain-deriveddata` 通过；`git diff --check` 通过。保留既有 AppIcon.icns 未声明资源及 legacy Keychain API 弃用警告。
+- 测试/构建日志：`/tmp/myusage-gateway-keychain-targeted.log`、`/tmp/myusage-gateway-keychain-full-tests.log`、`/tmp/myusage-gateway-keychain-build.log`。
+
+仍需真实应用手动验收：运行包含修复的构建，保留旧网关 key；出现授权提示后点击 Refresh，系统弹窗选择 Always Allow，确认用量恢复。再退出并启动同一构建，确认无须重填 key；取消系统授权时原配置不变、后台不重复弹窗。编辑页 key 留空后 Check Usage Access 也应能申请授权。此次仅完成代码、测试和编译验证，未打包、替换已安装应用、提交或发布。

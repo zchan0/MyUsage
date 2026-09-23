@@ -1,3 +1,4 @@
+import Security
 import XCTest
 @testable import MyUsage
 
@@ -6,7 +7,11 @@ final class MemoryGatewayCredentials: GatewayCredentialStore {
     var keys: [String: String] = [:]
     var failWrites = false
     var failDeletes = false
-    func read(_ reference: String) throws -> String {
+    var readIssue: GatewayIssue?
+    var readRequests: [(reference: String, allowUI: Bool)] = []
+    func read(_ reference: String, allowUI: Bool) throws -> String {
+        readRequests.append((reference, allowUI))
+        if let readIssue { throw readIssue }
         guard let key = keys[reference] else { throw GatewayIssue.missingCredential }
         return key
     }
@@ -91,6 +96,72 @@ final class GatewayStateTests: XCTestCase, @unchecked Sendable {
         let saved = try store.save(edited, newKey: "fixture-replacement")
         XCTAssertEqual(saved.id, original.id)
         XCTAssertEqual(keys.keys, [saved.credentialReference: "fixture-replacement"])
+    }
+    @MainActor
+    func testRecreatedStoreAndProviderReuseSavedCredentialReference() async throws {
+        let defaults = isolatedDefaults(), keys = MemoryGatewayCredentials()
+        let original = try GatewayConnectionStore(defaults: defaults, credentials: keys)
+            .save(connection(), newKey: "fixture-persisted-key")
+        let restoredKeys = MemoryGatewayCredentials()
+        restoredKeys.keys = keys.keys
+        let restoredStore = GatewayConnectionStore(defaults: defaults, credentials: restoredKeys)
+        let restored = try XCTUnwrap(restoredStore.load().first)
+        XCTAssertEqual(restored, original)
+
+        let provider = GatewayProvider(connection: restored, credentials: restoredKeys,
+                                       adapter: StateGatewayAdapter([summary()]))
+        await provider.refresh()
+        XCTAssertEqual(provider.snapshot.summary.value?.spend, 42)
+        XCTAssertNil(provider.snapshot.summary.issue)
+        XCTAssertEqual(restoredKeys.readRequests.map(\.reference), [original.credentialReference])
+        XCTAssertEqual(restoredKeys.readRequests.map(\.allowUI), [false])
+    }
+    @MainActor
+    func testManualRefreshRecoversKeychainAccessAndLaterReadsStaySilent() async {
+        let connection = connection()
+        var authorized = false
+        var reads: [Bool] = []
+        let keys = GatewayKeychain(readPassword: { _, reference, allowUI in
+            XCTAssertEqual(reference, connection.credentialReference)
+            reads.append(allowUI)
+            if allowUI { authorized = true }
+            return authorized ? (Data("fixture-key".utf8), errSecSuccess) : (nil, errSecInteractionNotAllowed)
+        }, allowsInteraction: true)
+        let adapter = StateGatewayAdapter([summary(), summary()])
+        let provider = GatewayProvider(connection: connection, credentials: keys, adapter: adapter)
+        await provider.refresh()
+        XCTAssertEqual(provider.snapshot.summary.issue, .keychainAccessRequired)
+        let callsWhileBlocked = await adapter.summaryCalls
+        XCTAssertEqual(callsWhileBlocked, 0)
+
+        provider.isHistoryVisible = true
+        await provider.refresh(trigger: .manual)
+        XCTAssertNil(provider.snapshot.summary.issue)
+        XCTAssertEqual(provider.snapshot.summary.value?.spend, 42)
+        XCTAssertEqual(provider.connection, connection)
+        XCTAssertEqual(reads, [false, false, true, false], "History must not request another authorization dialog")
+
+        // A recreated provider reads the authorized saved key without a new key or prompt.
+        let restarted = GatewayProvider(connection: connection, credentials: keys, adapter: adapter)
+        await restarted.refresh()
+        XCTAssertNil(restarted.snapshot.summary.issue)
+        XCTAssertEqual(restarted.snapshot.summary.value?.spend, 42)
+        XCTAssertEqual(reads, [false, false, true, false, false])
+    }
+    @MainActor
+    func testReadFailurePreservesConfigurationCredentialAndPreviousUsage() async throws {
+        let defaults = isolatedDefaults(), keys = MemoryGatewayCredentials()
+        let store = GatewayConnectionStore(defaults: defaults, credentials: keys)
+        let saved = try store.save(connection(), newKey: "fixture-key")
+        let initial = GatewayScopeCheck(scope: saved.scope!, summary: summary(), history: .init())
+        let provider = GatewayProvider(connection: saved, credentials: keys,
+                                       adapter: StateGatewayAdapter(), initial: initial)
+        keys.readIssue = .keychainAccessRequired
+        await provider.refresh(trigger: .manual)
+        XCTAssertEqual(provider.snapshot.summary.issue, .keychainAccessRequired)
+        XCTAssertEqual(provider.snapshot.summary.value?.spend, 42)
+        XCTAssertEqual(try store.load(), [saved])
+        XCTAssertEqual(keys.keys, [saved.credentialReference: "fixture-key"])
     }
     @MainActor
     func testUnreadableConfigurationAndFailedDeletionArePreserved() throws {

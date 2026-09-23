@@ -20,6 +20,7 @@ struct GatewayConnection: Codable, Identifiable, Equatable, Sendable {
 
 enum GatewayIssue: Error, Equatable, Sendable {
     case invalidConfiguration, missingCredential, identityUnknown, authentication, forbidden
+    case keychainAccessRequired, keychainReadFailed(status: Int32), invalidStoredCredential
     case endpointUnavailable, invalidResponse, network, rateLimited(until: Date?)
     case unsupported, notChecked, cancelled
 
@@ -27,6 +28,9 @@ enum GatewayIssue: Error, Equatable, Sendable {
         switch self {
         case .invalidConfiguration: "Enter a valid HTTPS gateway address (HTTP is allowed only on localhost)."
         case .missingCredential: "API key unavailable. Update it in Settings."
+        case .keychainAccessRequired: "Saved API key needs Keychain access. Click Refresh, or Check Usage Access in Settings, to authorize it."
+        case .keychainReadFailed: "Could not read the saved API key from Keychain. Unlock your Keychain and try again."
+        case .invalidStoredCredential: "The saved API key could not be decoded. Update it in Settings."
         case .identityUnknown: "Could not identify your user. Enter your LiteLLM user ID to check account usage."
         case .authentication: "The gateway rejected this API key."
         case .forbidden: "This API key cannot read this data."

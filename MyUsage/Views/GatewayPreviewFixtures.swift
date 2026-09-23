@@ -41,7 +41,7 @@ enum GatewayPreviewFixtures {
 }
 
 private struct PreviewGatewayCredentials: GatewayCredentialStore {
-    func read(_ reference: String) throws -> String { "preview-placeholder" }
+    func read(_ reference: String, allowUI: Bool) throws -> String { "preview-placeholder" }
     func write(_ key: String, reference: String) throws { throw GatewayStoreError.keychain }
     func delete(_ reference: String) throws { }
 }

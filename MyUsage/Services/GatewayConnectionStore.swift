@@ -3,17 +3,50 @@ import Security
 
 @MainActor
 protocol GatewayCredentialStore {
-    func read(_ reference: String) throws -> String
+    func read(_ reference: String, allowUI: Bool) throws -> String
     func write(_ key: String, reference: String) throws
     func delete(_ reference: String) throws
 }
 
+extension GatewayCredentialStore {
+    /// Launch, timer and history reads must never open an authorization dialog.
+    func read(_ reference: String) throws -> String { try read(reference, allowUI: false) }
+}
+
 struct GatewayKeychain: GatewayCredentialStore {
     private let service = "MyUsage.Gateway.APIKey"
-    func read(_ reference: String) throws -> String {
-        let result = KeychainHelper.readGenericPasswordResult(service: service, account: reference, allowUI: false)
-        guard result.status == errSecSuccess, let data = result.data,
-              let key = String(data: data, encoding: .utf8), !key.isEmpty else { throw GatewayIssue.missingCredential }
+    private let readPassword: (String, String, Bool) -> (data: Data?, status: OSStatus)
+    private let allowsInteraction: Bool
+
+    init(
+        readPassword: @escaping (String, String, Bool) -> (data: Data?, status: OSStatus) = {
+            KeychainHelper.readGenericPasswordResult(service: $0, account: $1, allowUI: $2)
+        },
+        allowsInteraction: Bool = ProcessInfo.processInfo.environment["MYUSAGE_NO_PROMPT"] != "1"
+            && ProcessInfo.processInfo.environment["MYUSAGE_AUTOPILOT"] == nil
+    ) {
+        self.readPassword = readPassword
+        self.allowsInteraction = allowsInteraction
+    }
+
+    func read(_ reference: String, allowUI: Bool) throws -> String {
+        var result = readPassword(service, reference, false)
+        // An updated ad-hoc build can lose access to an existing item's ACL.
+        // Recover only after an explicit user action, without replacing the key.
+        if allowUI, allowsInteraction,
+           result.status == errSecInteractionNotAllowed || result.status == errSecAuthFailed {
+            result = readPassword(service, reference, true)
+        }
+        switch result.status {
+        case errSecSuccess: break
+        case errSecItemNotFound: throw GatewayIssue.missingCredential
+        case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
+            throw GatewayIssue.keychainAccessRequired
+        default: throw GatewayIssue.keychainReadFailed(status: result.status)
+        }
+        guard let data = result.data, let key = String(data: data, encoding: .utf8), !key.isEmpty else {
+            throw GatewayIssue.invalidStoredCredential
+        }
         return key
     }
     func write(_ key: String, reference: String) throws {

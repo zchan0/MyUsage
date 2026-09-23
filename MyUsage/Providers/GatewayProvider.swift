@@ -59,7 +59,7 @@ final class GatewayProvider: UsageProvider {
             guard let self else { return }
             defer { if revision == current { isLoading = false; task = nil } }
             do {
-                let key = try credentials.read(connection.credentialReference)
+                let key = try credentials.read(connection.credentialReference, allowUI: trigger == .manual)
                 var context = GatewayRequestContext(connection: connection, apiKey: key)
                 if connection.scope == nil {
                     let check = try await adapter.checkConnection(context)

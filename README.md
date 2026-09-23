@@ -97,6 +97,8 @@ Each release includes a `.sha256` file for checksum verification.
 
 Open **Settings → Providers → Add Gateway…**. Enter a name, your gateway's HTTPS base URL, and API key, then **Check Usage Access** and **Add Provider**. Vendor is currently fixed to LiteLLM. Multiple connections to the same vendor remain independent; keys are stored in this Mac's Keychain. Changing the host requires re-entering a key.
 
+Saved keys survive app restarts. After an update or local rebuild, macOS may require Keychain authorization again because MyUsage is ad-hoc signed. Click **Refresh**, or leave the key field empty in **Edit Gateway → Check Usage Access**, and choose **Always Allow** in the system dialog to retain access for that build. Background refreshes never prompt; denied access preserves the saved key and shows an authorization message.
+
 The check reads your own `/key/info`, then `/user/info?user_id=…` when your identity is known. If the key cannot identify a user, an optional User ID field appears. If both scopes are readable, choose **My account** (all linked keys) or **This API key**. The check also probes one short page of account history; history permission failures do not discard a readable budget. Unverified settings can be saved for later.
 
 Account history comes from `/user/daily/activity`, from the first day of the current month through today in UTC. Availability depends on the deployment and key permissions. Key-only scope currently shows its summary without borrowing account history. Budget-period spend and monthly logged usage can differ. Missing values stay unknown; incomplete pagination/model breakdowns are labeled. Gateway-reported costs are separate from local estimates and multi-device sync, and are not summed across instances.
