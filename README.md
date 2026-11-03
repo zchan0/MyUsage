@@ -46,7 +46,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 - **30-day model costs with hover inspection.** Claude and Codex get a stacked daily chart plus a stable vertical model-cost breakdown. By default it shows each model's rolling cost; hover a day to see that day's total and per-model costs without the legend changing order.
 - **Synced token totals.** Claude and Codex Detail shows 30-day Total / Input / Output / Cache tokens across all ledger accounts and synced Macs, separately from the cost chart.
 - **Codex reset-credit inventory.** See the authoritative available count and nearest expiry in one row, then expand it for every reported reset-credit expiry.
-- **Per-bucket weekly breakdown for Claude.** Anthropic's `/api/oauth/usage` exposes plan-dependent sub-caps — model families (Opus, Sonnet, Haiku) and product lines (Design, Cowork, OAuth-apps). MyUsage surfaces every non-zero bucket as an indented row under the weekly bar. Plans without separate sub-caps (e.g. Max 5x, where everything pools into the unified weekly total) show none.
+- **Claude quota from official statusline data.** Explicitly connect in Settings → Providers. MyUsage reads private local 5-hour / 7-day snapshots without accessing Claude credentials, querying OAuth usage/profile APIs, or launching Claude Code.
 - **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
 - **In-app update channel.** On launch, MyUsage checks GitHub Releases and shows a banner when a newer tag is available. The Settings → About banner can download the next release and reveal it in Finder one drag away from /Applications.
 - **Privacy-respecting device identity.** Multi-device sync uses a salted SHA-256 of `IOPlatformUUID` as the device ID; the raw hardware UUID never leaves the process. Cached in UserDefaults so reinstalling doesn't create a duplicate device.
@@ -56,7 +56,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 
 | Provider | Data Source | What You See |
 | --- | --- | --- |
-| Claude Code | OAuth API (`~/.claude/.credentials.json` / Keychain) + `/api/oauth/profile` for plan label | 5h + weekly limits · reserve/deficit outcome · per-bucket caps · 30-day model cost + token totals · monthly cost |
+| Claude Code | Official statusline → private local snapshot; local JSONL for costs/tokens | Optional 5h + weekly limits with local receipt time · 30-day model cost + token totals · monthly estimate; email/plan not provided |
 | Codex | OAuth API (`~/.codex/auth.json` / Keychain) | 5h + weekly limits · reserve/deficit outcome · reset-credit inventory · 30-day model cost + token totals · monthly cost |
 | Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota + on-demand budget bars · billing-cycle countdown |
 | Antigravity | Local language server process probe | Per-model quota bars · IDE running indicator |
@@ -92,6 +92,22 @@ Each release includes a `.sha256` file for checksum verification.
    - `Providers`: reorder, toggle, and add/edit named LiteLLM gateways
    - `Devices`: inspect aggregated monthly cost by device and forget stale peers
    - `About`: app version and project link
+
+## Claude Code statusline integration
+
+Open **Settings → Providers → Claude Code statusline → Enable Integration**. This is opt-in: starting MyUsage or clicking Refresh never edits Claude settings or launches Claude Code. The setting uses `CLAUDE_CONFIG_DIR/settings.json` when that environment variable is present in MyUsage, otherwise `~/.claude/settings.json`. Project/managed settings can override it; verify the effective statusline in a normal Claude Code session.
+
+The wrapper sends the official stdin to MyUsage's native `--claude-statusline` collector, then passes the same bytes to the original command. It preserves the original stdout, stderr, exit status, and other settings. A collector error is silent and does not prevent the original command from running. No Python, jq, helper download, or third-party dependency is needed. MyUsage's executable must stay at the location used when enabling; disable/re-enable before moving the app.
+
+**Disable Integration** restores only the original command and retains edits to other settings. Enabling/disabling is idempotent. If the user changes or removes the installed command, MyUsage refuses to overwrite that change. Restore the installed wrapper before disabling, or remove the wrapper manually. The installation record contains only the original and installed commands, not a backup of the full settings file. Existing statusline scripts remain unchanged: if they read tokens or use network APIs, those are their own behaviors and continue until the user changes that script.
+
+Snapshots live only in `~/Library/Application Support/MyUsage/ClaudeStatusline/snapshots/`. Directories are `0700`, files and locks `0600`; the directory is excluded from system backup and is not sent to the sync folder. Each session has a separate file, serialized with a process lock and replaced atomically. A snapshot contains only schema version, local receipt time, session ID, Claude Code version, and the two quota windows. The app selects one latest receipt; it never sums sessions, combines their windows, or infers account identity from a session ID. Different signed-in accounts cannot be distinguished by this source.
+
+The official fields are `rate_limits.five_hour` and `rate_limits.seven_day`, each with `used_percentage` (0–100) and `resets_at` (Unix seconds). Each window can be absent. Eligible subscriptions report these fields only after the session's first API response. See [Claude Code statusline documentation](https://code.claude.com/docs/en/statusline#rate-limit-usage).
+
+The UI distinguishes not connected, waiting for quota, local snapshot, old snapshot, and damaged data. Overview and Claude Detail show a separate snapshot receipt date/time and relative age. Missing windows remain unknown; expired windows disappear from current limits, even with automatic refresh disabled. Receipts older than 15 minutes are labeled old. Only valid, enabled Claude data can generate new quota notifications; old, disconnected, waiting, or damaged data is excluded. **Local receipt time is not the server sample time**: repeated statusline events may carry unchanged quota. Automatic/manual refresh only rereads local files at the configured interval; it cannot obtain new quota. **When Claude Code is not running or provides no new data, MyUsage can only show an old snapshot with its receipt time.** No integration can promise that an account will never be restricted or banned.
+
+Local JSONL cost and token statistics remain separate estimates and ledger totals; they never substitute for subscription quota. Statusline does not supply email, plan, per-model subscription caps, or extra-usage billing, so these remain unprovided. New Claude cost days use the ledger's existing `default` bucket. An existing unique daily storage key is retained to prevent duplicate counting; it is never used as current account identity. Days with ambiguous legacy attribution remain unchanged and display a cost-history notice. The ledger schema and sync format are unchanged. The old OAuth cache and credential copies are never read during migration. Existing legacy Keychain entries are left untouched; Claude Code and other providers' credentials are not modified.
 
 ## LiteLLM gateways
 
@@ -134,7 +150,7 @@ More details: [docs/architecture.md](docs/architecture.md)
 
 ## Privacy and Data
 
-- MyUsage reads local credential/state files and keychain entries needed by each provider integration.
+- Claude quota uses only opt-in local statusline snapshots; its costs/tokens use local JSONL. Other provider integrations read their required local credentials/state and Keychain entries.
 - Network requests are sent only to provider endpoints required for usage retrieval.
 - Multi-device sync uses a user-selected local/shared folder; MyUsage does not run its own cloud backend.
 

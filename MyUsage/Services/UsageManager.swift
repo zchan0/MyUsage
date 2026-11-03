@@ -212,20 +212,8 @@ final class UsageManager {
             Task.detached(priority: .utility) { await PricingUpdater.refreshIfStale() }
         }
 
-        // Refresh providers concurrently so a slow one (e.g. Claude
-        // waiting on the network) doesn't hold up the others. Each
-        // provider is @MainActor-isolated, but its `refresh()` suspends at
-        // every network `await`, freeing the main actor for the others —
-        // so the HTTP round-trips genuinely overlap. Previously this was a
-        // serial `for await` loop, which made later providers (Codex,
-        // Cursor) visibly lag behind the first to finish.
-        // Kick each provider's refresh off as its own MainActor Task, then
-        // await them all. The providers are @MainActor-isolated, but each
-        // refresh() suspends at every network `await`, freeing the main
-        // actor for the others — so the HTTP round-trips overlap instead of
-        // running strictly one-after-another (which made Codex/Cursor
-        // visibly lag behind the first provider). Capture instance references
-        // so removing/reordering settings during refresh cannot change a target.
+        // Refresh independent providers concurrently. Claude reads local statusline files;
+        // network-backed providers can suspend without delaying that local read.
         let enabled = providers.filter { $0.isEnabled }
         let tasks: [Task<Void, Never>] = enabled.map { provider in
             Task { @MainActor in
@@ -327,6 +315,9 @@ final class UsageManager {
             }
             return nil
         case .claude, .codex, .antigravity:
+            if provider.kind == .claude, snapshot.sessionUsage == nil, snapshot.weeklyUsage == nil {
+                return nil
+            }
             // Prefix the worst window (5h·90% / wk·62%) so the number
             // isn't ambiguous when it jumps between windows. Antigravity's
             // quotas have no window label → bare percentage.
@@ -335,7 +326,11 @@ final class UsageManager {
             // Space-dot-space matches the app's separator convention
             // (e.g. the reset countdown "2h 14m · 16:30") and gives the
             // menu-bar label breathing room — "7d·62%" read as cramped.
-            return worst.label.map { "\($0) · \(pct)" } ?? pct
+            let label = worst.label.map { "\($0) · \(pct)" } ?? pct
+            if let claude = provider as? ClaudeProvider {
+                return label + (claude.dataState == .valid ? " · snapshot" : " · old")
+            }
+            return label
         }
     }
 
@@ -346,9 +341,7 @@ final class UsageManager {
 
     // MARK: - Timer
 
-    /// Hard floor for the auto-refresh interval. Even if jitter would pull
-    /// the tick below this, we wait at least this long — keeps us under
-    /// Anthropic / OpenAI rate-limit radar.
+    /// Hard floor for polling local sources and network-backed providers.
     nonisolated static let minRefreshIntervalFloor: TimeInterval = 60
 
     private func restartTimer() {

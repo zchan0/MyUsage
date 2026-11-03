@@ -2,6 +2,15 @@ import SwiftUI
 import AppKit
 
 @main
+enum MyUsageMain {
+    static func main() {
+        if CommandLine.arguments.dropFirst().first == "--claude-statusline" {
+            exit(ClaudeStatuslineCommand.run(arguments: CommandLine.arguments))
+        }
+        MyUsageApp.main()
+    }
+}
+
 struct MyUsageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 

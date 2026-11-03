@@ -46,7 +46,7 @@ MyUsage 是一个原生的 macOS 菜单栏小应用，解决方式是：
 - **30 天模型成本 + hover 明细**：Claude / Codex 使用按模型堆叠的每日图表和稳定的纵向成本明细；默认看各模型 30 天成本，悬停某天即可原位切换为当天 total 和各模型 cost。
 - **跨设备 Token 汇总**：Claude / Codex 详情独立显示 30 天 Total / Input / Output / Cache，汇总所有 ledger 账户和同步 Mac，不与 cost 图表混在一起。
 - **Codex reset-credit 库存**：一行查看官方 available 数量和最近过期时间，展开后查看全部已上报的 reset-credit expiry。
-- **Claude weekly 子配额拆分**：Anthropic `/api/oauth/usage` 暴露多种 plan-dependent 子配额——model 系列（Opus / Sonnet / Haiku）+ 产品线（Claude Design / Cowork / OAuth apps）。MyUsage 把每个非零子桶在 weekly 主条下方独占一行，按消耗量降序，看到是哪个模型/产品在吃额度。Plan 没有独立子配额（如 Max 5x，所有用量共享一个 weekly 总额）时不显示子行。
+- **Claude 官方 statusline 额度**：在 Settings → Providers 明确启用接入。MyUsage 只读本机 5 小时 / 7 天快照，不读 Claude OAuth 凭据，不请求用量/资料接口，也不启动 Claude Code。
 - **Limit 压力通知**：任意 limit 跨过 warn / crit 阈值（默认 80% / 95%，可调）会立即弹 macOS 系统通知。带幂等：同一档不会重复弹；用量回落后状态自动 reset，下次再升能再触发。
 - **应用内升级**：启动时检查 GitHub Releases，发现新版本时菜单栏图标和 Settings → About 都会有提示。banner 上的 Download 按钮可以一键下载新版的 .zip 并在 Finder 里高亮，离"拖到 /Applications"只差一拖。
 - **隐私：硬件衍生的设备 ID**：跨设备同步用的设备 ID 是 `IOPlatformUUID` 加盐后 SHA-256 的结果，原始硬件 ID 永远不出本进程。`UserDefaults` 仅作缓存，重装也不会产生重复设备。
@@ -74,6 +74,22 @@ xattr -cr /Applications/MyUsage.app && open /Applications/MyUsage.app
   - `Devices`：查看设备聚合成本、忘记旧设备
   - `About`：版本与项目链接
 
+## Claude Code statusline 接入
+
+在 **Settings → Providers → Claude Code statusline → Enable Integration** 启用。启动 MyUsage 和刷新均不会自动改配置，也不会安装、登录或启动 Claude Code。MyUsage 有 `CLAUDE_CONFIG_DIR` 环境变量时使用该目录的 `settings.json`，否则使用 `~/.claude/settings.json`。项目或受管配置可能覆盖该设置，需在正常会话中验收实际生效的命令。
+
+包装命令先把官方 stdin 交给 MyUsage 原生 `--claude-statusline` 采集入口，再把同一份字节交给原命令。原 stdout、stderr、退出码和其他配置字段均保留。桥接失败不影响原命令。无需 Python、jq 或额外依赖。采集入口绑定启用时的 MyUsage 路径；移动应用前先关闭接入，移动后再启用。
+
+**Disable Integration** 只恢复原命令，保留其他设置的新改动。重复启用/撤销幂等。若用户后来修改或移除了命令，MyUsage 拒绝用旧命令覆盖新配置。此时可先恢复包装命令再关闭，或手动移除包装。接入记录只含原命令与包装命令，不备份整份配置。已有 statusline 脚本保持原样；若它自己读 token 或请求网络，这些行为仍由旧脚本执行，不属于新桥接。
+
+快照仅保存到 `~/Library/Application Support/MyUsage/ClaudeStatusline/snapshots/`。目录权限 `0700`，快照和锁文件权限 `0600`。目录排除系统备份，不进入同步目录。各 session 独立文件，加锁后原子替换。内容仅含 schema 版本、本地接收时间、session ID、Claude Code 版本和两个额度窗口。不保存完整 stdin、token、项目路径或会话内容。读取时只选最新一份，不累加会话，不拼接窗口，也不从 session ID 推断账号。该来源无法区分不同登录账号。
+
+[官方字段](https://code.claude.com/docs/en/statusline#rate-limit-usage)为 `rate_limits.five_hour` / `rate_limits.seven_day` 下的 `used_percentage`（0～100）和 `resets_at`（Unix 秒）。各窗口可独立缺失。适用订阅在会话收到首次 API 响应后才提供额度。
+
+界面区分未接入、等待额度、本地快照、旧快照和损坏数据。Overview 与 Claude 详情单独显示快照接收日期、时间和距今时长。缺失窗口保持未知，重置时间已过的窗口不再作为当前额度，即使关闭自动刷新也会过期。接收超过 15 分钟标记为旧快照。只有有效且启用的 Claude 数据才会生成新额度通知；旧数据、断开接入、等待数据和损坏状态均排除。**本地接收时间不等于服务端采样时间**；重复 statusline 事件可能携带相同额度。自动/手动刷新只按设置的周期重读本地文件，不能获得新额度。**Claude Code 未运行或没有新数据时，MyUsage 只能展示带时间标记的旧快照。** 此改造不能保证账号不被限制或封禁。
+
+本地 JSONL 成本、token 统计和已有同步账本保留。成本估算不替代订阅额度。邮箱、套餐、分模型订阅额度及额外用量账单均显示未提供。新的 Claude 成本日期使用账本原有 `default` 桶。已有日期保留唯一存储键，避免重复计数；该键不作为当前账号身份。旧日期归属有歧义时保留记录，并提示成本历史未更新。账本 schema 与同步格式不变。迁移不读取旧 OAuth 缓存或凭据副本，也不清理既有 Keychain 项。Claude Code 及其他 provider 的凭据保持原样。
+
 ## LiteLLM 网关
 
 在 **Settings → Providers → Add Gateway…** 填写名称、HTTPS host 和 API key，点击 **Check Usage Access** 检查后添加。当前 Vendor 仅有 LiteLLM；同一供应商可创建多个独立实例，分别排序、启停和编辑。凭据仅保存在本机 Keychain；更换 host 需要重新输入 key。
@@ -98,7 +114,7 @@ swift build -c release
 
 ## 数据与隐私
 
-- 应用会读取本地凭据/状态文件与 Keychain 中必要信息来拉取各 provider 用量。
+- Claude 额度仅来自明确启用的本地 statusline 快照；成本和 token 来自本地 JSONL。其他 provider 按需读取本地凭据、状态文件及 Keychain。
 - 网络请求仅用于访问对应 provider 的接口。
 - 多设备聚合依赖你手动选择的本地/共享同步目录，不依赖 MyUsage 自建云服务。
 

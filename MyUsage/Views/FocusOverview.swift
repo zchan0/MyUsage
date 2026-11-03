@@ -160,6 +160,15 @@ struct FocusOverview: View {
                     .foregroundStyle(.tertiary)
                     .padding(.top, 8)
             }
+            if let claude = provider as? ClaudeProvider {
+                ClaudeSnapshotTimestamp(receivedAt: claude.receipt.map { Date(timeIntervalSince1970: $0.receivedAt) })
+                    .padding(.top, 8)
+                Text(claude.sourceMessage)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)

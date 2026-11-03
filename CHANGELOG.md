@@ -6,6 +6,40 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.19.0 — 2026-11-03
+
+### Changed
+- **Claude quota from official statusline data.** Enable the integration in
+  **Settings → Providers → Claude Code statusline**. MyUsage reads private local
+  snapshots instead of reading Claude OAuth credentials, querying usage/profile
+  APIs, or launching Claude Code to probe or renew credentials. Existing
+  statusline commands retain their input, output, and other settings; their own
+  credential or network behavior remains unchanged.
+- **Dated quota snapshots.** Overview and Claude Detail show the local receipt
+  date/time and relative age. Missing windows remain unknown; expired windows
+  disappear from current limits. Refresh only rereads local files. When Claude
+  Code stops or provides no new data, MyUsage can only show a dated old snapshot.
+  Email and plan are not provided by this source. Local JSONL costs, tokens,
+  and the existing sync ledger remain separate from subscription quota.
+
+### Fixed
+- **Suppress Claude alerts from unusable snapshots.** Only valid, enabled Claude
+  data can generate new quota notifications. Old, disconnected, waiting, or
+  damaged data does not dispatch alerts or advance the saved notification tier.
+
+### 中文
+
+- **Claude 额度改读官方 statusline**：在 **Settings → Providers → Claude Code
+  statusline** 明确启用。MyUsage 不再读取 Claude OAuth 凭据、请求用量/资料接口，
+  或启动 Claude Code 探测、续期。保留原 statusline 的输入、输出和其他设置；
+  原脚本自己的凭据读取或网络行为保持原样。
+- **明确快照时间和状态**：Overview 与 Claude 详情显示本地接收日期、时间和距今
+  时长。缺失窗口保持未知，已重置窗口不再作为当前额度。刷新只重读本地文件；
+  Claude Code 未运行或没有新数据时，只能展示带时间标记的旧快照。邮箱、套餐
+  显示未提供。本地 JSONL 成本、token 和已有同步账本与订阅额度分开。
+- **修复旧快照触发额度通知**：只有有效且启用的 Claude 数据才能生成新通知。
+  旧数据、断开接入、等待数据和损坏状态均不发送通知，也不推进通知等级。
+
 ## v0.18.2 — 2026-09-23
 
 ### Fixed

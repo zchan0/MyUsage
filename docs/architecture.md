@@ -18,8 +18,8 @@
 ┌──▼───┐  ┌──▼───┐  ┌──▼────┐  ┌──▼──────────┐
 │Claude│  │Codex │  │Cursor │  │Antigravity  │
 │      │  │      │  │       │  │             │
-│OAuth │  │OAuth │  │SQLite │  │Process Probe│
-│ API  │  │ API  │  │+ RPC  │  │ + Local RPC │
+│Local │  │OAuth │  │SQLite │  │Process Probe│
+│ File │  │ API  │  │+ RPC  │  │ + Local RPC │
 └──────┘  └──────┘  └───────┘  └─────────────┘
 ```
 
@@ -33,14 +33,15 @@ MyUsage/
 │   └── UsageSnapshot.swift       # Unified usage data model
 ├── Providers/
 │   ├── UsageProvider.swift       # Protocol all providers conform to
-│   ├── ClaudeProvider.swift      # Claude Code: OAuth API
+│   ├── ClaudeProvider.swift      # Claude Code: local statusline snapshot
 │   ├── CodexProvider.swift       # Codex: OAuth API
 │   ├── CursorProvider.swift      # Cursor: SQLite + Connect RPC
 │   └── AntigravityProvider.swift # Antigravity: process probe + local RPC
 ├── Services/
 │   ├── UsageManager.swift        # Orchestrator: auto-detect, timer, state
 │   ├── KeychainHelper.swift      # Security.framework Keychain reader
-│   └── TokenRefresher.swift      # Shared OAuth refresh logic
+│   ├── ClaudeStatuslineBridge.swift   # Explicit integration + native collector
+│   └── ClaudeStatuslineSnapshot.swift # Private local snapshot storage
 ├── Views/
 │   ├── MenuBarIcon.swift         # NSStatusItem + popover host
 │   ├── UsagePopover.swift        # Main popover container
@@ -58,7 +59,7 @@ MyUsage/
         ├── CodexProviderTests.swift
         ├── CursorProviderTests.swift
         ├── AntigravityProviderTests.swift
-        └── TokenRefresherTests.swift
+        └── ClaudeStatuslineSnapshotTests.swift
 ```
 
 ## Provider identity and gateways
@@ -81,29 +82,23 @@ Gateway refresh coalesces duplicate requests and rejects results from cancelled/
 
 ### Claude Code
 
-| Item | Detail |
-|------|--------|
-| **Credential** | `~/.claude/.credentials.json` → Keychain `Claude Code-credentials` |
-| **Token type** | OAuth JWT (short-lived, auto-refresh) |
-| **Refresh** | `POST https://platform.claude.com/v1/oauth/token` |
-| **Client ID** | `9d1c250a-e61b-44d9-88ed-5944d1962f5e` |
-| **Usage API** | `GET https://api.anthropic.com/api/oauth/usage` |
-| **Headers** | `Authorization: Bearer <token>`, `anthropic-beta: oauth-2025-04-20` |
+Claude Code's official statusline input is the only subscription-quota source. See [official rate-limit fields](https://code.claude.com/docs/en/statusline#rate-limit-usage).
 
-**Response fields:**
-- `five_hour.utilization` — % used in 5h rolling window
-- `five_hour.resets_at` — ISO 8601
-- `seven_day.utilization` — % used in 7-day window
-- `limits[]` entries with `kind = weekly_scoped` — dynamic model-specific
-  weekly limits such as Fable (optional)
-- `seven_day_opus` / `seven_day_sonnet` — legacy model-specific weekly
-  limits (optional)
-- `seven_day_routines` and legacy aliases including `seven_day_cowork` —
-  Daily Routines weekly limit (optional; a reported `null` remains a visible
-  0% allowance)
-- `extra_usage` — monthly overage credits in cents (optional)
+```text
+Claude Code → statusline wrapper → MyUsage --claude-statusline → local snapshot
+                            └──→ original statusline command (unchanged input/output)
+UsageManager → ClaudeProvider → local snapshot + existing JSONL cost/token parsers
+```
 
-**Billing model:** Rolling windows (5h + 7d simultaneous), hitting either throttles.
+- `ClaudeStatuslineBridge` wraps only an explicitly enabled user-level `statusLine.command`. It retains the original command in a private installation record, preserves other configuration fields, and refuses to overwrite subsequent command edits. Startup and refresh never install it. The native command dispatches before SwiftUI, AppKit, and provider initialization.
+- `ClaudeStatuslineSnapshot` allowlists schema version, local receipt time, session ID, Claude Code version, and optional `five_hour` / `seven_day` windows. Percentages are 0–100; reset times are Unix seconds. Invalid or missing windows remain unknown. Other stdin fields are discarded without being written to disk.
+- `ClaudeStatuslineStore` uses `Application Support/MyUsage/ClaudeStatusline/snapshots`, outside all sync paths. Directories are user-owned `0700`, files/locks `0600`, with symlink checks. Per-session SHA-256 filenames separate concurrent sessions; `flock` serializes writers and same-directory atomic rename prevents partial reads. Older receipts cannot overwrite newer receipts for the same session. Reads select one latest valid receipt, never sum sessions or merge windows. Damaged files are reported even if another valid receipt remains readable.
+- States are not connected, waiting, valid local receipt, stale, and invalid. A 15-minute age policy labels old receipts, without asserting server freshness. Expired windows are omitted at read time. A local transition task updates observation at reset/age boundaries even when automatic polling is disabled. LimitNotifier accepts Claude observations only from a valid, enabled ClaudeProvider; retained old/disconnected/waiting/invalid snapshots do not dispatch new notifications or advance tier state. Manual/automatic refresh only reads local files; no credentials, OAuth usage/profile requests, CLI probes, or delegated refresh exist in this source.
+- Statusline events may repeat unchanged quota; local receipt time is not a server sample timestamp. With Claude Code stopped or no new data, only a dated old snapshot can be shown. Window absence after the first API response can also mean an ineligible subscription; it does not mean zero usage.
+- Email, plan, per-model subscription caps, and extra-usage billing are not supplied. The UI does not reuse OAuth profile data or derive identity from a session ID. JSONL costs/tokens remain independent. New ledger days use its existing `default` bucket; existing unique daily storage keys are reused solely to prevent duplicate counting, never as current account identity. Ambiguous legacy days remain unchanged with an explicit cost-history notice. No ledger schema, sync format, or other provider changes are needed.
+- Legacy credential/usage caches are not read or migrated; existing Keychain items are left untouched. Existing statusline scripts can independently read credentials or call APIs; preserving them does not make those behaviors part of the new collector.
+
+**Billing model:** Optional rolling 5h + 7d subscription windows, separate from estimated JSONL cost.
 
 ---
 
@@ -182,7 +177,7 @@ Gateway refresh coalesces duplicate requests and rejects results from cancelled/
 
 | Provider | Trigger | Endpoint | Auth |
 |----------|---------|----------|------|
-| Claude | 5m before expiry or 401/403 | `platform.claude.com/v1/oauth/token` | `refresh_token` + `client_id` |
+| Claude | No credential refresh; local statusline receipt only | None | None |
 | Codex | `last_refresh` > 8 days or 401/403 | `auth.openai.com/oauth/token` | `refresh_token` + `client_id` (form-encoded) |
 | Cursor | JWT expired or 401 | `api2.cursor.sh/oauth/token` | `refresh_token` + `client_id` |
 | Antigravity | N/A (CSRF from process) | N/A | CSRF token from CLI args |

@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var crashLogStatus: String?
     @State private var gatewayEditor: GatewayEditorTarget?
+    @State private var claudeBridgeMessage: String?
 
     var body: some View {
         @Bindable var mgr = manager
@@ -270,6 +271,36 @@ struct SettingsView: View {
                     }
                 }
 
+                if let claude = manager.providers.first(where: { $0 is ClaudeProvider }) as? ClaudeProvider {
+                    SettingsCard("Claude Code statusline") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(claude.sourceMessage)
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text("Enable explicitly to wrap the current statusline. Its input and output are preserved. The existing command may have its own credential or network behavior. Moving MyUsage can require reconnecting. Refresh only reads local data.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            HStack {
+                                Button("Enable Integration") {
+                                    do {
+                                        try claude.bridge.enable()
+                                        claudeBridgeMessage = "Integration enabled. Use Claude Code normally to receive data."
+                                    } catch { claudeBridgeMessage = error.localizedDescription }
+                                    Task { await claude.refresh(trigger: .manual) }
+                                }
+                                Button("Disable Integration") {
+                                    do {
+                                        try claude.bridge.disable()
+                                        claudeBridgeMessage = "Integration disabled. Local snapshots are retained with their receipt times."
+                                    } catch { claudeBridgeMessage = error.localizedDescription }
+                                    Task { await claude.refresh(trigger: .manual) }
+                                }
+                            }
+                            if let claudeBridgeMessage {
+                                Text(claudeBridgeMessage).font(.caption)
+                            }
+                        }
+                    }
+                }
+
                 HStack {
                     if let error = manager.gatewaySettingsError {
                         Text(error).font(.caption).foregroundStyle(.secondary)
@@ -361,6 +392,9 @@ struct SettingsView: View {
         if let gateway = provider as? GatewayProvider {
             Text("\(gateway.connection.vendor.displayName) · \(gateway.connection.baseURL.host ?? "")")
                 .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+        } else if let claude = provider as? ClaudeProvider {
+            Text(claude.stateLabel)
+                .font(.system(size: 10.5)).foregroundStyle(.secondary)
         } else if provider.isAvailable {
             HStack(spacing: 4) {
                 Circle()

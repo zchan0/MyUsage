@@ -55,13 +55,13 @@ struct PopoverFooterBar: View {
         HStack(spacing: 2) {
             if let lastRefreshed = displayUpdatedAt {
                 HStack(spacing: 4) {
-                    Text(gatewaySnapshot?.hasDisplayIssue == true ? "Data from" : "Updated")
+                    Text(provider is ClaudeProvider ? "Received locally" : (gatewaySnapshot?.hasDisplayIssue == true ? "Data from" : "Updated"))
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(.tertiary)
                     RelativeTimestampLabel(date: lastRefreshed)
                 }.help(timestampHelp)
             } else {
-                Text("Not refreshed")
+                Text(provider is ClaudeProvider ? "No statusline receipt" : "Not refreshed")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
@@ -117,10 +117,14 @@ struct PopoverFooterBar: View {
         return snapshot
     }
     private var displayUpdatedAt: Date? {
+        if let claude = provider as? ClaudeProvider {
+            return claude.receipt.map { Date(timeIntervalSince1970: $0.receivedAt) }
+        }
         if let gatewaySnapshot { return gatewaySnapshot.displayUpdatedAt }
         return manager.lastRefreshed
     }
     private var timestampHelp: String {
+        if let claude = provider as? ClaudeProvider { return claude.sourceMessage }
         guard let snapshot = gatewaySnapshot else { return "Last refresh" }
         var details: [String] = []
         if snapshot.summary.value != nil, let date = snapshot.summary.updatedAt {

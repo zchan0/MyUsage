@@ -1,611 +1,167 @@
 import Foundation
 import os
-import CryptoKit
 
-/// Claude Code credential file structure.
-/// Located at `~/.claude/.credentials.json` or Keychain `Claude Code-credentials`.
-struct ClaudeCredentials: Codable, Sendable {
-    let claudeAiOauth: ClaudeOAuthInfo?
-
-    struct ClaudeOAuthInfo: Codable, Sendable {
-        let accessToken: String
-        let refreshToken: String
-        let expiresAt: Int64  // Unix milliseconds
-        let scopes: [String]?
-        let subscriptionType: String?
-        let rateLimitTier: String?
-    }
-
-    /// Whether the access token has expired (with 5-minute buffer).
-    var isExpired: Bool {
-        guard let oauth = claudeAiOauth else { return true }
-        let expiryDate = Date(timeIntervalSince1970: Double(oauth.expiresAt) / 1000.0)
-        return expiryDate.timeIntervalSinceNow < 300 // 5 min buffer
-    }
-
-    /// Infer plan name from subscription type or rate limit tier.
-    var planName: String? {
-        guard let oauth = claudeAiOauth else { return nil }
-        if let sub = oauth.subscriptionType {
-            return sub.prefix(1).uppercased() + sub.dropFirst()
-        }
-        return oauth.rateLimitTier
-    }
-}
-
-/// Claude usage API response.
-///
-/// The API exposes a primary weekly cap (`sevenDay`) plus a *variable* set
-/// of per-bucket sub-caps. Each sub-cap is **plan-dependent and optional**:
-/// only plans that actually meter usage against that bucket return a non-
-/// null value. Max 5x users typically see all sub-caps as null because
-/// their usage rolls up into the unified `sevenDay` figure; some Enterprise
-/// / Team tiers have separate Opus, Design, or Daily Routines caps.
-///
-/// The bucket vocabulary has been evolving:
-/// - `sevenDayOpus` / `sevenDaySonnet` — model-family caps (Haiku appears
-///   to have been removed from the response entirely as of mid-2026).
-/// - `sevenDayOmelette` — Anthropic's internal codename for **Claude Design**.
-/// - `sevenDayRoutines` and several older aliases, including
-///   `sevenDayCowork`, map to the **Daily Routines** product cap.
-/// - `sevenDayOauthApps` — usage attributed to third-party OAuth apps.
-///
-/// Other codename fields appear in the response (`tangelo`, `iguana_necktie`,
-/// `omelette_promotional`, ...) but their semantics aren't documented and
-/// they're consistently null for end-user accounts; we don't decode them.
-///
-/// As of mid-2026 Anthropic added a structured `limits` array that reports
-/// every cap in one place — the 5-hour session, the unified weekly cap, and
-/// any *model-scoped* weekly caps — and stopped populating the flat
-/// `seven_day_<codename>` fields (they now arrive null for end-user
-/// accounts). New model caps, e.g. the **Fable** weekly cap, surface *only*
-/// through `limits` (as a `weekly_scoped` entry whose `scope.model.display_name`
-/// is the model name). `weeklyModelRows(from:)` prefers `limits` and falls
-/// back to the flat fields for responses that predate the array. See
-/// `ClaudeLimit`.
-struct ClaudeUsageResponse: Codable, Sendable {
-    let fiveHour: ClaudeWindow?
-    let sevenDay: ClaudeWindow?
-
-    let sevenDayOpus: ClaudeWindow?
-    let sevenDaySonnet: ClaudeWindow?
-    let sevenDayHaiku: ClaudeWindow?
-    let sevenDayOmelette: ClaudeWindow?
-    let sevenDayCowork: ClaudeWindow?
-    let sevenDayOauthApps: ClaudeWindow?
-
-    /// Normalized Daily Routines window plus whether any known key was
-    /// present. Presence is tracked separately because Anthropic sometimes
-    /// reports a supported allowance as `null`; that still means the row
-    /// exists and should be shown at 0%, matching Claude's own consumers.
-    let sevenDayRoutines: ClaudeWindow?
-    let routinesLimitReported: Bool
-
-    let extraUsage: ClaudeExtraUsage?
-
-    /// Structured per-cap array (current API shape). Supersedes the flat
-    /// `seven_day_<codename>` fields for model-scoped weekly caps. See
-    /// `ClaudeLimit`. Optional so responses that predate it decode fine.
-    let limits: [ClaudeLimit]?
-
-    enum CodingKeys: String, CodingKey {
-        case fiveHour = "five_hour"
-        case sevenDay = "seven_day"
-        case sevenDayOpus = "seven_day_opus"
-        case sevenDaySonnet = "seven_day_sonnet"
-        case sevenDayHaiku = "seven_day_haiku"
-        case sevenDayOmelette = "seven_day_omelette"
-        case sevenDayCowork = "seven_day_cowork"
-        case sevenDayOauthApps = "seven_day_oauth_apps"
-        case sevenDayRoutines = "seven_day_routines"
-        case sevenDayClaudeRoutines = "seven_day_claude_routines"
-        case claudeRoutines = "claude_routines"
-        case routines
-        case routine
-        case cowork
-        case extraUsage = "extra_usage"
-        case limits
-    }
-
-    /// Explicit memberwise init so the new `limits` field can default to
-    /// `nil` — keeps existing call sites (tests, cache fixtures) compiling
-    /// unchanged while the JSON decoder still populates it via the
-    /// synthesized `init(from:)`. `fiveHour` / `sevenDay` stay required.
-    init(
-        fiveHour: ClaudeWindow?,
-        sevenDay: ClaudeWindow?,
-        sevenDayOpus: ClaudeWindow? = nil,
-        sevenDaySonnet: ClaudeWindow? = nil,
-        sevenDayHaiku: ClaudeWindow? = nil,
-        sevenDayOmelette: ClaudeWindow? = nil,
-        sevenDayCowork: ClaudeWindow? = nil,
-        sevenDayOauthApps: ClaudeWindow? = nil,
-        sevenDayRoutines: ClaudeWindow? = nil,
-        routinesLimitReported: Bool? = nil,
-        extraUsage: ClaudeExtraUsage? = nil,
-        limits: [ClaudeLimit]? = nil
-    ) {
-        self.fiveHour = fiveHour
-        self.sevenDay = sevenDay
-        self.sevenDayOpus = sevenDayOpus
-        self.sevenDaySonnet = sevenDaySonnet
-        self.sevenDayHaiku = sevenDayHaiku
-        self.sevenDayOmelette = sevenDayOmelette
-        self.sevenDayCowork = sevenDayCowork
-        self.sevenDayOauthApps = sevenDayOauthApps
-        self.sevenDayRoutines = sevenDayRoutines
-        self.routinesLimitReported = routinesLimitReported
-            ?? (sevenDayRoutines != nil || sevenDayCowork != nil)
-        self.extraUsage = extraUsage
-        self.limits = limits
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        fiveHour = try container.decodeIfPresent(ClaudeWindow.self, forKey: .fiveHour)
-        sevenDay = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDay)
-        sevenDayOpus = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayOpus)
-        sevenDaySonnet = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDaySonnet)
-        sevenDayHaiku = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayHaiku)
-        sevenDayOmelette = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayOmelette)
-        sevenDayCowork = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayCowork)
-        sevenDayOauthApps = try container.decodeIfPresent(ClaudeWindow.self, forKey: .sevenDayOauthApps)
-        extraUsage = try container.decodeIfPresent(ClaudeExtraUsage.self, forKey: .extraUsage)
-        limits = try container.decodeIfPresent([ClaudeLimit].self, forKey: .limits)
-
-        let routineKeys: [CodingKeys] = [
-            .sevenDayRoutines,
-            .sevenDayClaudeRoutines,
-            .claudeRoutines,
-            .routines,
-            .routine,
-            .sevenDayCowork,
-            .cowork,
-        ]
-        routinesLimitReported = routineKeys.contains { container.contains($0) }
-
-        var decodedRoutine: ClaudeWindow?
-        for key in routineKeys where decodedRoutine == nil {
-            decodedRoutine = try container.decodeIfPresent(ClaudeWindow.self, forKey: key)
-        }
-        sevenDayRoutines = decodedRoutine
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(fiveHour, forKey: .fiveHour)
-        try container.encodeIfPresent(sevenDay, forKey: .sevenDay)
-        try container.encodeIfPresent(sevenDayOpus, forKey: .sevenDayOpus)
-        try container.encodeIfPresent(sevenDaySonnet, forKey: .sevenDaySonnet)
-        try container.encodeIfPresent(sevenDayHaiku, forKey: .sevenDayHaiku)
-        try container.encodeIfPresent(sevenDayOmelette, forKey: .sevenDayOmelette)
-        try container.encodeIfPresent(sevenDayOauthApps, forKey: .sevenDayOauthApps)
-        if let routinesWindow {
-            try container.encode(routinesWindow, forKey: .sevenDayRoutines)
-        } else if routinesLimitReported {
-            try container.encodeNil(forKey: .sevenDayRoutines)
-        }
-        try container.encodeIfPresent(extraUsage, forKey: .extraUsage)
-        try container.encodeIfPresent(limits, forKey: .limits)
-    }
-
-    struct ClaudeWindow: Codable, Sendable {
-        let utilization: Double   // % used (0-100; API may be fractional)
-        let resetsAt: String?     // ISO 8601
-
-        enum CodingKeys: String, CodingKey {
-            case utilization
-            case resetsAt = "resets_at"
-        }
-    }
-
-    struct ClaudeExtraUsage: Codable, Sendable {
-        let isEnabled: Bool?
-        let usedCredits: Double?     // cents
-        let monthlyLimit: Double?    // cents (0 = unlimited)
-        let currency: String?
-
-        enum CodingKeys: String, CodingKey {
-            case isEnabled = "is_enabled"
-            case usedCredits = "used_credits"
-            case monthlyLimit = "monthly_limit"
-            case currency
-        }
-    }
-
-    /// One entry in the structured `limits` array.
-    ///
-    /// `kind` classifies the cap:
-    ///   - `session`       — the 5-hour rolling window (mirrors `five_hour`)
-    ///   - `weekly_all`    — the unified weekly cap (mirrors `seven_day`)
-    ///   - `weekly_scoped` — a *per-model* weekly cap. The model's
-    ///     user-facing name is in `scope.model.display_name` (e.g. "Fable").
-    ///     This is the only place new model caps now surface.
-    ///
-    /// `percent` is decoded as `Double` because the API is inconsistent
-    /// about integer vs. fractional utilization across fields. `severity`
-    /// (`normal` / `warning` / …) is decoded for future colour-driving but
-    /// not yet consumed — the bars still derive their band from `percent`.
-    struct ClaudeLimit: Codable, Sendable {
-        let kind: String?
-        let group: String?
-        let percent: Double?
-        let severity: String?
-        let resetsAt: String?
-        let scope: Scope?
-        let isActive: Bool?
-
-        enum CodingKeys: String, CodingKey {
-            case kind, group, percent, severity, scope
-            case resetsAt = "resets_at"
-            case isActive = "is_active"
-        }
-
-        struct Scope: Codable, Sendable {
-            let model: Model?
-
-            struct Model: Codable, Sendable {
-                let id: String?
-                let displayName: String?
-
-                enum CodingKeys: String, CodingKey {
-                    case id
-                    case displayName = "display_name"
-                }
-            }
-        }
-    }
-
-    /// The server has used several names for the same Daily Routines cap.
-    /// Prefer the current key, then the documented historical aliases.
-    var routinesWindow: ClaudeWindow? {
-        sevenDayRoutines ?? sevenDayCowork
-    }
-}
-
-/// `/api/oauth/profile` response — canonical source for the user's plan
-/// label since recent Claude CLI builds stopped writing `subscriptionType`
-/// / `rateLimitTier` into `~/.claude/.credentials.json`. Both fields now
-/// arrive as `null`, so the previous credentials-only path collapsed to
-/// a missing plan badge in the popover.
-struct ClaudeProfile: Codable, Sendable {
-    let account: Account?
-    let organization: Organization?
-
-    struct Account: Codable, Sendable {
-        let hasClaudeMax: Bool?
-        let hasClaudePro: Bool?
-        let email: String?
-
-        enum CodingKeys: String, CodingKey {
-            case hasClaudeMax = "has_claude_max"
-            case hasClaudePro = "has_claude_pro"
-            case email
-        }
-    }
-
-    struct Organization: Codable, Sendable {
-        let organizationType: String?
-        let rateLimitTier: String?
-
-        enum CodingKeys: String, CodingKey {
-            case organizationType = "organization_type"
-            case rateLimitTier = "rate_limit_tier"
-        }
-    }
-
-    /// Display label used by the popover provider card. Account-level
-    /// `has_claude_max` / `has_claude_pro` are checked first because
-    /// they're the most direct signals; organization type is a fallback
-    /// for team/enterprise tiers.
-    var planName: String? {
-        if account?.hasClaudeMax == true { return "Max" }
-        if account?.hasClaudePro == true { return "Pro" }
-        if let orgType = organization?.organizationType?.lowercased() {
-            if orgType.contains("max") { return "Max" }
-            if orgType.contains("pro") { return "Pro" }
-            if orgType.contains("team") { return "Team" }
-            if orgType.contains("enterprise") { return "Enterprise" }
-        }
-        return nil
-    }
-}
-
-/// Claude Code usage provider.
+/// Claude quota comes exclusively from explicit, local statusline integration.
 @Observable
 @MainActor
 final class ClaudeProvider: BuiltinUsageProvider {
+    enum DataState: String {
+        case notConnected, waiting, valid, stale, invalid
+    }
 
     let kind = ProviderKind.claude
-    private(set) var isAvailable = false
+    var isAvailable: Bool { connected || receipt != nil }
     var isEnabled = true
-    private(set) var snapshot: UsageSnapshot?
-    private(set) var error: String?
     private(set) var isLoading = false
-
-    // MARK: - Constants
-
-    private static let claudeDirectory: String = {
-        FileManager.default.homeDirectoryForCurrentUser.path + "/.claude"
-    }()
-    private static let credentialFilePath: String = {
-        claudeDirectory + "/.credentials.json"
-    }()
-    private static let keychainService = "Claude Code-credentials"
-    private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-    private static let profileURL = URL(string: "https://api.anthropic.com/api/oauth/profile")!
-
-    // MARK: - State
-
-    /// Prompt-minimizing credential loader (file → CLI Keychain no-UI →
-    /// own cached copy → one manual interactive read). See
-    /// `ClaudeCredentialStore` for the full chain.
-    private let credentialStore = ClaudeCredentialStore()
-
-    /// Last successfully loaded credentials — served when every store
-    /// source comes up empty mid-run (e.g. transient Keychain weirdness)
-    /// so an established session doesn't flap to "No credentials found".
-    private var credentials: ClaudeCredentials?
-
-    /// Cached profile (email + plan). Keyed by the credential fingerprint
-    /// (`cachedProfileFingerprint`) so that when the Claude Code CLI
-    /// switches accounts — a different OAuth token, hence a different
-    /// fingerprint — we re-fetch instead of serving the previous account's
-    /// email + plan. Without this the popover mislabels the active account
-    /// (wrong email) and shows the first account's plan ("Max") for every
-    /// account — the original account-switch mislabeling bug.
-    private var cachedProfile: ClaudeProfile?
-    private var cachedProfileFingerprint: String?
-
-    /// Optional multi-device ledger. When present, each successful cost
-    /// calculation writes per-day totals into the ledger (spec 12).
+    private(set) var receipt: ClaudeStatuslineSnapshot?
+    private var readIssue: String?
+    private var connected = false
+    private var monthlyCost: Double?
+    private var costHistoryIssue: String?
+    private var timeRevision = 0
+    @ObservationIgnored private var transitionTask: Task<Void, Never>?
+    private let store: ClaudeStatuslineStore
+    let bridge: ClaudeStatuslineBridge
+    private let logRoots: [URL]
+    private let costCacheURL: URL
+    private let now: @Sendable () -> Date
     private weak var ledger: LedgerSync?
 
-    /// After a 429, skip API calls until this time. `refresh()` becomes a no-op
-    /// and we keep showing the last good snapshot and error message.
-    private var nextAllowedRefreshAt: Date?
+    /// An age policy for local receipts, never a claim about server freshness.
+    nonisolated static let staleAfter: TimeInterval = 15 * 60
 
-    /// Consecutive non-429 failures (5xx, network, token refresh, …). Drives
-    /// exponential backoff so outages don't turn into tight retry loops.
-    /// Reset to 0 on any response from the server (200 or 429).
-    private var consecutiveFailures = 0
-
-    /// Default cooldown when the server returns 429 without `Retry-After`.
-    private static let defaultRateLimitCooldown: TimeInterval = 60
-
-    /// Exponential-backoff base delay for transient failures (seconds).
-    nonisolated private static let backoffBase: TimeInterval = 30
-
-    /// Exponential-backoff cap — don't sleep longer than this (seconds).
-    nonisolated private static let backoffCap: TimeInterval = 30 * 60
-
-    // MARK: - Init
-
-    init(ledger: LedgerSync? = nil) {
+    init(
+        ledger: LedgerSync? = nil,
+        directory: URL = ClaudeStatuslineStore.defaultDirectory,
+        bridge: ClaudeStatuslineBridge? = nil,
+        logRoots: [URL]? = nil,
+        costCacheURL: URL = ClaudeCostCache.defaultFileURL,
+        now: @escaping @Sendable () -> Date = { .now }
+    ) {
         self.ledger = ledger
-        detectAvailability()
+        self.store = ClaudeStatuslineStore(directory: directory)
+        self.bridge = bridge ?? ClaudeStatuslineBridge(directory: directory)
+        self.logRoots = logRoots ?? ClaudeLogParser.defaultRoots()
+        self.costCacheURL = costCacheURL
+        self.now = now
+        readLocalQuota()
     }
 
-    // MARK: - UsageProvider
-
-    func refresh() async {
-        await refresh(trigger: .automatic)
+    var dataState: DataState {
+        _ = timeRevision
+        if readIssue != nil { return .invalid }
+        guard connected else { return .notConnected }
+        guard let receipt else { return .waiting }
+        let windows = [receipt.rateLimits.fiveHour, receipt.rateLimits.sevenDay].compactMap { $0 }
+        guard !windows.isEmpty else { return .waiting }
+        let age = now().timeIntervalSince1970 - receipt.receivedAt
+        if age < -60 || age > Self.staleAfter || windows.contains(where: { $0.resetsAt <= now().timeIntervalSince1970 }) {
+            return .stale
+        }
+        return .valid
     }
+
+    var stateLabel: String {
+        switch dataState {
+        case .notConnected: "Statusline not connected"
+        case .waiting: "Waiting for first quota data"
+        case .valid: "Local statusline snapshot"
+        case .stale: "Old statusline snapshot"
+        case .invalid: "Statusline data unavailable"
+        }
+    }
+
+    var sourceMessage: String {
+        var message = stateLabel + ". "
+        if let receipt {
+            let date = Date(timeIntervalSince1970: receipt.receivedAt)
+            message += "Received locally \(date.formatted(date: .abbreviated, time: .standard)). "
+        }
+        if let readIssue { message += readIssue + " " }
+        switch dataState {
+        case .notConnected: message += "Enable in Settings → Providers. "
+        case .waiting: message += "Rate limits appear only for eligible subscriptions after the first API response. "
+        case .stale: message += "No new quota data; expired windows are hidden. "
+        case .valid, .invalid: break
+        }
+        message += "Server sample time is not provided. Refresh reads local files only."
+        if let costHistoryIssue { message += " " + costHistoryIssue }
+        return message
+    }
+
+    var error: String? {
+        dataState == .valid ? nil : sourceMessage
+    }
+
+    /// Re-evaluate resets at read time so an expired window cannot remain a current limit.
+    var snapshot: UsageSnapshot? {
+        _ = timeRevision
+        var result = receipt.map { Self.mapToSnapshot($0, now: now()) } ?? UsageSnapshot()
+        result.monthlyEstimatedCost = monthlyCost
+        return result
+    }
+
+    func refresh() async { await refresh(trigger: .automatic) }
 
     func refresh(trigger: UsageRefreshTrigger) async {
-        // Re-detect once per refresh so a user who ran `claude login`
-        // after the app launched doesn't need to relaunch.
-        if !isAvailable { detectAvailability() }
-        guard isAvailable else { return }
-
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
+        readLocalQuota()
+        let roots = logRoots
+        let cache = costCacheURL
+        let date = now()
+        monthlyCost = await Task.detached(priority: .utility) {
+            Self.computeMonthlyCostSync(roots: roots, now: date, cacheURL: cache)
+        }.value
+        await recordDailyCostsToLedger()
+    }
 
-        // Background refreshes stay silent. A click on Refresh is an explicit
-        // request to recover credential access, so it may show the Keychain
-        // ACL dialog and bypass an earlier prompt cooldown/denial.
-        var manualCredentials: ClaudeCredentials?
-        if trigger == .manual {
-            manualCredentials = loadCredentials(
-                interactive: true,
-                forceInteractive: true
-            )
-            guard manualCredentials != nil else {
-                error = missingCredentialsMessage(afterManualAttempt: true)
-                return
-            }
-        }
-
-        // Respect cooldown from a prior 429 — keep stale data + error intact.
-        if let until = nextAllowedRefreshAt, until > .now {
-            return
-        }
-
-        error = nil
-
+    private func readLocalQuota() {
+        defer { scheduleTimeTransition() }
+        connected = bridge.isInstalled
+        readIssue = bridge.hasInstallation && !connected
+            ? "The configured statusline no longer matches MyUsage. Your configuration was preserved." : nil
         do {
-            guard var creds = manualCredentials ?? loadCredentials(interactive: false),
-                  var oauth = creds.claudeAiOauth else {
-                error = missingCredentialsMessage(afterManualAttempt: false)
-                return
-            }
-
-            // Cache-first: seed the snapshot from disk before any slow path runs
-            // so a cold start (or a run that will fail below) never shows a
-            // blank card. See `specs/11-claude-data-sources.md`.
-            var fingerprint = ClaudeUsageCache.fingerprint(refreshToken: oauth.refreshToken)
-            if snapshot == nil,
-               let cached = ClaudeUsageCache.read(matching: fingerprint) {
-                snapshot = Self.mapToSnapshot(
-                    cached.response,
-                    plan: planLabel(creds: creds),
-                    fetchedAt: cached.fetchedAt
-                )
-                Logger.claude.info("Seeded Claude snapshot from disk cache")
-            }
-
-            // MyUsage is a passive reader: we never call Anthropic's OAuth
-            // refresh endpoint ourselves, because Anthropic rotates refresh
-            // tokens on each use and we would race the Claude Code CLI
-            // (docs/claude-token-rotation-bug.md). Instead, delegate: run the
-            // CLI briefly so IT rotates the Keychain entry, then re-read.
-            // Cooldown-gated, so at most one CLI spawn per 5 minutes.
-            if creds.isExpired {
-                Logger.claude.info("Access token expired; attempting delegated CLI refresh")
-                _ = await ClaudeDelegatedRefresh.attempt()
-                if let fresh = loadCredentials(interactive: false),
-                   let freshOAuth = fresh.claudeAiOauth,
-                   !fresh.isExpired {
-                    creds = fresh
-                    oauth = freshOAuth
-                    fingerprint = ClaudeUsageCache.fingerprint(refreshToken: freshOAuth.refreshToken)
-                    Logger.claude.info("Delegated refresh yielded a valid token")
-                } else {
-                    error = Self.tokenExpiredErrorMessage()
-                    Logger.claude.info("Still expired after delegated refresh; waiting for the CLI")
-                    return
-                }
-            }
-
-            // Fetch the profile (email + plan) when we don't have one yet,
-            // OR when the credential fingerprint changed since we last
-            // fetched — i.e. the CLI switched accounts. Re-fetching on the
-            // switch is what keeps the popover's email + plan attributed to
-            // the account that's actually signed in. Failures are logged
-            // but never stop the usage refresh — without the profile we
-            // fall back to creds.planName, strictly worse but not broken.
-            if cachedProfile == nil || cachedProfileFingerprint != fingerprint {
-                do {
-                    cachedProfile = try await fetchProfile(accessToken: oauth.accessToken)
-                    cachedProfileFingerprint = fingerprint
-                } catch {
-                    Logger.claude.error(
-                        "Profile fetch failed; falling back to credentials.planName: \(error.localizedDescription, privacy: .public)"
-                    )
-                }
-            }
-
-            let usage = try await fetchUsage(accessToken: oauth.accessToken)
-
-            do {
-                try ClaudeUsageCache.write(
-                    response: usage,
-                    fingerprint: fingerprint,
-                    at: .now
-                )
-            } catch {
-                Logger.claude.error(
-                    "Failed to write usage cache: \(error.localizedDescription, privacy: .public)"
-                )
-            }
-
-            let identity = currentAccount()
-            var mapped = Self.mapToSnapshot(usage, plan: planLabel(creds: creds), fetchedAt: .now)
-            mapped.email = identity?.email
-            mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
-            snapshot = mapped
-            nextAllowedRefreshAt = nil
-            consecutiveFailures = 0
-
-            // Tag ledger writes with the current account identity so
-            // cross-device aggregates stay attributable (spec 13). The
-            // account_id is invisible in the UI — the cost row sums across
-            // all of them — but it keeps each device's rows distinct.
-            // Write per-day totals into the multi-device ledger (spec 12).
-            // Off the hot path of the user-visible snapshot so a slow scan
-            // never blocks the card update.
-            await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
-
-            // NOTE: A previous build (commit 6ce6fba) overlaid `weeklyByModel`
-            // with cost-share percentages derived from the ledger so Max 5x
-            // users (where the API bundles everything into the unified
-            // `sevenDay` and never populates per-bucket fields) would see
-            // *something* under the Weekly bar. That conflated two different
-            // semantics: per-bucket utilization (% of THIS cap used) vs.
-            // share of total cost (% of THIS month's spend on this model).
-            // Side-by-side they read like a quota table, so 99.99% Opus +
-            // 0.01% Haiku displayed as "Opus 100% / Haiku 0%" looked like
-            // a cap state — but it was just rounded cost share. Removed.
-            // `weeklyByModel` is now the API path only: per-cap utilization
-            // when the plan exposes sub-buckets, empty otherwise. Cost-by-
-            // model data is still in the ledger for a future cost history
-            // view; it just doesn't masquerade as a quota row here.
-
-        } catch ProviderError.rateLimited(let retryAfter) {
-            let delay = retryAfter ?? Self.defaultRateLimitCooldown
-            nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
-            // 429 means we did reach the server — not a transient outage.
-            consecutiveFailures = 0
-            error = Self.rateLimitErrorMessage(retryAfter: delay)
-            Logger.claude.warning(
-                "Rate limited by Anthropic, retryAfter=\(Int(delay), privacy: .public)s"
-            )
-            // Intentionally keep `snapshot` as-is so the card still shows data.
+            let read = try store.read()
+            receipt = read.latest
+            if read.hasInvalidFiles { readIssue = "Some local snapshots are damaged or unsupported." }
         } catch {
-            consecutiveFailures += 1
-            let delay = Self.backoffDelay(consecutiveFailures: consecutiveFailures)
-            nextAllowedRefreshAt = Date.now.addingTimeInterval(delay)
-            self.error = Self.transientErrorMessage(
-                underlying: error.localizedDescription,
-                retryAfter: delay
-            )
-            Logger.claude.error(
-                "Transient failure (\(error.localizedDescription, privacy: .public)), consecutiveFailures=\(self.consecutiveFailures, privacy: .public), backoff=\(Int(delay), privacy: .public)s"
-            )
-            // Keep `snapshot` as-is so we still show the last known numbers.
+            receipt = nil
+            readIssue = error.localizedDescription
         }
     }
 
-    /// Formats the user-facing message shown on a 429. Kept internal + static
-    /// so it's easy to unit-test without spinning up the full provider.
-    nonisolated static func rateLimitErrorMessage(retryAfter: TimeInterval) -> String {
-        "Rate limited. Retry in \(formatRetryDelay(retryAfter)). If this persists, run `claude logout && claude login` in Terminal."
+    /// Expire UI/menu-bar values even with automatic polling disabled. This only advances local state.
+    private func scheduleTimeTransition() {
+        transitionTask?.cancel()
+        guard let receipt else { return }
+        let date = now().timeIntervalSince1970
+        let boundaries = [receipt.rateLimits.fiveHour?.resetsAt, receipt.rateLimits.sevenDay?.resetsAt,
+                          receipt.receivedAt + Self.staleAfter + 0.01, receipt.receivedAt - 60]
+        guard let next = boundaries.compactMap({ $0 }).filter({ $0 > date }).min() else { return }
+        transitionTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(next - date)) } catch { return }
+            guard let self else { return }
+            self.timeRevision += 1
+            self.scheduleTimeTransition()
+        }
     }
 
-    /// Compact, human-readable retry delay. Sub-minute values stay precise in
-    /// seconds ("45s"); anything longer rounds to the coarser unit with a "~"
-    /// so a server's 2504-second cooldown reads "~42 min" instead of the
-    /// unparseable "2504s". Hours fold in remaining minutes ("~1h 5m").
-    nonisolated static func formatRetryDelay(_ seconds: TimeInterval) -> String {
-        let total = max(1, Int(seconds.rounded()))
-        if total < 60 { return "\(total)s" }
-        let totalMinutes = Int((Double(total) / 60).rounded())
-        if totalMinutes < 60 { return "~\(totalMinutes) min" }
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        return minutes == 0 ? "~\(hours)h" : "~\(hours)h \(minutes)m"
-    }
+    deinit { transitionTask?.cancel() }
 
-    /// Shown when the cached access token has expired and we're waiting for the
-    /// Claude Code CLI to rotate the Keychain entry. MyUsage deliberately does
-    /// not call `/v1/oauth/token` itself — see the commit removing that path.
-    nonisolated static func tokenExpiredErrorMessage() -> String {
-        "Claude access token expired. Run `claude` once in Terminal so the CLI refreshes the Keychain entry."
-    }
-
-    /// Formats the user-facing message shown during exponential backoff.
-    nonisolated static func transientErrorMessage(
-        underlying: String,
-        retryAfter: TimeInterval
-    ) -> String {
-        "\(underlying). Retrying in \(formatRetryDelay(retryAfter))."
-    }
-
-    /// Exponential-backoff delay in seconds for the Nth consecutive failure.
-    ///
-    /// - 1 failure →  30s
-    /// - 2        →  60s
-    /// - 3        → 120s
-    /// - 4        → 240s (4m)
-    /// - 5        → 480s (8m)
-    /// - 6        → 960s (16m)
-    /// - 7+       → capped at `backoffCap` (30m)
-    nonisolated static func backoffDelay(consecutiveFailures: Int) -> TimeInterval {
-        guard consecutiveFailures > 0 else { return 0 }
-        let exponent = Double(consecutiveFailures - 1)
-        let raw = backoffBase * pow(2.0, exponent)
-        return min(raw, backoffCap)
+    nonisolated static func mapToSnapshot(_ receipt: ClaudeStatuslineSnapshot, now: Date = .now) -> UsageSnapshot {
+        func window(_ value: ClaudeStatuslineSnapshot.Window?, duration: TimeInterval) -> UsageWindow? {
+            guard let value, value.isValid, value.resetsAt > now.timeIntervalSince1970 else { return nil }
+            return UsageWindow(percentUsed: value.usedPercentage,
+                               resetsAt: Date(timeIntervalSince1970: value.resetsAt), windowDuration: duration)
+        }
+        var snapshot = UsageSnapshot()
+        snapshot.sessionUsage = window(receipt.rateLimits.fiveHour, duration: 5 * 3600)
+        snapshot.weeklyUsage = window(receipt.rateLimits.sevenDay, duration: 7 * 86400)
+        snapshot.lastRefreshed = Date(timeIntervalSince1970: receipt.receivedAt)
+        // Statusline provides no account/profile information or per-model subscription caps.
+        return snapshot
     }
 
     /// Scan `~/.claude/projects/**/*.jsonl` modified since the first of the
@@ -687,387 +243,46 @@ final class ClaudeProvider: BuiltinUsageProvider {
 
     // MARK: - Ledger
 
-    private func recordDailyCostsToLedger(accountID: String) async {
+    private func recordDailyCostsToLedger() async {
         guard let ledger else { return }
+        costHistoryIssue = nil
+        let roots = logRoots
         let breakdown = await Task.detached(priority: .utility) {
             ClaudeLogParser.scanDailyBreakdown(
-                roots: ClaudeLogParser.defaultRoots(),
+                roots: roots,
                 since: Date.ledgerBackfillStart()
             )
         }.value
         guard !breakdown.total.isEmpty || !breakdown.tokensByDay.isEmpty else { return }
-        await ledger.recordDailyCosts(
-            provider: .claude,
-            byDay: breakdown.total,
-            perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel,
-            tokensByDay: breakdown.tokensByDay.isEmpty ? nil : breakdown.tokensByDay,
-            accountID: accountID
-        )
-    }
-
-    // MARK: - Detection
-
-    /// Claude is "available" when we can read credentials from *either* source:
-    /// the legacy `~/.claude/.credentials.json` file or the macOS Keychain item
-    /// `Claude Code-credentials`. Newer Claude Code CLIs on macOS store only in
-    /// Keychain, so a file-only check hides the provider for most users.
-    ///
-    /// When credentials cannot be read but `~/.claude/` exists, we assume the
-    /// user *is* a Claude user whose Keychain item is ACL-restricted to the
-    /// CLI itself, and surface a helpful error instead of "Not configured".
-    private func detectAvailability() {
-        // Silent pass through the whole source chain (file → CLI Keychain
-        // no-UI → own cache). Never prompts — detection runs at launch and
-        // a password dialog before the user even opened the popover is
-        // exactly the experience we're eliminating.
-        if let result = credentialStore.load(interactive: false) {
-            credentials = result.credentials
-            isAvailable = true
-            error = nil
-            Logger.claude.info(
-                "Claude credentials loaded from \(result.origin.rawValue, privacy: .public)"
-            )
-            return
-        }
-
-        // The silent probe told us the CLI's item exists but is
-        // ACL-blocked: definitely a Claude user. Mark available and let
-        // an explicit manual refresh run the interactive bootstrap.
-        if credentialStore.lastCLIStatus == errSecInteractionNotAllowed {
-            isAvailable = true
-            error = nil
-            Logger.claude.info("Claude Keychain item present but ACL-blocked; manual refresh can authorize access")
-            return
-        }
-
-        isAvailable = false
-
-        // Distinguish "user never installed Claude" from "installed but we
-        // cannot read the Keychain item".
-        let claudeDirExists = FileManager.default.fileExists(atPath: Self.claudeDirectory)
-        if !claudeDirExists {
-            // Genuinely not a Claude user. Leave error nil → "Not configured".
-            Logger.claude.info("Claude not detected (no ~/.claude directory)")
-            return
-        }
-
-        let status = credentialStore.lastCLIStatus ?? errSecItemNotFound
-        Logger.claude.error(
-            "Claude credentials unreadable (keychain status=\(status, privacy: .public))"
-        )
-        error = Self.credentialAccessErrorMessage(status: status)
-    }
-
-    /// User-facing message shown when `~/.claude/` exists but credentials
-    /// cannot be read from either source. Visible via the provider card's
-    /// error row.
-    nonisolated static func credentialAccessErrorMessage(status: OSStatus) -> String {
-        switch status {
-        case errSecItemNotFound:
-            return "Claude Code is installed but no credentials were found. Run `claude login` in a terminal."
-        default:
-            return "Cannot read Claude credentials from Keychain (status \(status)). Open Keychain Access, find “Claude Code-credentials”, and allow MyUsage to access it."
-        }
-    }
-
-    // MARK: - Credentials
-
-    func loadCredentials() -> ClaudeCredentials? {
-        loadCredentials(interactive: false)
-    }
-
-    /// `interactive: true` permits the store's "Always Allow" bootstrap
-    /// prompt; every other caller stays silent. Falls back to
-    /// the last in-memory copy when the store comes up empty, so a live
-    /// session degrades to "token expired" instead of "no credentials".
-    private func loadCredentials(
-        interactive: Bool,
-        forceInteractive: Bool = false
-    ) -> ClaudeCredentials? {
-        if let result = credentialStore.load(
-            interactive: interactive,
-            forceInteractive: forceInteractive
-        ) {
-            credentials = result.credentials
-            return result.credentials
-        }
-        return credentials
-    }
-
-    private func missingCredentialsMessage(afterManualAttempt: Bool) -> String {
-        switch credentialStore.lastCLIStatus {
-        case errSecInteractionNotAllowed:
-            return "Claude is signed in, but MyUsage needs Keychain access. Click Refresh, then choose Always Allow."
-        case errSecUserCanceled:
-            return "Keychain access was cancelled. Click Refresh to try again."
-        case errSecItemNotFound:
-            return "Claude Code is installed but no credentials were found. Run `claude login` in a terminal."
-        case let status?:
-            return "Cannot read Claude credentials from Keychain (status \(status)). Click Refresh to try again."
-        case nil:
-            return afterManualAttempt
-                ? "Claude credentials could not be loaded. Click Refresh to try again."
-                : "Claude credentials need access. Click Refresh to continue."
-        }
-    }
-
-    // MARK: - Plan label
-
-    /// Profile-first, credentials-fallback. Profile reflects the user's
-    /// real subscription (Max / Pro / Team / …) even when the local
-    /// credentials file no longer carries `subscriptionType`.
-    private func planLabel(creds: ClaudeCredentials) -> String? {
-        cachedProfile?.planName ?? creds.planName
-    }
-
-    // MARK: - Account identity
-
-    /// Identity of the currently signed-in Claude account. `nil` when we
-    /// haven't fetched the profile yet AND can't derive a fallback (e.g.
-    /// no credentials at all). Once profile is cached, returns the email
-    /// path; on the rare path where profile lookup failed but we still
-    /// have credentials, returns an opaque hash so ledger writes don't
-    /// silently merge into the legacy `"default"` bucket.
-    func currentAccount() -> AccountIdentity? {
-        if let email = cachedProfile?.account?.email, !email.isEmpty {
-            return .email(email)
-        }
-        guard let creds = loadCredentials(), let oauth = creds.claudeAiOauth else {
-            return nil
-        }
-        let digest = SHA256.hash(data: Data(oauth.refreshToken.utf8))
-        let short = digest.prefix(4).map { String(format: "%02x", $0) }.joined()
-        return .opaque(short)
-    }
-
-    // MARK: - Profile Fetch
-
-    private func fetchProfile(accessToken: String) async throws -> ClaudeProfile {
-        var request = URLRequest(url: Self.profileURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue(AppInfo.claudeUserAgent, forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let http = response as? HTTPURLResponse
-        guard http?.statusCode == 200 else {
-            throw ProviderError.apiFailed(statusCode: http?.statusCode ?? -1)
-        }
-        return try JSONDecoder().decode(ClaudeProfile.self, from: data)
-    }
-
-    // MARK: - Usage Fetch
-
-    private func fetchUsage(accessToken: String) async throws -> ClaudeUsageResponse {
-        var request = URLRequest(url: Self.usageURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue(AppInfo.claudeUserAgent, forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let http = response as? HTTPURLResponse
-
-        if http?.statusCode == 429 {
-            let retryAfter = http
-                .flatMap { $0.value(forHTTPHeaderField: "Retry-After") }
-                .flatMap { RetryAfterParser.seconds(from: $0) }
-            throw ProviderError.rateLimited(retryAfter: retryAfter)
-        }
-
-        guard http?.statusCode == 200 else {
-            throw ProviderError.apiFailed(statusCode: http?.statusCode ?? -1)
-        }
-
-        return try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
-    }
-
-    // MARK: - Snapshot Mapping
-
-    /// `fetchedAt` is the wall-clock time the `response` came off the wire,
-    /// typically `.now` for a fresh fetch or the cached value for a
-    /// replayed snapshot. It drives the "Last refreshed N min ago" label.
-    nonisolated static func mapToSnapshot(
-        _ response: ClaudeUsageResponse,
-        plan: String?,
-        fetchedAt: Date = .now
-    ) -> UsageSnapshot {
-        var snapshot = UsageSnapshot()
-        snapshot.planName = plan
-        snapshot.lastRefreshed = fetchedAt
-
-        if let fh = response.fiveHour {
-            snapshot.sessionUsage = UsageWindow(
-                percentUsed: fh.utilization,
-                resetsAt: fh.resetsAt.flatMap { parseISO8601($0) },
-                windowDuration: 5 * 3600
-            )
-        }
-
-        if let sd = response.sevenDay {
-            snapshot.weeklyUsage = UsageWindow(
-                percentUsed: sd.utilization,
-                resetsAt: sd.resetsAt.flatMap { parseISO8601($0) },
-                windowDuration: 7 * 24 * 3600
-            )
-        }
-
-        snapshot.weeklyByModel = weeklyModelRows(from: response)
-
-        if let extra = response.extraUsage, extra.isEnabled == true {
-            let spent = (extra.usedCredits ?? 0) / 100.0
-            let limit = extra.monthlyLimit.map { $0 > 0 ? $0 / 100.0 : nil } ?? nil
-            snapshot.onDemandSpend = CreditInfo(
-                amount: spent,
-                limit: limit,
-                currency: extra.currency ?? "USD"
-            )
-        }
-
-        return snapshot
-    }
-
-    /// Additional Claude caps for the popover's compact breakdown, sorted by
-    /// utilization so the most constrained cap reads first.
-    ///
-    /// Source precedence:
-    ///  1. The structured `limits` array (current API). Every
-    ///     `weekly_scoped` entry is one model's separate weekly cap; the
-    ///     label is `scope.model.display_name`. This is how new model caps
-    ///     (e.g. **Fable**) arrive — the flat `seven_day_*` fields stopped
-    ///     carrying them. When `limits` is present we trust it exclusively:
-    ///     no scoped entries means "no per-model caps on this plan", which
-    ///     is a real (empty) answer, not a reason to fall back.
-    ///  2. Legacy flat `seven_day_<codename>` fields — used only when the
-    ///     response predates the `limits` array (`limits == nil`).
-    ///
-    /// Daily Routines is returned separately under one of several flat keys,
-    /// so it is appended regardless of which scoped-limit representation is
-    /// active.
-    ///
-    /// 0% rows are kept on purpose: a returned cap at 0% means "this cap
-    /// exists on your plan but is unused this week" — information the user
-    /// wants (and exactly the current Fable state). Only absent caps drop.
-    nonisolated static func weeklyModelRows(
-        from response: ClaudeUsageResponse
-    ) -> [WeeklyModelUsage] {
-        var rows: [WeeklyModelUsage]
-
-        if let limits = response.limits {
-            var seen: Set<String> = []
-            rows = limits.compactMap { limit -> WeeklyModelUsage? in
-                guard limit.kind == "weekly_scoped",
-                      limit.group == "weekly",
-                      let rawName = limit.scope?.model?.displayName,
-                      let name = nonEmpty(rawName),
-                      !isAllModelsScope(
-                        id: limit.scope?.model?.id,
-                        displayName: name
-                      ),
-                      let percent = limit.percent,
-                      percent.isFinite
-                else { return nil }
-
-                let identity = nonEmpty(limit.scope?.model?.id) ?? name
-                guard seen.insert(identity.lowercased()).inserted else {
-                    return nil
+        do {
+            // Reuse an existing daily storage key, without treating it as current account identity.
+            // Moving the same full-day total to a new account bucket would double-count it.
+            let existing = try ledger.store.entries(forDevice: ledger.selfDeviceID).filter { $0.provider == "claude" }
+            let byDay = Dictionary(grouping: existing, by: \.day)
+            let days = Set(breakdown.total.keys).union(breakdown.tokensByDay.keys)
+            var daysByStorageKey: [String: Set<String>] = [:]
+            for day in days {
+                let prior = byDay[day] ?? []
+                if prior.count > 1 || prior.first.map({ $0.sourceHash != day }) == true {
+                    costHistoryIssue = "Ambiguous legacy cost days were preserved; current local cost estimates remain available."
+                    continue
                 }
-                return WeeklyModelUsage(
-                    id: identity,
-                    label: name,
-                    percent: percent,
-                    resetsAt: limit.resetsAt.flatMap { parseISO8601($0) }
+                daysByStorageKey[prior.first?.accountId ?? "default", default: []].insert(day)
+            }
+            for (key, days) in daysByStorageKey {
+                let models = breakdown.byModel.filter { days.contains($0.key) }
+                let tokens = breakdown.tokensByDay.filter { days.contains($0.key) }
+                await ledger.recordDailyCosts(
+                    provider: .claude,
+                    byDay: breakdown.total.filter { days.contains($0.key) },
+                    perModelByDay: models.isEmpty ? nil : models,
+                    tokensByDay: tokens.isEmpty ? nil : tokens,
+                    accountID: key
                 )
             }
-        } else {
-            // Legacy fallback — flat codename fields. Model families plus
-            // product lines, each plan-dependent and optional. Cowork is
-            // normalized separately as Daily Routines below.
-            rows = [
-                ("Opus",       response.sevenDayOpus),
-                ("Sonnet",     response.sevenDaySonnet),
-                ("Haiku",      response.sevenDayHaiku),
-                ("Design",     response.sevenDayOmelette),
-                ("OAuth apps", response.sevenDayOauthApps)
-            ].compactMap { (label, window) -> WeeklyModelUsage? in
-                guard let window else { return nil }
-                return WeeklyModelUsage(
-                    label: label,
-                    percent: window.utilization,
-                    resetsAt: window.resetsAt.flatMap { parseISO8601($0) },
-                    scope: label == "OAuth apps" ? .product : .model
-                )
-            }
-        }
-
-        if response.routinesLimitReported {
-            rows.removeAll { $0.label.caseInsensitiveCompare("Daily Routines") == .orderedSame }
-        }
-        if let routines = response.routinesWindow {
-            rows.append(WeeklyModelUsage(
-                label: "Daily Routines",
-                percent: routines.utilization,
-                resetsAt: routines.resetsAt.flatMap { parseISO8601($0) },
-                scope: .product
-            ))
-        } else if response.routinesLimitReported {
-            rows.append(WeeklyModelUsage(label: "Daily Routines", percent: 0, scope: .product))
-        }
-
-        return rows.sorted {
-            if $0.percent != $1.percent { return $0.percent > $1.percent }
-            return $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+        } catch {
+            costHistoryIssue = "Could not read existing cost history; ledger writes were skipped to preserve it."
         }
     }
-}
 
-// MARK: - Helpers
-
-private func parseISO8601(_ string: String) -> Date? {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.date(from: string) ?? ISO8601DateFormatter().date(from: string)
-}
-
-private func nonEmpty(_ value: String?) -> String? {
-    guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
-          !trimmed.isEmpty else { return nil }
-    return trimmed
-}
-
-private func isAllModelsScope(id: String?, displayName: String) -> Bool {
-    let normalize: (String) -> String = {
-        $0.lowercased()
-            .replacingOccurrences(of: "_", with: "-")
-            .replacingOccurrences(of: " ", with: "-")
-    }
-    if normalize(displayName) == "all-models" { return true }
-    guard let id = nonEmpty(id) else { return false }
-    let normalizedID = normalize(id)
-    return normalizedID == "all-models" || normalizedID.hasSuffix("-all-models")
-}
-
-enum ProviderError: LocalizedError {
-    case tokenRefreshFailed
-    case apiFailed(statusCode: Int)
-    case rateLimited(retryAfter: TimeInterval?)
-    case notConfigured
-
-    var errorDescription: String? {
-        switch self {
-        case .tokenRefreshFailed: "Token refresh failed"
-        case .apiFailed(let code): "API error (\(code))"
-        case .rateLimited(let retry):
-            if let retry, retry > 0 {
-                "Rate limited (retry in \(ClaudeProvider.formatRetryDelay(retry)))"
-            } else {
-                "Rate limited"
-            }
-        case .notConfigured: "Not configured"
-        }
-    }
 }

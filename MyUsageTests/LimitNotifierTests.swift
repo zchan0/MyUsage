@@ -30,6 +30,91 @@ struct LimitNotifierTests {
         #expect(LimitNotifier.Tier.healthy < .crit)
     }
 
+    enum ClaudeSnapshotScenario: CaseIterable {
+        case valid, stale, disconnected, waiting, invalid, disabled
+    }
+
+    @Test("Only valid, enabled Claude snapshots can generate new notifications",
+          arguments: ClaudeSnapshotScenario.allCases)
+    @MainActor
+    func claudeNotificationEligibility(scenario: ClaudeSnapshotScenario) async throws {
+        let fixture = try ClaudeStatuslineFixture()
+        defer { fixture.cleanup() }
+        try fixture.bridge.enable()
+        let now = fixture.now
+        let limits = """
+        "five_hour":{"used_percentage":97,"resets_at":\(now.timeIntervalSince1970 + 3600)},
+        "seven_day":{"used_percentage":97,"resets_at":\(now.timeIntervalSince1970 + 7 * 86400)}
+        """
+        try fixture.store.write(
+            fixture.input(limits: scenario == .waiting ? "" : limits),
+            now: scenario == .stale ? now.addingTimeInterval(-86400) : now
+        )
+        if scenario == .disconnected { try fixture.bridge.disable() }
+        if scenario == .invalid {
+            try ClaudePrivateFiles.atomicWrite(Data("broken".utf8),
+                to: fixture.store.snapshotsDirectory.appendingPathComponent("damaged.json"))
+        }
+        let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge,
+                                      logRoots: [], now: { now })
+        provider.isEnabled = scenario != .disabled
+        let expectedState: ClaudeProvider.DataState = switch scenario {
+        case .valid, .disabled: .valid
+        case .stale: .stale
+        case .disconnected: .notConnected
+        case .waiting: .waiting
+        case .invalid: .invalid
+        }
+        #expect(provider.dataState == expectedState)
+        if scenario != .waiting {
+            // Suppress new alerts without discarding the dated snapshot the UI can still display.
+            #expect(provider.snapshot?.weeklyUsage?.percentUsed == 97)
+            #expect(provider.snapshot?.sessionUsage?.percentUsed == 97)
+        }
+        let observations = LimitNotifier.observations(from: provider)
+        #expect(LimitNotifier.observations(from: [provider]) == observations)
+        #expect(observations.count == (scenario == .valid ? 2 : 0))
+
+        let suite = "LimitNotifierTests.ClaudeSnapshot.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(["claude.weekly": "warn"], forKey: "MyUsage.notifierState")
+        let dispatcher = RecordingNotificationDispatcher()
+        let notifier = LimitNotifier(center: dispatcher, defaults: defaults)
+        await notifier.evaluate(observations: observations, warnThreshold: 80, critThreshold: 95, enabled: true)
+        #expect(state(defaults)["claude.weekly"] == (scenario == .valid ? "crit" : "warn"))
+        #expect((await dispatcher.firstTitle() != nil) == (scenario == .valid))
+    }
+
+    @Test("Claude requires verified source state; other built-in notification inputs are preserved")
+    @MainActor
+    func sourceStateRequirementIsSpecificToClaude() {
+        for kind in ProviderKind.allCases {
+            let provider = SnapshotProvider(kind: kind)
+            let observations = LimitNotifier.observations(from: provider)
+            #expect(observations.count == (kind == .claude ? 0 : 1))
+        }
+    }
+
+    @MainActor
+    private final class SnapshotProvider: BuiltinUsageProvider {
+        let kind: ProviderKind
+        let isAvailable = true
+        var isEnabled = true
+        let error: String? = nil
+        let isLoading = false
+        let snapshot: UsageSnapshot?
+
+        init(kind: ProviderKind) {
+            self.kind = kind
+            var snapshot = UsageSnapshot()
+            snapshot.sessionUsage = .init(percentUsed: 97, resetsAt: nil)
+            self.snapshot = snapshot
+        }
+
+        func refresh() async {}
+    }
+
     // MARK: - Idempotency / state machine
 
     @Test("crossing healthy → warn marks state warn")

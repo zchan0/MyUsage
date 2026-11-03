@@ -158,8 +158,8 @@ final class LimitNotifier {
 
     /// Compose `LimitObservation`s out of every enabled provider's snapshot.
     /// MainActor-isolated because UsageProvider properties (kind, isEnabled,
-    /// snapshot) are themselves MainActor-only. Tests should construct
-    /// observations by hand rather than calling this overload.
+    /// snapshot) are themselves MainActor-only. Claude requires a valid local
+    /// receipt; a retained snapshot alone does not establish notification eligibility.
     ///
     static func observations(
         from providers: [any UsageProvider]
@@ -179,6 +179,9 @@ final class LimitNotifier {
                           limitName: "Budget", percent: percent, resetCountdown: nil)]
         }
         guard let provider = provider as? any BuiltinUsageProvider else { return [] }
+        if provider.kind == .claude {
+            guard let claude = provider as? ClaudeProvider, claude.dataState == .valid else { return [] }
+        }
         guard provider.isEnabled, let snap = provider.snapshot else { return [] }
         let display = provider.kind.displayName
         let kindRaw = provider.kind.rawValue
