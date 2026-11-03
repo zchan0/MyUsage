@@ -6,7 +6,7 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
-## v0.19.0 — 2026-11-03
+## v0.19.1 — 2026-11-03
 
 ### Changed
 - **Claude quota from official statusline data.** Enable the integration in
@@ -39,6 +39,15 @@ the 中文 half lives here only.
   显示未提供。本地 JSONL 成本、token 和已有同步账本与订阅额度分开。
 - **修复旧快照触发额度通知**：只有有效且启用的 Claude 数据才能生成新通知。
   旧数据、断开接入、等待数据和损坏状态均不发送通知，也不推进通知等级。
+
+## v0.19.0 — 2026-11-03
+
+Release automation stopped during test compilation on Xcode 16. No application
+artifact was published. The changes are included in **v0.19.1**.
+
+### 中文
+
+Xcode 16 下的测试编译失败，未生成发布产物。相关改动包含在 **v0.19.1**。
 
 ## v0.18.2 — 2026-09-23
 

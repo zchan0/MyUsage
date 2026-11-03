@@ -117,14 +117,21 @@ struct ClaudeProviderTests {
         let reset = Date.now.addingTimeInterval(0.5).timeIntervalSince1970
         try f.store.write(f.input(limits: "\"five_hour\":{\"used_percentage\":42,\"resets_at\":\(reset)}"))
         let provider = ClaudeProvider(directory: f.directory, bridge: f.bridge, logRoots: [])
-        await confirmation("Local reset invalidates observed snapshot") { confirmed in
-            withObservationTracking {
-                #expect(provider.snapshot?.sessionUsage?.percentUsed == 42)
-            } onChange: { confirmed() }
-            try? await Task.sleep(for: .milliseconds(750))
-            #expect(provider.snapshot?.sessionUsage == nil)
-            #expect(provider.dataState == .stale)
+        let invalidations = InvalidationCounter()
+        withObservationTracking {
+            #expect(provider.snapshot?.sessionUsage?.percentUsed == 42)
+        } onChange: {
+            Task { await invalidations.record() }
         }
+        try await Task.sleep(for: .milliseconds(750))
+        #expect(await invalidations.count == 1)
+        #expect(provider.snapshot?.sessionUsage == nil)
+        #expect(provider.dataState == .stale)
+    }
+
+    private actor InvalidationCounter {
+        private(set) var count = 0
+        func record() { count += 1 }
     }
 
     @Test("Claude runtime has no credential, HTTP or CLI recovery dependencies")
