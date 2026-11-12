@@ -124,15 +124,11 @@ struct DevicesTab: View {
             Button {
                 Task { await reload(force: true) }
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
-                    .rotationEffect(.degrees(isLoading ? 360 : 0))
-                    .animation(
-                        isLoading
-                            ? .linear(duration: 1).repeatForever(autoreverses: false)
-                            : .default,
-                        value: isLoading
-                    )
+                SpinningRefreshGlyph(
+                    symbol: "arrow.clockwise",
+                    font: .system(size: 12),
+                    spinning: isLoading
+                )
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)

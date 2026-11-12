@@ -163,4 +163,31 @@ struct ClaudeStatuslineBridgeTests {
         #expect(files.count == 12)
         #expect(try !store.read().hasInvalidFiles)
     }
+
+    @Test func integrationStateDetectsAppMovedReconnectAndResetWithoutTouchingSettings() throws {
+        let f = try ClaudeStatuslineFixture()
+        defer { f.cleanup() }
+        try f.writeSettings(["statusLine": ["type": "command", "command": "echo original"]])
+
+        #expect(f.bridge.integrationState == .notInstalled)
+        try f.bridge.enable()
+        #expect(f.bridge.integrationState == .installed)
+
+        let movedBridge = ClaudeStatuslineBridge(
+            settingsURL: f.settings,
+            directory: f.directory,
+            executableURL: f.root.appendingPathComponent("Applications/MyUsage.app/Contents/MacOS/MyUsage")
+        )
+        #expect(movedBridge.integrationState == .appMoved)
+        try movedBridge.reconnect()
+        #expect(movedBridge.integrationState == .installed)
+        #expect(try f.command().contains("Applications/MyUsage.app/Contents/MacOS/MyUsage"))
+
+        try f.writeSettings(["statusLine": ["type": "command", "command": "echo external-change"]])
+        let before = try Data(contentsOf: f.settings)
+        #expect(movedBridge.integrationState == .modifiedExternally)
+        try movedBridge.resetInstallationRecord()
+        #expect(movedBridge.integrationState == .notInstalled)
+        #expect(try Data(contentsOf: f.settings) == before)
+    }
 }

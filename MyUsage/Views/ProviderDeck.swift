@@ -1,515 +1,323 @@
+import AppKit
 import SwiftUI
 
-/// Provider detail follows one stable axis: account identity, provider limits,
-/// provider-specific inventory, then cost/model history and token totals.
 struct BuiltinProviderDeck: View {
     let provider: any BuiltinUsageProvider
 
-    @Environment(UsageManager.self) private var manager
     @Environment(\.colorScheme) private var colorScheme
+    private var palette: PopoverPalette { PopoverPalette(colorScheme) }
+    private var usesRollingLimits: Bool { provider.kind == .claude || provider.kind == .codex }
 
     var body: some View {
-        content
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if provider.isLoading && provider.snapshot == nil {
-            stateRow(icon: nil, text: "Loading…", loading: true)
-        } else if let error = provider.error, provider.snapshot == nil {
-            stateRow(icon: "exclamationmark.triangle", text: error)
-        } else if let snapshot = provider.snapshot {
-            snapshotContent(snapshot)
-        } else {
-            stateRow(icon: "questionmark.circle", text: "Not configured")
-        }
-    }
-
-    private func snapshotContent(_ snapshot: UsageSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            accountHeader(snapshot)
-
-            if let claude = provider as? ClaudeProvider {
-                VStack(alignment: .leading, spacing: 6) {
-                    ClaudeSnapshotTimestamp(receivedAt: claude.receipt.map { Date(timeIntervalSince1970: $0.receivedAt) })
-                    Text(claude.sourceMessage)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+        VStack(spacing: 9) {
+            if let snapshot = provider.snapshot {
+                quotaSheet(snapshot)
+                if let report = snapshot.localUsage {
+                    ProviderUsageInstrument(report: report)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .bottom) { sectionDivider }
-            }
-
-            if provider.kind == .claude || provider.kind == .codex {
-                rollingInstruments(snapshot)
             } else {
-                ProviderQuotaInstruments(kind: provider.kind, snapshot: snapshot)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 18)
-                    .overlay(alignment: .bottom) { sectionDivider }
-            }
-
-            if provider.kind == .claude, let extra = snapshot.onDemandSpend {
-                ExtraUsageInstrument(
-                    spend: extra,
-                    tint: provider.kind.usageTint(for: colorScheme)
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 17)
-                .overlay(alignment: .bottom) { sectionDivider }
-            }
-
-            if provider.kind == .codex {
-                resetCredits(snapshot)
-            }
-
-            history(snapshot)
-
-            if provider.kind != .claude, let error = provider.error {
-                errorRow(error)
-            }
-        }
-    }
-
-    // MARK: - Account identity
-
-    private func accountHeader(_ snapshot: UsageSnapshot) -> some View {
-        HStack(spacing: 9) {
-            AccountAvatar(kind: provider.kind, email: snapshot.email)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(snapshot.email ?? (provider.kind == .claude ? "Email not provided" : provider.kind.shortName))
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(accountCaption)
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(.tertiary)
-            }
-
-            Spacer(minLength: 8)
-
-            if let plan = snapshot.planName {
-                PlanPill(text: plan)
-            } else if provider.kind == .claude {
-                PlanPill(text: "Plan not provided")
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(minHeight: 54)
-        .overlay(alignment: .bottom) { sectionDivider }
-    }
-
-    private var accountCaption: String {
-        switch provider.kind {
-        case .claude: "Claude · local statusline"
-        case .codex: "Codex · OAuth account"
-        case .cursor: "Cursor account · billing cycle"
-        case .antigravity: "Antigravity · Google account"
-        }
-    }
-
-    // MARK: - Limits
-
-    @ViewBuilder
-    private func rollingInstruments(_ snapshot: UsageSnapshot) -> some View {
-        let metrics = CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
-        if metrics.isEmpty {
-            Text("No rolling limits reported")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .padding(18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .bottom) { sectionDivider }
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(metrics) { metric in
-                    DeckLimitInstrument(metric: metric)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .overlay(alignment: .bottom) { sectionDivider }
-                }
-            }
-        }
-    }
-
-    private func resetCredits(_ snapshot: UsageSnapshot) -> some View {
-        Group {
-            if let inventory = snapshot.resetCredits {
-                ResetCreditsSection(inventory: inventory)
-            } else {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Reset credits")
-                        .font(.system(size: 10.5, weight: .semibold))
-                    Spacer()
-                    Text("Unavailable")
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-                .help("Codex did not return reset-credit inventory. No count is assumed.")
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 18)
-        .overlay(alignment: .bottom) { sectionDivider }
-    }
-
-    // MARK: - Cost and tokens
-
-    @ViewBuilder
-    private func history(_ snapshot: UsageSnapshot) -> some View {
-        let series = manager.ledger.dailyCosts[provider.kind] ?? []
-        let tokens = manager.ledger.tokenUsage30Days[provider.kind]
-        let showCost = manager.showEstimatedCost && hasCost(snapshot, series: series)
-
-        if showCost || tokens != nil {
-            VStack(alignment: .leading, spacing: 0) {
-                if showCost {
-                    ProviderCardCostRow(
-                        kind: provider.kind,
-                        snapshot: snapshot,
-                        showsDivider: false
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-
-                    if !series.isEmpty {
-                        sectionDivider
-                        DailyCostChart(kind: provider.kind, series: series)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
+                GlassSheet {
+                    if provider.isLoading {
+                        stateRow("Loading…", loading: true)
+                    } else if let error = provider.error {
+                        stateRow(error, icon: "exclamationmark.triangle", warning: true)
+                    } else {
+                        stateRow("Not configured", icon: "questionmark.circle")
                     }
                 }
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+    }
 
-                // Prefer the derived readings; they need per-day cost paired
-                // with per-day tokens, which only the ledger series carries.
-                // Fall back to the raw counters when that is unavailable.
-                if let efficiency = TokenEfficiency.reading(from: series) {
-                    sectionDivider
-                    TokenEfficiencySection(
-                        kind: provider.kind,
-                        reading: efficiency,
-                        session: snapshot.sessionUsage
-                    )
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
-                } else if let tokens {
-                    sectionDivider
-                    TokenUsageSummary(usage: tokens)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
+    private func quotaSheet(_ snapshot: UsageSnapshot) -> some View {
+        let metrics = CapacityFocus.metrics(providerKind: provider.kind, snapshot: snapshot)
+        let credits = snapshot.resetCredits.flatMap { $0.reportedAvailableCount > 0 ? $0 : nil }
+        let antigravity = provider as? AntigravityProvider
+        let isAntigravityStatusline = antigravity?.quotaSource == .statusline
+        return GlassSheet {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 11) {
+                    accountHeader(snapshot, metrics: metrics)
+                    if usesRollingLimits {
+                        rollingLimits(metrics)
+                    } else if let antigravity, isAntigravityStatusline, snapshot.modelQuotas.isEmpty {
+                        antigravityStatuslineEmptyState(antigravity)
+                    } else if provider.kind == .antigravity, snapshot.modelQuotas.isEmpty, let issue = provider.error {
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Live quota unavailable")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(palette.inkSecondary)
+                                Text(issue)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(palette.inkTertiary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 4)
+                            if antigravity != nil {
+                                settingsPillButton(help: "Open Settings → Providers to connect Antigravity CLI statusline")
+                            }
+                        }
+                    } else {
+                        ProviderQuotaInstruments(kind: provider.kind, snapshot: snapshot)
+                    }
+                }
+                .padding(.horizontal, 15)
+                .padding(.top, 14)
+                .padding(.bottom, credits == nil ? 14 : 12)
+
+                if let credits {
+                    ResetCreditsSection(inventory: credits)
+                }
+
+                if provider.kind != .claude,
+                   !(provider.kind == .antigravity && (snapshot.modelQuotas.isEmpty || isAntigravityStatusline)),
+                   let error = provider.error {
+                    PopoverHairline()
+                    stateRow(error, icon: "exclamationmark.triangle", warning: true)
                 }
             }
-            .overlay(alignment: .bottom) { sectionDivider }
         }
     }
 
-    private func hasCost(_ snapshot: UsageSnapshot, series: [LedgerStore.DailyCost]) -> Bool {
-        if !series.isEmpty { return true }
-        switch provider.kind {
-        case .claude, .codex:
-            let monthKey = LedgerCalendar.monthKey(for: .now)
-            return (manager.ledger.monthlyTotals[monthKey]?[provider.kind] ?? 0) > 0
-                || snapshot.monthlyEstimatedCost != nil
-        case .cursor:
-            return snapshot.monthlyEstimatedCost != nil || snapshot.spentAmount != nil
-        case .antigravity:
-            return false
-        }
-    }
+    private func accountHeader(_ snapshot: UsageSnapshot, metrics: [CapacityFocus.Metric]) -> some View {
+        let claude = provider as? ClaudeProvider
+        let antigravity = provider as? AntigravityProvider
+        let email = claude?.localAccount?.email ?? snapshot.email
+        let plan = claude?.localAccount?.planName ?? snapshot.planName
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(planTitle(plan))
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(-0.13)
+                .foregroundStyle(palette.inkPrimary)
+                .lineLimit(1)
+                .layoutPriority(1)
+                .help(planTitle(plan))
 
-    // MARK: - States
-
-    private func errorRow(_ error: String) -> some View {
-        HStack(alignment: .top, spacing: 7) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 10))
-                .foregroundStyle(.orange)
-            Text(error)
-                .font(.system(size: 10.5))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Button("Retry") {
-                Task { await provider.refresh(trigger: .manual) }
+            if let email {
+                Text(email)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(palette.inkTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(claude?.localAccount?.helpText ?? email)
             }
-                .buttonStyle(.plain)
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.tint)
+
+            if let claude {
+                StatuslineDataIndicator(state: claude.dataState)
+                    .help(claude.sourceMessage)
+            } else if let antigravity, antigravity.quotaSource == .statusline {
+                StatuslineDataIndicator(state: antigravity.statuslineDataState)
+                    .help(antigravity.statuslineSourceMessage)
+            }
+
+            Spacer(minLength: 2)
+
+            runwayBadge(snapshot, metrics: metrics)
+                .fixedSize()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-        .overlay(alignment: .bottom) { sectionDivider }
     }
 
-    private func stateRow(icon: String?, text: String, loading: Bool = false) -> some View {
+    private func planTitle(_ plan: String?) -> String {
+        let name = provider.kind.shortName
+        guard let plan = plan?.trimmingCharacters(in: .whitespacesAndNewlines), !plan.isEmpty else { return name }
+        if provider.kind == .antigravity || plan.compare(name, options: .caseInsensitive) == .orderedSame
+            || plan.lowercased().hasPrefix(name.lowercased() + " ") {
+            return plan
+        }
+        return "\(name) \(plan)"
+    }
+
+    @ViewBuilder
+    private func runwayBadge(_ snapshot: UsageSnapshot, metrics: [CapacityFocus.Metric]) -> some View {
+        if provider.kind == .cursor {
+            if snapshot.spentAmount != nil || snapshot.onDemandSpend != nil {
+                let amount = (snapshot.spentAmount?.amount ?? 0) + (snapshot.onDemandSpend?.amount ?? 0)
+                Text(String(format: "$%.2f this cycle", amount))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(palette.inkSecondary)
+            }
+        } else if !metrics.isEmpty {
+            if metrics.contains(where: { $0.percentUsed >= LimitSafety.critThreshold }) {
+                badge("Near limit", ink: palette.critInk, background: palette.critPillBackground)
+            } else if let soonest = metrics.compactMap(\.projectedExhaustionAt).min() {
+                let countdown = OverviewSummary.shortCountdown(until: soonest)
+                badge("Runs out in \(countdown)", ink: palette.warnInk, background: palette.warnPillBackground)
+            } else if metrics.contains(where: \.hasCapacityRisk) {
+                badge("Over pace", ink: palette.warnInk, background: palette.warnPillBackground)
+            } else {
+                Text("Plenty of runway")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(palette.okInk)
+            }
+        }
+    }
+
+    private func badge(_ text: String, ink: Color, background: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(ink)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(background, in: Capsule())
+    }
+
+    @ViewBuilder
+    private func rollingLimits(_ metrics: [CapacityFocus.Metric]) -> some View {
+        if metrics.isEmpty {
+            let claude = provider as? ClaudeProvider
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(claude?.stateLabel ?? "No rolling limits reported")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.inkSecondary)
+                    if let hint = claudeStateHint(for: claude) {
+                        Text(hint)
+                            .font(.system(size: 10))
+                            .foregroundStyle(palette.inkTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 4)
+                if claude?.dataState == .notConnected || claude?.dataState == .invalid {
+                    settingsPillButton(help: "Open Settings → Providers to connect Claude Code statusline")
+                }
+            }
+            .help(claude?.sourceMessage ?? "No rolling limits reported")
+        } else {
+            VStack(alignment: .leading, spacing: 11) {
+                ForEach(metrics) { metric in
+                    let isSession = metric.label == "5-hour"
+                    let isWeekly = metric.label == "Weekly"
+                    let window = UsageWindow(percentUsed: metric.percentUsed, resetsAt: metric.resetsAt)
+                    QuotaRunwayRow(
+                        win: isSession ? "5h" : isWeekly ? "7d" : metric.label,
+                        percent: metric.percentUsed,
+                        wide: !isSession && !isWeekly,
+                        pacePercent: metric.pacePercent,
+                        reset: window.resetCountdown.map { $0 == "Resetting…" ? $0 : "resets \($0)" },
+                        verdict: metric.runwayBalance,
+                        risk: metric.hasCapacityRisk,
+                        detailSummary: CapacityPaceText.detailSummary(for: metric)
+                    )
+                }
+            }
+        }
+    }
+
+    private func antigravityStatuslineEmptyState(_ antigravity: AntigravityProvider) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(antigravity.statuslineStateLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.inkSecondary)
+                if let hint = antigravityStatuslineHint(for: antigravity) {
+                    Text(hint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(palette.inkTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 4)
+            if antigravity.statuslineDataState == .notConnected || antigravity.statuslineDataState == .invalid {
+                settingsPillButton(help: "Open Settings → Providers to connect Antigravity CLI statusline")
+            }
+        }
+        .help(antigravity.statuslineSourceMessage)
+    }
+
+    private func antigravityStatuslineHint(for antigravity: AntigravityProvider) -> String? {
+        switch antigravity.statuslineDataState {
+        case .notConnected:
+            return "Enable Antigravity CLI statusline in Settings → Providers."
+        case .waiting:
+            return "Quota appears after an Antigravity CLI (agy) statusLine update."
+        case .stale:
+            return "Latest local snapshot is outdated; run a turn in Antigravity CLI (agy) to refresh."
+        case .invalid:
+            return "Check Settings → Providers for local statusline details."
+        case .valid:
+            return nil
+        }
+    }
+
+    private func settingsPillButton(help: String) -> some View {
+        SettingsLink {
+            Text("Settings")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(palette.inkPrimary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(palette.rowHover, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded {
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                NSApp.activate(ignoringOtherApps: true)
+                let settings = NSApp.windows.first {
+                    $0.identifier?.rawValue.contains("Settings") == true
+                        || $0.frameAutosaveName.contains("Settings")
+                }
+                settings?.makeKeyAndOrderFront(nil)
+                settings?.orderFrontRegardless()
+            }
+        })
+        .help(help)
+    }
+
+    private func claudeStateHint(for claude: ClaudeProvider?) -> String? {
+        guard let claude else { return nil }
+        switch claude.dataState {
+        case .notConnected:
+            return "Enable statusline integration in Settings → Providers."
+        case .waiting:
+            return "Quota appears after your next Claude Code response."
+        case .stale:
+            return "Latest local snapshot is outdated; send a message in Claude Code to refresh."
+        case .invalid:
+            return "Check Settings → Providers for local statusline details."
+        case .valid:
+            return nil
+        }
+    }
+
+    private func stateRow(_ text: String, icon: String? = nil, warning: Bool = false, loading: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 8) {
             if loading {
-                ProgressView().scaleEffect(0.7)
+                ProgressView().controlSize(.small)
             } else if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(warning ? palette.warnInk : palette.inkSecondary)
             }
             Text(text)
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(palette.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
             if !loading {
-                Button {
-                    Task { await provider.refresh(trigger: .manual) }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(20)
-    }
-
-    private var sectionDivider: some View {
-        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-    }
-}
-
-private struct AccountAvatar: View {
-    let kind: ProviderKind
-    let email: String?
-
-    var body: some View {
-        if initials.isEmpty {
-            ProviderIconTile(kind: kind, size: 27, glyph: 15)
-        } else {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(
-                        colors: [Color.secondary.opacity(0.82), Color.secondary.opacity(0.58)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                Text(initials)
-                    .font(.system(size: 9.5, weight: .semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(width: 27, height: 27)
-            .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.12), radius: 1.5, y: 1)
-        }
-    }
-
-    private var initials: String {
-        guard let local = email?.split(separator: "@").first else { return "" }
-        return String(local.prefix(2)).uppercased()
-    }
-}
-
-private struct DeckLimitInstrument: View {
-    let metric: CapacityFocus.Metric
-    /// Marks a row whose percentage is derived rather than reported, without
-    /// giving it a different shape from the reported ones.
-    var caption: String?
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(metric.label)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                if let caption {
-                    Text(caption)
-                        .font(.system(size: 8.5))
-                        .foregroundStyle(.quaternary)
-                }
-                Spacer(minLength: 8)
-                Text("\(Int(metric.percentUsed.rounded()))%")
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(metric.needsAttention
-                        ? AnyShapeStyle(LimitBar.warnAccent)
-                        : AnyShapeStyle(.primary))
-                Text("used")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-            }
-
-            ProgressTrack(
-                percent: metric.percentUsed,
-                pacePercent: metric.pacePercent,
-                level: LimitSafety.level(for: metric.percentUsed),
-                height: 6,
-                tint: metric.providerKind.usageTint(for: colorScheme)
-            )
-            .padding(.top, 8)
-
-            paceFooter
-            .padding(.top, 6)
-        }
-    }
-
-    private var paceFooter: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            resetText
-                .fixedSize()
-
-            if let summary = compactPaceSummary {
-                Spacer(minLength: 18)
-                paceText(summary)
-                    .fixedSize()
-                    .help(CapacityPaceText.detailSummary(for: metric) ?? summary)
-            }
-        }
-    }
-
-    /// Keep the primary limit footer to one line. A predicted exhaustion is
-    /// the actionable outcome and outranks the intermediate deficit number;
-    /// otherwise the quieter reserve/on-pace reading is enough. The complete
-    /// balance + outcome sentence remains available as hover help.
-    private var compactPaceSummary: String? {
-        if case .runsOut = metric.paceOutcome {
-            return CapacityPaceText.outcomeLabel(for: metric)
-        }
-        return CapacityPaceText.balanceLabel(for: metric)
-    }
-
-    private var resetText: some View {
-        Text(resetCaption)
-            .font(.system(size: 9, design: .monospaced))
-            .monospacedDigit()
-            .foregroundStyle(.tertiary)
-    }
-
-    private func paceText(_ summary: String) -> some View {
-        Text(summary)
-            .font(.system(
-                size: 9,
-                weight: metric.hasCapacityRisk ? .medium : .regular,
-                design: .monospaced
-            ))
-            .monospacedDigit()
-            .foregroundStyle(metric.hasCapacityRisk
-                ? AnyShapeStyle(LimitBar.warnAccent)
-                : AnyShapeStyle(.tertiary))
-            .lineLimit(1)
-    }
-
-    private var resetCaption: String {
-        guard let resetsAt = metric.resetsAt else { return "Reset not reported" }
-        return "Resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
-    }
-}
-
-/// Claude's per-model weekly figures are secondary to the account-wide 5-hour
-/// and weekly limits, so they use a compact single-line rail. This keeps Fable
-/// and Daily Routines visible without turning each into another full-height
-/// hero instrument — and without repeating the countdown and pace already
-/// shown by the Weekly instrument directly above, which these rows share.
-private struct ClaudeAdditionalLimits: View {
-    let title: String
-    var caption: String?
-    let rows: [WeeklyModelUsage]
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                if let caption {
-                    Text(caption)
-                        .font(.system(size: 8.5))
-                        .foregroundStyle(.quaternary)
+                HStack(spacing: 8) {
+                    if let antigravity = provider as? AntigravityProvider, antigravity.quotaSource == .none {
+                        settingsPillButton(help: "Open Settings → Providers to connect Antigravity CLI statusline")
+                    }
+                    Button("Retry") {
+                        Task { await provider.refresh(trigger: .manual) }
+                    }
+                    .buttonStyle(.plain)
+                    .fontWeight(.medium)
+                    .foregroundStyle(palette.inkPrimary)
+                    .disabled(provider.isLoading)
                 }
             }
-
-            ForEach(rows) { row in
-                HStack(spacing: 9) {
-                    Text(row.label)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-
-                    Spacer(minLength: 8)
-
-                    ProgressTrack(
-                        percent: row.percent,
-                        level: LimitSafety.level(for: row.percent),
-                        height: 4,
-                        tint: ProviderKind.claude.usageTint(for: colorScheme)
-                    )
-                    .frame(width: 104)
-
-                    Text("\(Int(row.percent.rounded()))%")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(row.percent >= 75
-                            ? AnyShapeStyle(LimitBar.warnAccent)
-                            : AnyShapeStyle(.primary.opacity(0.86)))
-                        .frame(width: 34, alignment: .trailing)
-                }
-                .help(helpText(for: row))
-            }
         }
-    }
-
-    private func helpText(for row: WeeklyModelUsage) -> String {
-        let share = caption == nil
-            ? "\(Int(row.percent.rounded()))% used"
-            : "≈\(Int(row.percent.rounded()))% of the weekly limit, estimated from local cost"
-        guard let resetsAt = row.resetsAt else { return "\(row.label): \(share)" }
-        return "\(row.label): \(share) · resets in \(OverviewSummary.shortCountdown(until: resetsAt))"
+        .font(.system(size: 11))
+        .padding(.horizontal, 15)
+        .padding(.vertical, 14)
     }
 }
-
-struct TokenUsageSummary: View {
-    let usage: TokenUsage
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Token usage")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("30 days · all accounts")
-                    .font(.system(size: 8.5))
-                    .foregroundStyle(.tertiary)
-            }
-
-            HStack(spacing: 0) {
-                tokenStat("Total", usage.total)
-                tokenStat("Input", usage.input)
-                tokenStat("Output", usage.output)
-                tokenStat("Cache", usage.cache)
-            }
-        }
-    }
-
-    private func tokenStat(_ label: String, _ value: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(TokenCountFormatter.string(value))
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-            Text(label)
-                .font(.system(size: 8.5))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.leading, label == "Total" ? 0 : 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .leading) {
-            if label != "Total" {
-                Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 0.5)
-            }
-        }
-    }
-}
-
 enum TokenCountFormatter {
     static func string(_ value: Int) -> String {
         let count = Double(max(0, value))
@@ -526,19 +334,3 @@ enum TokenCountFormatter {
         return String(format: "%.*f%@", digits, value, suffix)
     }
 }
-
-#if DEBUG
-#Preview("Claude Detail") {
-    let manager = PreviewFixtures.manager(providerCount: 4)
-    ProviderDeck(provider: manager.orderedProviders.first { $0.id == .builtin(.claude) }!)
-        .environment(manager)
-        .frame(width: PopoverLayout.width)
-}
-
-#Preview("Codex Detail") {
-    let manager = PreviewFixtures.manager(providerCount: 4)
-    ProviderDeck(provider: manager.orderedProviders.first { $0.id == .builtin(.codex) }!)
-        .environment(manager)
-        .frame(width: PopoverLayout.width)
-}
-#endif

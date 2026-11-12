@@ -50,6 +50,15 @@ enum CodexLogParser {
             case outputTokens = "output_tokens"
             case reasoningOutputTokens = "reasoning_output_tokens"
         }
+
+        var tokens: TokenUsage {
+            let cached = cachedInputTokens ?? 0
+            return TokenUsage(
+                input: max(0, (inputTokens ?? 0) - cached),
+                output: (outputTokens ?? 0) + (reasoningOutputTokens ?? 0),
+                cachedInput: cached
+            )
+        }
     }
 
     // MARK: - Default roots
@@ -96,6 +105,33 @@ enum CodexLogParser {
     static func parseFile(url: URL, into result: inout UsageByModel) {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
         parse(data: data, into: &result)
+    }
+
+    static func scanLocalUsage(
+        roots: [URL] = defaultRoots(),
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> LocalUsageReport {
+        var scan = LocalUsageLogScan(now: now, calendar: calendar)
+        let decoder = JSONDecoder()
+        for file in scan.files(in: roots) {
+            var currentModel: String?
+            LocalUsageLogScan.readRows(in: file, decoder: decoder, timestamp: \Row.timestamp) { row, time in
+                switch row.type {
+                case "turn_context":
+                    currentModel = row.payload?.model.flatMap(normalizeModelFamily)
+                case "event_msg":
+                    guard row.payload?.type == "token_count", let usage = row.payload?.info?.lastTokenUsage,
+                          let model = currentModel, let time else { return }
+                    let tokens = usage.tokens
+                    guard !tokens.isEmpty else { return }
+                    scan.add(.init(tokens: tokens), for: model, at: time)
+                default:
+                    break
+                }
+            }
+        }
+        return scan.report()
     }
 
     // MARK: - Per-day cost breakdown (ledger)
@@ -231,15 +267,7 @@ enum CodexLogParser {
                       let u = row.payload?.info?.lastTokenUsage,
                       let model = currentModel
                 else { return }
-                let cached = u.cachedInputTokens ?? 0
-                let rawInput = u.inputTokens ?? 0
-                let nonCachedInput = max(0, rawInput - cached)
-                let output = (u.outputTokens ?? 0) + (u.reasoningOutputTokens ?? 0)
-                let tokens = TokenUsage(
-                    input: nonCachedInput,
-                    output: output,
-                    cachedInput: cached
-                )
+                let tokens = u.tokens
                 guard !tokens.isEmpty else { return }
                 acc.tokensByDay[lastDay, default: .zero] += tokens
                 let usd = CostCalculator.cost(
@@ -303,15 +331,7 @@ enum CodexLogParser {
                       let u = row.payload?.info?.lastTokenUsage,
                       let model = currentModel
                 else { return }
-                let cached = u.cachedInputTokens ?? 0
-                let rawInput = u.inputTokens ?? 0
-                let nonCachedInput = max(0, rawInput - cached)
-                let output = (u.outputTokens ?? 0) + (u.reasoningOutputTokens ?? 0)
-                let tokens = TokenUsage(
-                    input: nonCachedInput,
-                    output: output,
-                    cachedInput: cached
-                )
+                let tokens = u.tokens
                 guard tokens.input + tokens.output + tokens.cachedInput > 0 else { return }
                 acc.add(tokens, for: model)
             default:

@@ -291,9 +291,11 @@ final class CursorProvider: BuiltinUsageProvider {
             $0.prefix(1).uppercased() + $0.dropFirst()
         }
 
-        // Billing cycle end
+        if let start = usage.billingCycleStart.flatMap(Double.init), start.isFinite {
+            snapshot.billingCycleStart = Date(timeIntervalSince1970: start / 1000)
+        }
         if let endStr = usage.billingCycleEnd ?? plan?.planInfo?.billingCycleEnd,
-           let endMs = Double(endStr) {
+           let endMs = Double(endStr), endMs.isFinite {
             snapshot.billingCycleEnd = Date(timeIntervalSince1970: endMs / 1000)
         }
 

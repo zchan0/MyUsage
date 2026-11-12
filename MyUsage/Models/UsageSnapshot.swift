@@ -188,18 +188,58 @@ struct WeeklyModelUsage: Sendable, Equatable, Identifiable {
     }
 }
 
-/// Per-model quota info (used by Antigravity).
-struct ModelQuota: Identifiable, Sendable {
-    let id = UUID()
-    /// Display label, e.g., "Claude Sonnet 4.5"
+/// Per-model or grouped-bucket quota info (used by Antigravity).
+struct ModelQuota: Identifiable, Sendable, Equatable {
+    let id: UUID
+    /// Display label, e.g., "Claude Sonnet 4.5" or "Gemini Models · 7d".
     let label: String
-    /// Remaining fraction (0.0 = depleted, 1.0 = full)
+    /// Remaining fraction (0.0 = depleted, 1.0 = full).
     let remainingFraction: Double
-    /// When this model's quota resets.
+    /// When this model or bucket's quota resets.
     let resetsAt: Date?
+    /// Logical group name from RetrieveUserQuotaSummary (e.g., "Gemini Models").
+    let groupName: String?
+    /// Compact window label (e.g., "7d", "5h") when backed by a rolling window.
+    let windowLabel: String?
+    /// Total duration of this rolling window, enabling pace & projection math.
+    let windowDuration: TimeInterval?
+    /// Stable bucket identifier (e.g., "gemini-weekly", "3p-5h") for notifications.
+    let bucketId: String?
+
+    init(
+        id: UUID = UUID(),
+        label: String,
+        remainingFraction: Double,
+        resetsAt: Date?,
+        groupName: String? = nil,
+        windowLabel: String? = nil,
+        windowDuration: TimeInterval? = nil,
+        bucketId: String? = nil
+    ) {
+        self.id = id
+        self.label = label
+        self.remainingFraction = max(0, min(1, remainingFraction))
+        self.resetsAt = resetsAt
+        self.groupName = groupName
+        self.windowLabel = windowLabel
+        self.windowDuration = windowDuration
+        self.bucketId = bucketId
+    }
 
     /// Percentage used (0–100).
     var percentUsed: Double { (1.0 - remainingFraction) * 100 }
+
+    /// Rolling window view reusing `UsageWindow`'s pace, projection, and countdown helpers.
+    var usageWindow: UsageWindow {
+        UsageWindow(
+            percentUsed: percentUsed,
+            resetsAt: resetsAt,
+            windowDuration: windowDuration
+        )
+    }
+
+    /// Stable key for notification deduplication.
+    var stableKey: String { bucketId ?? label }
 }
 
 /// Credit / billing info.
@@ -220,18 +260,25 @@ struct CreditInfo: Sendable {
     }
 }
 
-/// One available Codex rate-limit reset credit. The provider's opaque ID is
-/// retained only as an in-memory identity for SwiftUI; it is never rendered,
-/// logged, or persisted by MyUsage.
+/// One available rate-limit reset grant. The provider's ID identifies the row in SwiftUI.
 struct ResetCredit: Identifiable, Sendable, Equatable {
     let id: String
+    let label: String?
+    let count: Int
     let grantedAt: Date?
     let expiresAt: Date?
+
+    init(id: String, label: String? = nil, count: Int = 1, grantedAt: Date? = nil, expiresAt: Date? = nil) {
+        self.id = id
+        let trimmedLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.label = trimmedLabel.flatMap { $0.isEmpty ? nil : $0 }
+        self.count = max(1, count)
+        self.grantedAt = grantedAt
+        self.expiresAt = expiresAt
+    }
 }
 
-/// Inventory returned by Codex's reset-credit endpoint. `reportedAvailableCount`
-/// is the API's authoritative count; `availableCredits` contains the matching
-/// non-expired records for which the API supplied details.
+/// The provider-reported count and the active grants for which details are available.
 struct ResetCreditInventory: Sendable, Equatable {
     let reportedAvailableCount: Int
     let availableCredits: [ResetCredit]
@@ -255,6 +302,7 @@ struct UsageSnapshot: Sendable {
 
     // MARK: - Billing cycle (Cursor)
     var totalUsagePercent: Double?
+    var billingCycleStart: Date?
     var billingCycleEnd: Date?
     var spentAmount: CreditInfo?
 
@@ -265,8 +313,7 @@ struct UsageSnapshot: Sendable {
     var planName: String?
     var email: String?
     var credits: CreditInfo?
-    /// Codex-only rate-limit reset credits. nil means the endpoint did not
-    /// return a trustworthy result; it is distinct from a confirmed count of 0.
+    /// Rate-limit reset-credit inventory reported by Codex or Claude, when available.
     var resetCredits: ResetCreditInventory?
     var onDemandSpend: CreditInfo?
     var lastRefreshed: Date = .now
@@ -276,6 +323,8 @@ struct UsageSnapshot: Sendable {
     /// - Cursor: sum of included spend + on-demand spend from the billing API.
     /// - nil when the provider doesn't compute one.
     var monthlyEstimatedCost: Double?
+
+    var localUsage: LocalUsageReport? = nil
 
     // MARK: - Computed
 
@@ -299,12 +348,13 @@ struct UsageSnapshot: Sendable {
     }
 
     var worstUsage: WorstUsage {
+        let worstModelQuota = modelQuotas.max(by: { $0.percentUsed < $1.percentUsed })
         let candidates: [(label: String?, percent: Double)] = [
             ("5h", sessionUsage?.percentUsed),
             ("7d", weeklyUsage?.percentUsed),
             (nil, totalUsagePercent),
             (nil, onDemandUsagePercent),
-            (nil, modelQuotas.isEmpty ? nil : modelQuotas.map(\.percentUsed).max())
+            (worstModelQuota?.windowLabel, worstModelQuota?.percentUsed)
         ].compactMap { entry in entry.1.map { (entry.0, $0) } }
 
         guard let best = candidates.max(by: { $0.percent < $1.percent }) else {

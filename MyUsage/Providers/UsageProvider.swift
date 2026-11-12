@@ -1,5 +1,22 @@
 import Foundation
 
+/// Observation state for local opt-in statusline quota sources (Claude Code, Antigravity CLI).
+enum StatuslineDataState: String, Sendable, Equatable {
+    case notConnected, waiting, valid, stale, invalid
+}
+
+/// Configuration state of an opt-in CLI statusline bridge (`settings.json` vs installation record).
+enum StatuslineBridgeState: String, Sendable, Equatable {
+    /// No installation record exists.
+    case notInstalled
+    /// Wrapper is active and points to the current MyUsage executable.
+    case installed
+    /// Wrapper is active, but points to a different MyUsage executable path (app was moved).
+    case appMoved
+    /// Installation record exists, but `settings.json` no longer matches the installed wrapper.
+    case modifiedExternally
+}
+
 /// Why a refresh was started. Providers normally treat both cases the same;
 /// credential-gated providers can reserve interactive authorization for a
 /// deliberate user action.

@@ -36,6 +36,27 @@ struct ClaudeStatuslineBridge: Sendable {
     }
     var hasInstallation: Bool { FileManager.default.fileExists(atPath: installationURL.path) }
 
+    var integrationState: StatuslineBridgeState {
+        guard hasInstallation else { return .notInstalled }
+        guard isInstalled, let saved = try? installation() else { return .modifiedExternally }
+        return saved.installedCommand == makeCommand(original: saved.originalCommand) ? .installed : .appMoved
+    }
+
+    func reconnect() throws {
+        try disable()
+        try enable()
+    }
+
+    /// Removes only MyUsage's private installation record without touching `settings.json`.
+    func resetInstallationRecord() throws {
+        guard hasInstallation else { return }
+        try ClaudePrivateFiles.directory(directory)
+        try ClaudePrivateFiles.locked(at: directory.appendingPathComponent("installation.lock")) {
+            guard hasInstallation else { return }
+            try FileManager.default.removeItem(at: installationURL)
+        }
+    }
+
     private func installation() throws -> Installation {
         try JSONDecoder().decode(Installation.self, from: ClaudePrivateFiles.read(installationURL))
     }

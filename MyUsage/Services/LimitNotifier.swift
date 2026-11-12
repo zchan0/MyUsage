@@ -182,6 +182,9 @@ final class LimitNotifier {
         if provider.kind == .claude {
             guard let claude = provider as? ClaudeProvider, claude.dataState == .valid else { return [] }
         }
+        if let antigravity = provider as? AntigravityProvider, !antigravity.isNotificationEligible {
+            return []
+        }
         guard provider.isEnabled, let snap = provider.snapshot else { return [] }
         let display = provider.kind.displayName
         let kindRaw = provider.kind.rawValue
@@ -230,12 +233,12 @@ final class LimitNotifier {
         }
         for quota in snap.modelQuotas {
             rows.append(.init(
-                id: "\(kindRaw).model.\(quota.label)",
+                id: "\(kindRaw).model.\(quota.stableKey)",
                 providerName: display,
                 accountLabel: accountLabel,
                 limitName: quota.label,
                 percent: quota.percentUsed,
-                resetCountdown: nil
+                resetCountdown: quota.usageWindow.resetCountdown
             ))
         }
         return rows

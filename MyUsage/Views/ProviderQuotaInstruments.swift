@@ -1,124 +1,153 @@
 import SwiftUI
 
-/// Limit-bar block for providers that do not use rolling instruments in
-/// `ProviderDeck`. Cursor expresses included + on-demand budgets, while
-/// Antigravity reports per-model quotas.
 struct ProviderQuotaInstruments: View {
     let kind: ProviderKind
     let snapshot: UsageSnapshot
 
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            switch kind {
-            case .claude, .codex:
-                EmptyView()
-            case .cursor:
-                CursorLimits(snapshot: snapshot)
-            case .antigravity:
-                ForEach(snapshot.modelQuotas) { quota in
-                    LimitBar(
-                        name: quota.label,
-                        percent: quota.percentUsed,
-                        monoName: true,
-                        tint: kind.usageTint(for: colorScheme)
-                    )
-                }
-            }
+        switch kind {
+        case .claude, .codex:
+            EmptyView()
+        case .cursor:
+            CursorLimits(snapshot: snapshot)
+        case .antigravity:
+            AntigravityLimits(quotas: snapshot.modelQuotas)
         }
     }
 }
 
-/// Cursor splits into Included (capped quota, healthy bar) and On-demand
-/// (capped budget, "+$X of $Y" overflow). Both use the `LimitBar` shape —
-/// they ARE both bounded limits, just billed differently.
-///
-/// When neither bar has data (Free plans return no included budget and
-/// no on-demand spend), the card body would otherwise be visually empty —
-/// the head shows "Free" and then nothing. Surface a small dim caption
-/// so the absence is intentional, not a render bug.
-struct CursorLimits: View {
-    let snapshot: UsageSnapshot
-
+/// Supports grouped rolling buckets and the legacy flat model list.
+struct AntigravityLimits: View {
+    let quotas: [ModelQuota]
     @Environment(\.colorScheme) private var colorScheme
 
-    var body: some View {
-        let hasIncluded = snapshot.spentAmount != nil
-        let hasOnDemand = snapshot.onDemandSpend != nil
+    private struct QuotaSection: Identifiable {
+        let id: String
+        let title: String?
+        let items: [ModelQuota]
+    }
 
-        if hasIncluded || hasOnDemand {
-            if let spent = snapshot.spentAmount {
-                LimitBar(
-                    name: "Included",
-                    percent: snapshot.totalUsagePercent ?? 0,
-                    reset: spent.formatted,
-                    tint: ProviderKind.cursor.usageTint(for: colorScheme)
-                )
-            }
-            if let onDemand = snapshot.onDemandSpend {
-                if let limit = onDemand.limit, limit > 0 {
-                    let pct = onDemand.amount / limit * 100
-                    LimitBar(
-                        name: "On-demand",
-                        percent: pct,
-                        reset: "+\(onDemand.formatted)",
-                        tint: ProviderKind.cursor.usageTint(for: colorScheme)
-                    )
-                } else {
-                    // No on-demand cap reported — show the spend as a
-                    // single metered row with no bar. Reuses the LimitBar
-                    // header shape so it visually rhymes with capped rows.
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("On-demand")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary.opacity(0.95))
-                        Spacer(minLength: 8)
-                        Text("+" + onDemand.formatted)
-                            .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                            .monospacedDigit()
-                            .foregroundStyle(.primary.opacity(0.92))
+    var body: some View {
+        let palette = PopoverPalette(colorScheme)
+        if quotas.isEmpty {
+            Text("No model quotas reported")
+                .font(.system(size: 11))
+                .foregroundStyle(palette.inkSecondary)
+        } else {
+            let sections = sections
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(sections) { section in
+                    if section.id != sections.first?.id {
+                        PopoverHairline()
+                            .padding(.top, 13)
+                            .padding(.bottom, 12)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let title = section.title {
+                            Text(title)
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(palette.inkSecondary)
+                        }
+                        VStack(alignment: .leading, spacing: 11) {
+                            ForEach(section.items) { quota in quotaRow(quota) }
+                        }
                     }
                 }
             }
-        } else {
-            // Free / no-quota plan: explicit empty state so the card
-            // doesn't look broken.
-            Text("No usage limits on this plan")
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary.opacity(0.7))
-                .italic()
         }
+    }
+
+    private func quotaRow(_ quota: ModelQuota) -> some View {
+        let window = quota.usageWindow
+        let metric = CapacityFocus.Metric(providerKind: .antigravity, label: quota.label, window: window)
+        return QuotaRunwayRow(
+            win: quota.windowLabel ?? quota.label,
+            percent: quota.percentUsed,
+            wide: quota.windowLabel == nil,
+            pacePercent: metric.pacePercent,
+            reset: window.resetCountdown.map { $0 == "Resetting…" ? $0 : "resets \($0)" },
+            verdict: quota.windowLabel == "7d" || metric.hasCapacityRisk ? metric.runwayBalance : nil,
+            risk: metric.hasCapacityRisk,
+            detailSummary: CapacityPaceText.detailSummary(for: metric)
+        )
+    }
+
+    private var sections: [QuotaSection] {
+        var result: [QuotaSection] = []
+        var indexByTitle: [String: Int] = [:]
+
+        for quota in quotas {
+            let key = quota.groupName ?? ""
+            if let existing = indexByTitle[key] {
+                result[existing] = QuotaSection(
+                    id: result[existing].id,
+                    title: result[existing].title,
+                    items: result[existing].items + [quota]
+                )
+            } else {
+                indexByTitle[key] = result.count
+                result.append(QuotaSection(
+                    id: key.isEmpty ? "ungrouped-\(result.count)" : key,
+                    title: quota.groupName,
+                    items: [quota]
+                ))
+            }
+        }
+        return result
     }
 }
 
-/// Claude's API reports Extra usage separately from estimated token cost.
-/// A configured monthly limit behaves like a normal bounded instrument;
-/// accounts without a reported cap still get an explicit metered amount.
-struct ExtraUsageInstrument: View {
-    let spend: CreditInfo
-    let tint: Color
+struct CursorLimits: View {
+    let snapshot: UsageSnapshot
+    @Environment(\.colorScheme) private var colorScheme
 
-    @ViewBuilder
     var body: some View {
-        if let limit = spend.limit, limit > 0 {
-            LimitBar(
-                name: "Extra usage",
-                percent: spend.amount / limit * 100,
-                reset: spend.formatted,
-                tint: tint
-            )
-        } else {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Extra usage")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.secondary.opacity(0.95))
-                Spacer(minLength: 8)
-                Text(ProviderCardCostRow.formatCost(spend.amount, estimated: false))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary.opacity(0.92))
+        let palette = PopoverPalette(colorScheme)
+        VStack(alignment: .leading, spacing: 11) {
+            if let spent = snapshot.spentAmount {
+                includedRow(spent)
+            }
+            if let onDemand = snapshot.onDemandSpend {
+                if let percent = snapshot.onDemandUsagePercent {
+                    QuotaRunwayRow(win: "On-demand", percent: percent, wide: true, reset: "+\(onDemand.formatted) cap")
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("On-demand")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(palette.inkSecondary)
+                        Spacer(minLength: 8)
+                        Text("+\(onDemand.formatted)")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(palette.inkPrimary)
+                    }
+                }
+            }
+            if snapshot.spentAmount == nil && snapshot.onDemandSpend == nil {
+                Text("No usage limits on this plan")
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.inkSecondary)
             }
         }
+    }
+
+    private func includedRow(_ spent: CreditInfo) -> some View {
+        let percent = snapshot.totalUsagePercent ?? 0
+        let end = snapshot.billingCycleEnd
+        let duration = snapshot.billingCycleStart.flatMap { start in end.map { $0.timeIntervalSince(start) } }
+        let window = UsageWindow(percentUsed: percent, resetsAt: end, windowDuration: duration)
+        let metric = CapacityFocus.Metric(providerKind: .cursor, label: "Included", window: window)
+        let reset = end.map { " · resets \($0.formatted(.dateTime.month(.abbreviated).day()))" } ?? ""
+
+        return QuotaRunwayRow(
+            win: "Included",
+            percent: percent,
+            wide: true,
+            pacePercent: metric.pacePercent,
+            reset: spent.formatted + reset,
+            verdict: metric.runwayBalance,
+            risk: metric.hasCapacityRisk,
+            detailSummary: CapacityPaceText.detailSummary(for: metric)
+        )
     }
 }

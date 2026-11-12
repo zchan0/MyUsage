@@ -52,6 +52,65 @@ struct ClaudeStatuslineSnapshotTests {
         #expect(throws: (any Error).self) { try f.store.write(Data(repeating: 32, count: 1_048_577), now: f.now) }
     }
 
+    @Test func capturesAndPersistsAllowlistedResetCreditGrants() throws {
+        let f = try ClaudeStatuslineFixture()
+        defer { f.cleanup() }
+        let input = Data("""
+        {"session_id":"synthetic-session","version":"2.1.synthetic",
+         "cedar_ember":{"grants":[
+            null,
+            {"id":"","resets_left":1},
+            {"id":"missing-count"},
+            {"id":"boolean-count","resets_left":true},
+            {"id":"fractional-count","resets_left":1.5},
+            {"id":"negative-count","resets_left":-1},
+            {"id":"oversized-count","resets_left":101},
+            {"id":"bad-expiry","resets_left":1,"expiresAt":"invalid"},
+            {"id":"week-boost","label":"  Weekly boost  ","resets_left":3,"ends_at":1800003600000,"usable_now":true,"extra":"ignored"},
+            {"id":"inactive","resetsLeft":0,"expires_at":"2027-01-01T00:00:00.125Z","usableNow":false},
+            {"id":"optional-fields","remaining":1,"label":"   "}
+         ]},
+         "reset_credits":[{"id":"fallback","resets_left":1}]}
+        """.utf8)
+
+        try f.store.write(input, now: f.now)
+        let read = try f.store.read()
+        let grants = try #require(read.latest?.resetCredits)
+        #expect(!read.hasInvalidFiles)
+        #expect(grants == [
+            .init(id: "week-boost", label: "Weekly boost", resetsLeft: 3, endsAt: 1_800_003_600, usableNow: true),
+            .init(id: "inactive", label: nil, resetsLeft: 0, endsAt: 1_798_761_600.125, usableNow: false),
+            .init(id: "optional-fields", label: nil, resetsLeft: 1, endsAt: nil, usableNow: nil)
+        ])
+        let files = try FileManager.default.contentsOfDirectory(at: f.store.snapshotsDirectory, includingPropertiesForKeys: nil)
+        let file = try #require(files.first { $0.pathExtension == "json" })
+        let text = try String(contentsOf: file, encoding: .utf8)
+        #expect(!text.contains("cedar_ember"))
+        #expect(!text.contains("ignored"))
+    }
+
+    @Test func capturesAlternateLocationsAndCapsValidResetCredits() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let grants = (0..<33).map { #"{"id":"grant-\#($0)","remaining":1}"# }.joined(separator: ",")
+        let field = #""reset_credits":[{},\#(grants)]"#
+        for input in [field, #""rate_limits":{\#(field)}"#] {
+            let raw = Data(#"{"session_id":"synthetic-session","version":"2.1.synthetic",\#(input)}"#.utf8)
+            let snapshot = try ClaudeStatuslineSnapshot.capture(raw, receivedAt: now)
+            #expect(snapshot.resetCredits?.count == 32)
+            #expect(snapshot.resetCredits?.last?.id == "grant-31")
+        }
+    }
+
+    @Test func decodesSchemaOneWithoutResetCredits() throws {
+        let raw = Data("""
+        {"schemaVersion":1,"receivedAt":1800000000,"sessionID":"synthetic-session",
+         "claudeCodeVersion":"2.1.synthetic","rateLimits":{}}
+        """.utf8)
+        let snapshot = try JSONDecoder().decode(ClaudeStatuslineSnapshot.self, from: raw)
+        #expect(snapshot.isValid)
+        #expect(snapshot.resetCredits == nil)
+    }
+
     @Test func concurrentSessionsAndOutOfOrderWriters() async throws {
         let f = try ClaudeStatuslineFixture()
         defer { f.cleanup() }

@@ -11,7 +11,8 @@ struct ClaudeProviderTests {
         defer { fixture.cleanup() }
         let now = fixture.now
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
-                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"), now: { now })
+                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"),
+                                      accountURL: fixture.accountURL, now: { now })
         #expect(provider.dataState == .notConnected)
         #expect(!FileManager.default.fileExists(atPath: fixture.settings.path))
         try fixture.bridge.enable()
@@ -34,6 +35,29 @@ struct ClaudeProviderTests {
         #expect(provider.sourceMessage.contains("Received locally"))
     }
 
+    @Test("Claude menu-bar labels omit snapshot state", arguments: [false, true])
+    @MainActor
+    func menuBarOmitsSnapshotState(stale: Bool) throws {
+        let fixture = try ClaudeStatuslineFixture()
+        defer { fixture.cleanup() }
+        let now = fixture.now
+        try fixture.bridge.enable()
+        try fixture.store.write(fixture.input(), now: stale ? now.addingTimeInterval(-901) : now)
+        let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
+                                      accountURL: fixture.accountURL, now: { now })
+        let suite = "claude-menu-bar-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let ledger = LedgerSync(store: try LedgerStore(path: LedgerStore.inMemoryPath),
+                                syncRoot: LocalSyncRoot(url: fixture.root))
+        let manager = UsageManager(ledger: ledger, providers: [provider], startsLedger: false, defaults: defaults)
+        manager.iconTrackProvider = provider.id.rawValue
+        #expect(provider.dataState == (stale ? .stale : .valid))
+        #expect(manager.menuBarText(for: .claude) == "7d · 41%")
+        #expect(manager.menuBarText(for: provider.id) == "7d · 41%")
+        #expect(manager.menuBarDisplayText == "7d · 41%")
+    }
+
     @Test @MainActor
     func staleAndExpiredWindowsNeverBecomeCurrent() async throws {
         let fixture = try ClaudeStatuslineFixture()
@@ -46,7 +70,8 @@ struct ClaudeProviderTests {
         #expect(mapped.weeklyUsage?.percentUsed == 41.2)
         try fixture.store.write(fixture.input(), now: fixture.now)
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
-                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"), now: { afterFiveHourReset })
+                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"),
+                                      accountURL: fixture.accountURL, now: { afterFiveHourReset })
         #expect(provider.dataState == .stale)
         #expect(provider.snapshot?.lastRefreshed == fixture.now)
         #expect(provider.snapshot?.sessionUsage == nil)
@@ -68,8 +93,50 @@ struct ClaudeProviderTests {
         try fixture.bridge.enable()
         try fixture.store.write(fixture.input(), now: fixture.now)
         for date in [fixture.now.addingTimeInterval(901), fixture.now.addingTimeInterval(-120)] {
-            let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [], now: { date })
+            let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [], accountURL: fixture.accountURL, now: { date })
             #expect(provider.dataState == .stale)
+        }
+    }
+
+    @Test func mapsOnlyActiveResetCreditsAndSortsByExpiryThenID() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let receivedAt = now.addingTimeInterval(-60)
+        let input = Data("""
+        {"session_id":"synthetic-session","version":"2.1.synthetic","cedar_ember":{"grants":[
+            {"id":"no-expiry","resets_left":1,"label":"Anytime"},
+            {"id":"later","resets_left":2,"ends_at":1800000600},
+            {"id":"early-b","resets_left":1,"ends_at":1800000300},
+            {"id":"early-a","resets_left":3,"ends_at":1800000300,"label":"  Weekly boost  "},
+            {"id":"zero","resets_left":0,"ends_at":1800000100},
+            {"id":"unusable","resets_left":2,"usable_now":false},
+            {"id":"expired","resets_left":5,"ends_at":1800000000}
+        ]}}
+        """.utf8)
+        let receipt = try ClaudeStatuslineSnapshot.capture(input, receivedAt: receivedAt)
+        let inventory = try #require(ClaudeProvider.mapToSnapshot(receipt, now: now).resetCredits)
+        #expect(inventory.reportedAvailableCount == 7)
+        #expect(inventory.availableCredits.map(\.id) == ["early-a", "early-b", "later", "no-expiry"])
+        #expect(inventory.availableCredits.map(\.label) == ["Weekly boost", nil, nil, "Anytime"])
+        let grants = try #require(receipt.resetCredits)
+        let countsByID = Dictionary(uniqueKeysWithValues: grants.map { ($0.id, $0.resetsLeft) })
+        #expect(inventory.availableCredits.allSatisfy { $0.count == countsByID[$0.id] })
+        #expect(inventory.availableCredits.allSatisfy { $0.grantedAt == nil })
+        #expect(inventory.availableCredits.last?.expiresAt == nil)
+        #expect(inventory.earliestExpiration == now.addingTimeInterval(300))
+        #expect(inventory.fetchedAt == receivedAt)
+    }
+
+    @Test func omitsInventoryWithoutActiveGrants() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let variants: [[ClaudeStatuslineSnapshot.ResetCreditGrant]?] = [
+            nil,
+            [.init(id: "expired", label: nil, resetsLeft: 1, endsAt: now.timeIntervalSince1970, usableNow: true)]
+        ]
+        for grants in variants {
+            let receipt = ClaudeStatuslineSnapshot(schemaVersion: 1, receivedAt: now.timeIntervalSince1970,
+                sessionID: "synthetic-session", claudeCodeVersion: "2.1.synthetic",
+                rateLimits: .init(fiveHour: nil, sevenDay: nil), resetCredits: grants)
+            #expect(ClaudeProvider.mapToSnapshot(receipt, now: now).resetCredits == nil)
         }
     }
 
@@ -79,7 +146,8 @@ struct ClaudeProviderTests {
         defer { fixture.cleanup() }
         let now = fixture.now
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
-                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"), now: { now })
+                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"),
+                                      accountURL: fixture.accountURL, now: { now })
         let suite = "claude-manager-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -116,14 +184,18 @@ struct ClaudeProviderTests {
         try f.bridge.enable()
         let reset = Date.now.addingTimeInterval(0.5).timeIntervalSince1970
         try f.store.write(f.input(limits: "\"five_hour\":{\"used_percentage\":42,\"resets_at\":\(reset)}"))
-        let provider = ClaudeProvider(directory: f.directory, bridge: f.bridge, logRoots: [])
+        let provider = ClaudeProvider(directory: f.directory, bridge: f.bridge, logRoots: [], accountURL: f.accountURL)
         let invalidations = InvalidationCounter()
         withObservationTracking {
             #expect(provider.snapshot?.sessionUsage?.percentUsed == 42)
         } onChange: {
             Task { await invalidations.record() }
         }
-        try await Task.sleep(for: .milliseconds(750))
+        // Wait for observation delivery as well as the reset; both tasks can be delayed under load.
+        let deadline = Date.now.addingTimeInterval(3)
+        while await invalidations.count == 0 && Date.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(await invalidations.count == 1)
         #expect(provider.snapshot?.sessionUsage == nil)
         #expect(provider.dataState == .stale)
@@ -137,7 +209,7 @@ struct ClaudeProviderTests {
     @Test("Claude runtime has no credential, HTTP or CLI recovery dependencies")
     func retiredPathsStayRemoved() throws {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        for name in ["Providers/ClaudeProvider.swift", "Services/ClaudeStatuslineSnapshot.swift", "Services/ClaudeStatuslineBridge.swift"] {
+        for name in ["Providers/ClaudeProvider.swift", "Services/ClaudeStatuslineSnapshot.swift", "Services/ClaudeStatuslineBridge.swift", "Services/ClaudeLocalAccount.swift"] {
             let text = try String(contentsOf: repo.appendingPathComponent("MyUsage/" + name), encoding: .utf8)
             for forbidden in ["URLSession", "URLRequest", "KeychainHelper", "SecItem", "Process()", "ClaudeCredentialStore", "ClaudeDelegatedRefresh", "/api/oauth/", "auth status", "[\"/status\"]"] {
                 #expect(!text.contains(forbidden), "\(name) contains retired dependency: \(forbidden)")
@@ -177,7 +249,7 @@ struct ClaudeProviderTests {
                         day: days[0], costUSD: 9, recordedAt: oldDate)
         ])
         let provider = ClaudeProvider(ledger: ledger, directory: f.directory, bridge: f.bridge, logRoots: [logs],
-                                      costCacheURL: f.root.appendingPathComponent("cost.json"))
+                                      costCacheURL: f.root.appendingPathComponent("cost.json"), accountURL: f.accountURL)
         await provider.refresh(trigger: .manual)
         await provider.refresh(trigger: .automatic)
         let entries = try store.entries(forDevice: ledger.selfDeviceID)
@@ -189,6 +261,8 @@ struct ClaudeProviderTests {
         #expect(claude.first { $0.day == days[1] }?.accountId == "default")
         #expect(claude.filter { $0.day == days[2] }.map(\.costUSD).sorted() == [1, 2])
         #expect(entries.first { $0.provider == "codex" }?.costUSD == 9)
+        #expect(provider.snapshot?.localUsage?.summary30d.reportedCostUSD == 6)
+        #expect(provider.snapshot?.localUsage?.summary30d.totalTokens == 33)
         #expect(provider.snapshot?.email == nil)
         #expect(provider.snapshot?.planName == nil)
         #expect(provider.sourceMessage.contains("Ambiguous legacy cost days were preserved"))

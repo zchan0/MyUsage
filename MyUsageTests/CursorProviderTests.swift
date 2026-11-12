@@ -97,6 +97,7 @@ struct CursorProviderTests {
         #expect(snapshot.totalUsagePercent! > 50)
         // No on-demand yet (under budget)
         #expect(snapshot.onDemandSpend == nil)
+        #expect(snapshot.billingCycleStart == Date(timeIntervalSince1970: 1_768_399_334))
         #expect(snapshot.billingCycleEnd != nil)
     }
 

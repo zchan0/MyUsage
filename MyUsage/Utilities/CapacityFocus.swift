@@ -178,18 +178,22 @@ enum CapacityFocus {
             ].compactMap { $0 }
 
         case .antigravity:
-            return snapshot.modelQuotas.map {
-                Metric(
+            return snapshot.modelQuotas.map { quota in
+                let window = quota.usageWindow
+                return Metric(
                     providerKind: providerKind,
-                    label: $0.label,
-                    percentUsed: $0.percentUsed,
-                    resetsAt: $0.resetsAt,
-                    pacePercent: nil,
-                    projectedFinalPercent: nil,
-                    projectedExhaustionAt: nil
+                    label: quota.label,
+                    percentUsed: quota.percentUsed,
+                    resetsAt: quota.resetsAt,
+                    pacePercent: window.onPacePercent(now: now),
+                    projectedFinalPercent: window.projectedFinalPercent(now: now),
+                    projectedExhaustionAt: window.projectedExhaustionDate(now: now)
                 )
             }
-            .sorted { $0.percentUsed > $1.percentUsed }
+            .sorted {
+                if $0.riskScore != $1.riskScore { return $0.riskScore > $1.riskScore }
+                return $0.percentUsed > $1.percentUsed
+            }
         }
     }
 

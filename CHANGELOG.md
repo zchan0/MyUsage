@@ -6,6 +6,54 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.20.0 — 2026-11-27
+
+### Added
+- **Antigravity 2.0 grouped quotas and CLI statusline support.** Live local
+  language server probing now reads grouped rolling `7d` / `5h` buckets via
+  `RetrieveUserQuotaSummary` (with pace and runway projection), while keeping
+  fallback to legacy per-model quotas. When live process RPC is unavailable
+  (such as Antigravity 2.34+ private stdin bridge tokens or CLI-only sessions),
+  opt in under **Settings → Providers → Statusline Integrations** to capture
+  local quota snapshots from Antigravity CLI (`agy`) via `--antigravity-statusline`
+  while preserving existing `statusLine` commands and settings.
+- **Local usage charts for Claude Code, Codex, and Antigravity.** Switch between
+  today's hourly activity and a 30-day trend directly inside the provider card,
+  and hover any bar to inspect token totals, prompt-cache hit rate, and
+  Claude-reported costs by model. Antigravity reads local conversation
+  transcripts from `~/.gemini/antigravity/brain/`.
+- **Claude Code local profile display and reset credits.** Displays cached email
+  and plan name from local `.claude.json` (display-only, never written to
+  snapshots or sync) and surfaces reset-credit grants reported by Claude
+  statusline snapshots.
+
+### Changed
+- **Direct provider-first popover.** Opens straight to the active provider with
+  a compact capsule dock and amber attention dot instead of a separate Overview
+  tab.
+- **Redesigned Statusline Integrations settings.** Claude Code and Antigravity
+  CLI now share one compact **Statusline Integrations** card showing live
+  connection status, last receipt timestamp, and a single contextual action
+  (`Connect`, `Disconnect`, one-click `Reconnect` after moving the app, or
+  `Reveal` / `Reset` when edited externally).
+
+### 中文
+
+- **支持 Antigravity 2.0 分组额度与 CLI statusline 接入**：本地 language server
+  探测新增 `RetrieveUserQuotaSummary` 分组滚动额度（`7d` / `5h` 窗口与 pace
+  预测），并保留旧版单模型额度回退。当本地进程 RPC 不可用（例如 Antigravity
+  2.34+ 私有 stdin token 或纯 `agy` CLI 场景）时，可在 **Settings → Providers →
+  Statusline Integrations** 启用 Antigravity CLI (`agy`) statusline 接入，
+  完整保留原有命令与配置，快照仅存本机、过期自动隐藏且仅有效快照触发通知。
+- **新增本地模型用量图表（Claude Code / Codex / Antigravity）**：支持在今日按小时
+  与近 30 天趋势之间切换，悬停柱条查看分模型 token、缓存命中率及 Claude
+  本地日志费用；Antigravity 从 `~/.gemini/antigravity/brain/` 读取本地对话日志。
+- **Claude Code 本地账号展示与 Reset Credits**：从本机 `.claude.json` 仅作展示
+  读取邮箱和套餐（不写入快照与同步），并支持展示 statusline 上报的重置额度。
+- **精简弹窗与 Statusline 设置界面**：弹窗直接打开当前 provider，通过顶部胶囊栏切换；
+  Settings → Providers 合并为一张 **Statusline Integrations** 状态卡，实时识别未接入、
+  已接入、等待数据、应用路径变动（一键 Reconnect）及外部改动（Reveal / Reset）。
+
 ## v0.19.1 — 2026-11-03
 
 ### Changed

@@ -1,89 +1,62 @@
 import SwiftUI
 
-/// Panel content for one provider in separate-icons mode. The same account-
-/// first Detail used by merged mode opens directly, without Overview or tabs.
+/// Panel content for one provider in separate-icons mode.
 struct ProviderPopover: View {
     let id: ProviderID
 
     @Environment(UsageManager.self) private var manager
-    @Environment(UpdateChecker.self) private var updateChecker
 
     var body: some View {
+        let provider = manager.orderedProviders.first { $0.id == id }
         VStack(spacing: 0) {
-            if let provider = manager.orderedProviders.first(where: { $0.id == id }) {
+            if let provider {
                 PopoverPage { ProviderDeck(provider: provider) }
             }
-
-            PopoverFooterBar(provider: manager.orderedProviders.first { $0.id == id })
+            PopoverFooterBar(provider: provider)
         }
         .frame(width: PopoverLayout.width)
         .background { PopoverGlassSurface() }
-        // Content-sized panel — see UsagePopover for the sizing contract.
         .fixedSize(horizontal: false, vertical: true)
     }
-
 }
 
-// MARK: - Shared popover chrome
-
-/// "N min ago" mono label used by the compact footer. Shares the footer's
-/// size / weight / colour so the "Updated" prefix and the relative time read
-/// as one label rather than two mismatched fonts.
-struct RelativeTimestampLabel: View {
-    let date: Date
-
-    var body: some View {
-        (
-            Text(date, style: .relative)
-            + Text(" ago")
-        )
-        .font(.system(size: 10, weight: .regular, design: .monospaced))
-        .monospacedDigit()
-        .foregroundStyle(.tertiary)
-    }
-}
-
-/// Compact action rail shared by both popovers. It preserves every command
-/// from the previous vertical menu without spending roughly a quarter of the
-/// panel height on app chrome.
 struct PopoverFooterBar: View {
     var provider: (any UsageProvider)? = nil
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 2) {
-            if let lastRefreshed = displayUpdatedAt {
-                HStack(spacing: 4) {
-                    Text(provider is ClaudeProvider ? "Received locally" : (gatewaySnapshot?.hasDisplayIssue == true ? "Data from" : "Updated"))
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                    RelativeTimestampLabel(date: lastRefreshed)
-                }.help(timestampHelp)
-            } else {
-                Text(provider is ClaudeProvider ? "No statusline receipt" : "Not refreshed")
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-            }
+            timestamp
+                .font(.system(size: 10.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(PopoverPalette(colorScheme).inkTertiary)
+                .help(timestampHelp)
 
             Spacer()
 
-            iconButton(
-                "arrow.clockwise",
-                help: manager.isRefreshing ? "Refreshing…" : "Refresh",
-                disabled: manager.isRefreshing,
-                spinning: manager.isRefreshing
-            ) {
+            Button {
                 Task { await manager.refreshAll(trigger: .manual) }
+            } label: {
+                FooterIcon(symbol: "arrow.clockwise", spinning: manager.isRefreshing)
             }
+            .buttonStyle(.plain)
+            .disabled(manager.isRefreshing)
+            .accessibilityLabel("Refresh")
+            .help(manager.isRefreshing ? "Refreshing…" : "Refresh")
 
             settingsButton
 
             if let update = updateChecker.updateAvailable {
-                iconButton("arrow.up.circle", help: "Update available") {
+                Button {
                     NSWorkspace.shared.open(update.url)
+                } label: {
+                    FooterIcon(symbol: "arrow.up.circle", highlighted: true)
                 }
-                .foregroundStyle(.orange)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Update available")
+                .help("Update available")
             }
 
             Menu {
@@ -94,21 +67,33 @@ struct PopoverFooterBar: View {
                 Divider()
                 Button("Quit MyUsage") { NSApp.terminate(nil) }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
+                FooterIcon(symbol: "ellipsis")
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .fixedSize()
-            .help("More")
+            .frame(width: 24, height: 24)
+            .accessibilityLabel("More")
+            .help("More · MyUsage v\(AppInfo.version)")
         }
         .padding(.horizontal, 14)
-        .frame(minHeight: 44)
-        .help("MyUsage v\(AppInfo.version)")
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .frame(minHeight: 36)
+    }
+
+    @ViewBuilder
+    private var timestamp: some View {
+        if manager.isRefreshing {
+            Text("Refreshing…")
+        } else if let date = displayUpdatedAt {
+            HStack(spacing: 3) {
+                Text("Updated")
+                Text(date, style: .relative)
+                Text("ago")
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            Text("Not refreshed")
         }
     }
 
@@ -116,15 +101,14 @@ struct PopoverFooterBar: View {
         guard let provider, case .gateway(let snapshot) = provider.payload else { return nil }
         return snapshot
     }
+
     private var displayUpdatedAt: Date? {
-        if let claude = provider as? ClaudeProvider {
-            return claude.receipt.map { Date(timeIntervalSince1970: $0.receivedAt) }
-        }
         if let gatewaySnapshot { return gatewaySnapshot.displayUpdatedAt }
         return manager.lastRefreshed
     }
+
     private var timestampHelp: String {
-        if let claude = provider as? ClaudeProvider { return claude.sourceMessage }
+        if manager.isRefreshing { return "Refreshing…" }
         guard let snapshot = gatewaySnapshot else { return "Last refresh" }
         var details: [String] = []
         if snapshot.summary.value != nil, let date = snapshot.summary.updatedAt {
@@ -133,18 +117,15 @@ struct PopoverFooterBar: View {
         if snapshot.history.value != nil, let date = snapshot.history.updatedAt {
             details.append("Monthly usage: " + date.formatted(date: .abbreviated, time: .standard))
         }
-        return details.joined(separator: "\n")
+        return details.isEmpty ? "Last refresh" : details.joined(separator: "\n")
     }
 
     private var settingsButton: some View {
         SettingsLink {
-            Image(systemName: "gearshape")
-                .font(.system(size: 12))
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
+            FooterIcon(symbol: "gearshape")
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .accessibilityLabel("Settings")
         .help("Settings")
         .simultaneousGesture(TapGesture().onEnded {
             NSApp.activate(ignoringOtherApps: true)
@@ -159,36 +140,37 @@ struct PopoverFooterBar: View {
             }
         })
     }
+}
 
-    private func iconButton(
-        _ icon: String,
-        help: String,
-        disabled: Bool = false,
-        spinning: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .rotationEffect(.degrees(spinning ? 360 : 0))
-                .animation(
-                    spinning
-                        ? .linear(duration: 1).repeatForever(autoreverses: false)
-                        : .default,
-                    value: spinning
-                )
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .disabled(disabled)
-        .help(help)
+private struct FooterIcon: View {
+    let symbol: String
+    var spinning = false
+    var highlighted = false
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
+        let palette = PopoverPalette(colorScheme)
+        let hovered = isHovered && isEnabled
+        SpinningRefreshGlyph(
+            symbol: symbol,
+            font: .system(size: 13, weight: .medium),
+            spinning: spinning
+        )
+        .foregroundStyle(highlighted ? palette.warnInk : hovered ? palette.inkPrimary : palette.inkSecondary)
+        .frame(width: 24, height: 24)
+        .background(hovered ? palette.rowHover : .clear, in: RoundedRectangle(cornerRadius: 7))
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(PopoverMotion.hover, value: hovered)
     }
 }
 
-#Preview {
+#if DEBUG
+#Preview("Claude · Separate icon") {
     ProviderPopover(id: .builtin(.claude))
-        .environment(UsageManager())
+        .environment(PreviewFixtures.manager(providerCount: 1))
         .environment(UpdateChecker())
 }
+#endif

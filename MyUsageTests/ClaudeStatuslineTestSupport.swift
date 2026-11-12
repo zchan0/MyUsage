@@ -7,6 +7,7 @@ struct ClaudeStatuslineFixture {
     let settings: URL
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     var store: ClaudeStatuslineStore { .init(directory: directory) }
+    var accountURL: URL { root.appendingPathComponent(".claude.json") }
     var executable: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(".build/debug/MyUsage")

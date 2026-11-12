@@ -2,12 +2,13 @@ import AppKit
 import os
 import SwiftUI
 import Observation
+import QuartzCore
 
 /// Owns one menu-bar status item and its popover panel, replacing
 /// `MenuBarExtra`. Toggling, anchoring, and dismiss-on-outside-click are all
 /// handled here so the panel can be sized deterministically (see `PopoverPanel`).
 ///
-/// `kind == nil` is the merged item (Overview + tabs panel); a non-nil kind
+/// `id == nil` is the merged item; a non-nil ID
 /// is one provider's own item in separate-icons mode, whose panel shows only
 /// that provider. `MenuBarCoordinator` decides which set of controllers
 /// exists at any moment.
@@ -267,7 +268,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         let animate = panel.isVisible
         DispatchQueue.main.async { [weak self] in
-            self?.panel.setFrame(frame, display: true, animate: animate)
+            guard let self else { return }
+            guard animate, panel.isVisible else {
+                panel.setFrame(frame, display: true, animate: false)
+                return
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.28
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
+                context.allowsImplicitAnimation = true
+                self.panel.animator().setFrame(frame, display: true)
+            }
         }
     }
 }

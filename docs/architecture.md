@@ -40,8 +40,10 @@ MyUsage/
 ├── Services/
 │   ├── UsageManager.swift        # Orchestrator: auto-detect, timer, state
 │   ├── KeychainHelper.swift      # Security.framework Keychain reader
-│   ├── ClaudeStatuslineBridge.swift   # Explicit integration + native collector
-│   └── ClaudeStatuslineSnapshot.swift # Private local snapshot storage
+│   ├── ClaudeStatuslineBridge.swift       # Explicit Claude integration + native collector
+│   ├── ClaudeStatuslineSnapshot.swift     # Private local Claude snapshot storage
+│   ├── AntigravityStatuslineBridge.swift  # Explicit Antigravity CLI integration + collector
+│   └── AntigravityStatuslineSnapshot.swift # Private local Antigravity snapshot storage
 ├── Views/
 │   ├── MenuBarIcon.swift         # NSStatusItem + popover host
 │   ├── UsagePopover.swift        # Main popover container
@@ -95,7 +97,8 @@ UsageManager → ClaudeProvider → local snapshot + existing JSONL cost/token p
 - `ClaudeStatuslineStore` uses `Application Support/MyUsage/ClaudeStatusline/snapshots`, outside all sync paths. Directories are user-owned `0700`, files/locks `0600`, with symlink checks. Per-session SHA-256 filenames separate concurrent sessions; `flock` serializes writers and same-directory atomic rename prevents partial reads. Older receipts cannot overwrite newer receipts for the same session. Reads select one latest valid receipt, never sum sessions or merge windows. Damaged files are reported even if another valid receipt remains readable.
 - States are not connected, waiting, valid local receipt, stale, and invalid. A 15-minute age policy labels old receipts, without asserting server freshness. Expired windows are omitted at read time. A local transition task updates observation at reset/age boundaries even when automatic polling is disabled. LimitNotifier accepts Claude observations only from a valid, enabled ClaudeProvider; retained old/disconnected/waiting/invalid snapshots do not dispatch new notifications or advance tier state. Manual/automatic refresh only reads local files; no credentials, OAuth usage/profile requests, CLI probes, or delegated refresh exist in this source.
 - Statusline events may repeat unchanged quota; local receipt time is not a server sample timestamp. With Claude Code stopped or no new data, only a dated old snapshot can be shown. Window absence after the first API response can also mean an ineligible subscription; it does not mean zero usage.
-- Email, plan, per-model subscription caps, and extra-usage billing are not supplied. The UI does not reuse OAuth profile data or derive identity from a session ID. JSONL costs/tokens remain independent. New ledger days use its existing `default` bucket; existing unique daily storage keys are reused solely to prevent duplicate counting, never as current account identity. Ambiguous legacy days remain unchanged with an explicit cost-history notice. No ledger schema, sync format, or other provider changes are needed.
+- The Claude quota sheet shows a small data-state icon beside the account, with an accessibility label and source and receipt details in its tooltip. The footer uses MyUsage’s local refresh time. Provider settings also show receipt details. `ClaudeLocalAccount` separately decodes only `oauthAccount.emailAddress`, `organizationType`, and `profileFetchedAt` from the user-owned local `.claude.json` config (under `CLAUDE_CONFIG_DIR` when set, otherwise the home directory). Missing, malformed, unsafe, or oversized files yield no profile. Account headers display the email with a source/age tooltip and a plain plan-name label. This display-only cache cannot establish snapshot ownership and never populates `UsageSnapshot` identity or ledger keys. No credential access, CLI probe, profile request, or config write is involved.
+- Per-model subscription caps and extra-usage billing are not supplied. JSONL costs/tokens remain independent. New ledger days use its existing `default` bucket; existing unique daily storage keys are reused solely to prevent duplicate counting, never as current account identity. Ambiguous legacy days remain unchanged with an explicit cost-history notice. No ledger schema, sync format, or other provider changes are needed.
 - Legacy credential/usage caches are not read or migrated; existing Keychain items are left untouched. Existing statusline scripts can independently read credentials or call APIs; preserving them does not make those behaviors part of the new collector.
 
 **Billing model:** Optional rolling 5h + 7d subscription windows, separate from estimated JSONL cost.
@@ -156,22 +159,25 @@ UsageManager → ClaudeProvider → local snapshot + existing JSONL cost/token p
 
 | Item | Detail |
 |------|--------|
-| **Discovery** | `ps -ax` → find `language_server_macos.*antigravity`, extract `--csrf_token` |
+| **Discovery** | `ps -ax` → find `language_server.*antigravity`, extract optional `--csrf_token` |
 | **Port** | `lsof -nP -iTCP -sTCP:LISTEN -p <pid>` → probe each port |
-| **Probe** | `POST https://127.0.0.1:<port>/.../GetUnleashData` → first 200 OK |
-| **Usage API** | `POST https://127.0.0.1:<port>/exa.language_server_pb.LanguageServerService/GetUserStatus` |
-| **Fallback** | `POST .../GetCommandModelConfigs` |
+| **Probe** | `POST https://127.0.0.1:<port>/.../RetrieveUserQuotaSummary` or `GetUnleashData` |
+| **Usage API** | `POST https://127.0.0.1:<port>/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary` + `GetUserStatus` |
+| **Fallback RPC** | `POST .../GetCommandModelConfigs` |
 | **Headers** | `x-codeium-csrf-token: <token>`, `Connect-Protocol-Version: 1` |
-| **SQLite fallback** | `~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb` → `antigravityAuthStatus` |
+| **Opt-in CLI Statusline Fallback** | `AntigravityStatuslineBridge` (`~/.gemini/antigravity-cli/settings.json` / `ANTIGRAVITY_CLI_CONFIG_DIR`) → `MyUsage --antigravity-statusline` → `Application Support/MyUsage/AntigravityStatusline/snapshots/` |
+| **Local Transcript Logs** | `~/.gemini/antigravity/brain/<conversation-id>/.system_generated/logs/transcript.jsonl` |
 
 **Response fields:**
-- `userStatus.planStatus.planInfo.planName` — "Free" / "Pro" / "Teams" / "Ultra"
-- `userStatus.cascadeModelConfigData.clientModelConfigs[]`
+- `RetrieveUserQuotaSummary`: `groups[]` → `buckets[]` (`bucketId`, `window`, `remainingFraction`, `resetTime`)
+- `userStatus.planStatus.planInfo.planName` / `userStatus.userTier.name` — "Free" / "Pro" / "Teams" / "Ultra" / "Google AI Ultra"
+- `userStatus.cascadeModelConfigData.clientModelConfigs[]` (legacy)
   - `.label` — "Gemini 3 Pro (High)", "Claude Sonnet 4.5", etc.
   - `.quotaInfo.remainingFraction` — 0.0–1.0
   - `.quotaInfo.resetTime` — ISO 8601
+- `agy` `statusLine` stdin (allowlisted in `AntigravityStatuslineSnapshot`): `conversation_id`/`session_id`, `version`, `plan_tier`, `email`, and `quota` buckets (flat dictionary, grouped envelope, or bucket list). Reuses `ClaudePrivateFiles` (`0700`/`0600`, `flock`, atomic rename, backup-excluded). When no live tokenized language server is reachable (e.g. Antigravity 2.34+ stdin bridge token or CLI-only usage), `AntigravityProvider` falls back to statusline snapshots with the shared `StatuslineDataState`, 15-minute age policy, read-time bucket expiration, local transition timer, and valid-only `LimitNotifier` eligibility.
 
-**Billing model:** Per-model quota with 5h rolling window, fraction-based.
+**Billing model:** Grouped rolling windows (7d + 5h) or per-model quota, fraction-based, plus local transcript token/cache metrics.
 
 ## Token Refresh Summary
 

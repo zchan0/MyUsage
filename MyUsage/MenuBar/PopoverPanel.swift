@@ -31,9 +31,9 @@ final class PopoverPanel: NSPanel {
     private let visualEffectView: NSVisualEffectView
     private let hostingView: NSHostingView<AnyView>
 
-    /// Merged-mode convenience: hosts the Overview + tabs popover.
+    /// Merged-mode convenience: hosts the provider dock and selected deck.
     convenience init(manager: UsageManager, updateChecker: UpdateChecker) {
-        self.init(manager: manager, updateChecker: updateChecker, rootView: AnyView(UsagePopover()))
+        self.init(manager: manager, updateChecker: updateChecker, rootView: AnyView(UsagePopover(manager: manager)))
     }
 
     /// Host an arbitrary SwiftUI root (separate mode passes a single

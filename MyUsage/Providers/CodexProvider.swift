@@ -233,11 +233,14 @@ final class CodexProvider: BuiltinUsageProvider {
     /// Optional multi-device ledger (spec 12). Written after each successful
     /// `computeMonthlyCost`.
     private weak var ledger: LedgerSync?
+    private var localUsage: LocalUsageReport?
+    private let logRoots: [URL]
 
     // MARK: - Init
 
-    init(ledger: LedgerSync? = nil) {
+    init(ledger: LedgerSync? = nil, logRoots: [URL]? = nil) {
         self.ledger = ledger
+        self.logRoots = logRoots ?? CodexLogParser.defaultRoots()
         detectAvailability()
     }
 
@@ -331,6 +334,11 @@ final class CodexProvider: BuiltinUsageProvider {
                 mapped.email = identity?.email
                 mapped.resetCredits = usageBundle.resetCredits
                 mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
+                let roots = logRoots
+                localUsage = await Task.detached(priority: .utility) {
+                    CodexLogParser.scanLocalUsage(roots: roots)
+                }.value
+                mapped.localUsage = localUsage
                 snapshot = mapped
             }
 

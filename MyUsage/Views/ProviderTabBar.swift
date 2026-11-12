@@ -1,143 +1,207 @@
 import SwiftUI
 
-/// Which page the popover is showing.
-enum PopoverTab: Equatable {
-    case overview
-    case provider(ProviderID)
-}
-
-/// Overview remains fixed while provider instances scroll at their natural width.
-/// The overflow menu gives a direct route to every instance, even in a long list.
 struct ProviderTabBar: View {
     struct Item: Identifiable {
         let id: ProviderID
         let source: ProviderSource
         let name: String
-        @MainActor init(provider: any UsageProvider) { id = provider.id; source = provider.source; name = provider.shortName }
-        init(kind: ProviderKind) { id = .builtin(kind); source = .builtin(kind); name = kind.shortName }
-        init(id: ProviderID, source: ProviderSource, name: String) {
-            self.id = id; self.source = source; self.name = name
+        let needsAttention: Bool
+
+        @MainActor
+        init(provider: any UsageProvider, needsAttention: Bool) {
+            self.init(id: provider.id, source: provider.source, name: provider.shortName, needsAttention: needsAttention)
+        }
+
+        init(id: ProviderID, source: ProviderSource, name: String, needsAttention: Bool = false) {
+            self.id = id
+            self.source = source
+            self.name = name
+            self.needsAttention = needsAttention
         }
     }
 
     let items: [Item]
-    @Binding var selection: PopoverTab
-    @State private var railWidth: CGFloat = PopoverLayout.width
-    @State private var contentWidth: CGFloat = 0
-    private let overviewWidth: CGFloat = 80
-    private var overflows: Bool { contentWidth > railWidth - overviewWidth + 1 }
+    @Binding var selection: ProviderID
+    @Namespace private var dockNamespace
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hoveredID: ProviderID?
 
     var body: some View {
-        HStack(spacing: 0) {
-            segment(tab: .overview) {
-                Text("Overview")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(selection == .overview ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+        Group {
+            if items.count <= 4 {
+                HStack(spacing: 0) {
+                    ForEach(items) { slot($0, equalWidth: true) }
+                }
+            } else {
+                overflowDock
             }
-            .frame(width: overviewWidth)
+        }
+        .padding(4)
+        .background { PopoverWell(shape: RoundedRectangle(cornerRadius: 25, style: .continuous)) }
+        .padding(.horizontal, 11)
+        .padding(.top, 11)
+        .animation(PopoverMotion.selection, value: selection)
+        .onKeyPress(keys: [.leftArrow, .rightArrow], phases: .down) { press in
+            guard let index = items.firstIndex(where: { $0.id == selection }) else { return .ignored }
+            let offset = press.key == .leftArrow ? -1 : 1
+            select(items[(index + offset + items.count) % items.count].id)
+            return .handled
+        }
+    }
 
+    private var overflowDock: some View {
+        HStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     HStack(spacing: 0) {
                         ForEach(items) { item in
-                            let selected = selection == .provider(item.id)
-                            segment(tab: .provider(item.id)) {
-                                HStack(spacing: 4) {
-                                    ProviderInstanceIcon(source: item.source, size: 16, glyph: 9.5)
-                                        .opacity(selected ? 1 : 0.78)
-                                    Text(item.source == .builtin(.antigravity) ? "AG" : item.name)
-                                        .font(.system(size: 9.5, weight: .semibold))
-                                        .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                                        .lineLimit(1)
-                                }
-                                .padding(.horizontal, 10)
-                                .frame(minWidth: 58, maxWidth: 136)
-                                .fixedSize(horizontal: true, vertical: false)
-                            }
-                            .id(item.id)
-                            .help(item.name)
+                            slot(item, equalWidth: false)
+                                .id(item.id)
                         }
                     }
-                    .onSizeChange { contentWidth = $0.width }
+                    .padding(.horizontal, 6)
                 }
                 .scrollIndicators(.hidden)
-                .mask {
-                    if overflows {
-                        HStack(spacing: 0) {
-                            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 6)
-                            Rectangle()
-                            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 6)
-                        }
-                    } else { Rectangle() }
-                }
-                .onAppear { revealSelection(proxy) }
-                .onChange(of: selection) { _, _ in revealSelection(proxy) }
-                .onChange(of: items.map(\.id)) { _, _ in revealSelection(proxy) }
-                .onChange(of: overflows) { _, _ in revealSelection(proxy) }
-            }
-            .frame(height: 46)
-
-            if overflows {
-                Menu {
-                    ForEach(items) { item in
-                        Button { selection = .provider(item.id) } label: {
-                            if selection == .provider(item.id) { Label(item.name, systemImage: "checkmark") }
-                            else { Text(item.name) }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "list.bullet")
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).controlSize(.mini)
-                .frame(width: 28, height: 46)
-                .accessibilityLabel("All providers (\(items.count))")
-                .help("All providers (\(items.count))")
-            }
-        }
-        .frame(height: 46)
-        .onSizeChange { railWidth = $0.width }
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 0.5)
-        }
-    }
-
-    private func revealSelection(_ proxy: ScrollViewProxy) {
-        guard case .provider(let id) = selection else { return }
-        withAnimation(.easeInOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) }
-    }
-
-    private func segment(tab: PopoverTab, @ViewBuilder content: () -> some View) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.15)) { selection = tab }
-        } label: {
-            content()
-                .frame(maxWidth: .infinity)
                 .frame(height: 46)
-                .overlay(alignment: .bottom) {
-                    if selection == tab {
-                        Capsule().fill(Color.primary.opacity(0.86)).frame(maxWidth: 44).frame(height: 2)
+                .scrollClipDisabled()
+                .mask {
+                    HStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: 6)
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: 6)
+                    }
+                    .padding(.vertical, -4)
+                }
+                .onAppear { proxy.scrollTo(selection, anchor: .center) }
+                .onChange(of: selection) { _, id in
+                    withAnimation(PopoverMotion.selection) { proxy.scrollTo(id, anchor: .center) }
+                }
+                .onChange(of: items.map(\.id)) { _, _ in
+                    withAnimation(PopoverMotion.selection) { proxy.scrollTo(selection, anchor: .center) }
+                }
+            }
+
+            Menu {
+                ForEach(items) { item in
+                    Button { select(item.id) } label: {
+                        if selection == item.id {
+                            Label(item.name, systemImage: "checkmark")
+                        } else {
+                            Text(item.name)
+                        }
                     }
                 }
-                .contentShape(Rectangle())
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(PopoverPalette(colorScheme).inkSecondary)
+                    .frame(width: 24, height: 24)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("All providers")
+            .help("All providers")
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selection == tab ? .isSelected : [])
+    }
+
+    private func slot(_ item: Item, equalWidth: Bool) -> some View {
+        let palette = PopoverPalette(colorScheme)
+        let selected = selection == item.id
+        let hovered = hoveredID == item.id
+        return Button {
+            select(item.id)
+        } label: {
+            VStack(spacing: 3.5) {
+                glyph(for: item.source, palette: palette)
+                    .frame(width: 16, height: 16)
+                    .opacity(selected ? 1 : 0.72)
+                    .offset(y: selected ? -0.5 : 0)
+                    .overlay(alignment: .topTrailing) {
+                        Circle()
+                            .fill(palette.warnFill)
+                            .frame(width: 5, height: 5)
+                            .offset(x: 5, y: -1)
+                            .opacity(!selected && item.needsAttention ? 1 : 0)
+                            .animation(PopoverMotion.selection, value: item.needsAttention)
+                    }
+                    .accessibilityHidden(true)
+
+                Text(item.name)
+                    .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected || hovered ? palette.inkPrimary : palette.inkSecondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, equalWidth ? 4 : 10)
+            .frame(minWidth: equalWidth ? 0 : 64, maxWidth: equalWidth ? .infinity : 136)
+            .padding(.top, 7)
+            .padding(.bottom, 6)
+            .background {
+                if selected {
+                    PopoverLens(shape: RoundedRectangle(cornerRadius: 21, style: .continuous))
+                        .matchedGeometryEffect(id: "dockLens", in: dockNamespace)
+                        .transition(.identity)
+                } else {
+                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                        .fill(hovered ? palette.rowHover : .clear)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DockButtonStyle())
+        .keyboardShortcut(shortcut(for: item.id))
+        .onHover { inside in
+            withAnimation(PopoverMotion.hover) {
+                if inside { hoveredID = item.id }
+                else if hoveredID == item.id { hoveredID = nil }
+            }
+        }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityValue(item.needsAttention && !selected ? "Usage needs attention" : "")
+        .help(item.name)
+    }
+
+    @ViewBuilder
+    private func glyph(for source: ProviderSource, palette: PopoverPalette) -> some View {
+        switch source {
+        case .builtin(let kind):
+            ProviderIcon(kind: kind, size: 16, fillHex: palette.brandHex(for: kind))
+        case .gateway:
+            if let image = ProviderTemplateIcon.image(for: source) {
+                Image(nsImage: image)
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(source.usageTint(for: colorScheme))
+            }
+        }
+    }
+
+    private func select(_ id: ProviderID) {
+        withAnimation(PopoverMotion.selection) { selection = id }
+    }
+
+    private func shortcut(for id: ProviderID) -> KeyboardShortcut? {
+        guard let index = items.prefix(4).firstIndex(where: { $0.id == id }) else { return nil }
+        return KeyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [])
+    }
+}
+
+private struct DockButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(PopoverMotion.hover, value: configuration.isPressed)
     }
 }
 
 #if DEBUG
-private struct ProviderRailPreview: View {
-    let count: Int
-    @State private var selection = PopoverTab.overview
-    var body: some View {
-        ProviderTabBar(items: (0..<count).map { index in
-            if index < ProviderKind.allCases.count { return .init(kind: ProviderKind.allCases[index]) }
-            return .init(id: .init(rawValue: "preview:\(index)"), source: .gateway(.litellm), name: "Company gateway \(index - 3)")
-        }, selection: $selection)
-        .frame(width: PopoverLayout.width)
-    }
+#Preview("Capsule dock · Overflow") {
+    let manager = PreviewFixtures.manager(providerCount: 4, gateway: .full, gatewayCount: 3)
+    UsagePopover(manager: manager, previewSelection: .builtin(.codex))
+        .environment(manager)
+        .environment(UpdateChecker())
 }
-#Preview("Provider rail · 2") { ProviderRailPreview(count: 2) }
-#Preview("Provider rail · 6") { ProviderRailPreview(count: 6) }
-#Preview("Provider rail · 30") { ProviderRailPreview(count: 30) }
 #endif

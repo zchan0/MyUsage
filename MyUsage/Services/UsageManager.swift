@@ -318,6 +318,9 @@ final class UsageManager {
             if provider.kind == .claude, snapshot.sessionUsage == nil, snapshot.weeklyUsage == nil {
                 return nil
             }
+            if provider.kind == .antigravity, snapshot.modelQuotas.isEmpty {
+                return nil
+            }
             // Prefix the worst window (5h·90% / wk·62%) so the number
             // isn't ambiguous when it jumps between windows. Antigravity's
             // quotas have no window label → bare percentage.
@@ -327,9 +330,6 @@ final class UsageManager {
             // (e.g. the reset countdown "2h 14m · 16:30") and gives the
             // menu-bar label breathing room — "7d·62%" read as cramped.
             let label = worst.label.map { "\($0) · \(pct)" } ?? pct
-            if let claude = provider as? ClaudeProvider {
-                return label + (claude.dataState == .valid ? " · snapshot" : " · old")
-            }
             return label
         }
     }

@@ -5,18 +5,19 @@ import os
 @Observable
 @MainActor
 final class ClaudeProvider: BuiltinUsageProvider {
-    enum DataState: String {
-        case notConnected, waiting, valid, stale, invalid
-    }
+    typealias DataState = StatuslineDataState
 
     let kind = ProviderKind.claude
     var isAvailable: Bool { connected || receipt != nil }
     var isEnabled = true
     private(set) var isLoading = false
     private(set) var receipt: ClaudeStatuslineSnapshot?
+    private(set) var localAccount: ClaudeLocalAccount?
     private var readIssue: String?
     private var connected = false
+    private(set) var bridgeState: StatuslineBridgeState = .notInstalled
     private var monthlyCost: Double?
+    private var localUsage: LocalUsageReport?
     private var costHistoryIssue: String?
     private var timeRevision = 0
     @ObservationIgnored private var transitionTask: Task<Void, Never>?
@@ -24,6 +25,7 @@ final class ClaudeProvider: BuiltinUsageProvider {
     let bridge: ClaudeStatuslineBridge
     private let logRoots: [URL]
     private let costCacheURL: URL
+    private let accountURL: URL
     private let now: @Sendable () -> Date
     private weak var ledger: LedgerSync?
 
@@ -36,6 +38,7 @@ final class ClaudeProvider: BuiltinUsageProvider {
         bridge: ClaudeStatuslineBridge? = nil,
         logRoots: [URL]? = nil,
         costCacheURL: URL = ClaudeCostCache.defaultFileURL,
+        accountURL: URL = ClaudeLocalAccount.defaultURL(),
         now: @escaping @Sendable () -> Date = { .now }
     ) {
         self.ledger = ledger
@@ -43,6 +46,7 @@ final class ClaudeProvider: BuiltinUsageProvider {
         self.bridge = bridge ?? ClaudeStatuslineBridge(directory: directory)
         self.logRoots = logRoots ?? ClaudeLogParser.defaultRoots()
         self.costCacheURL = costCacheURL
+        self.accountURL = accountURL
         self.now = now
         readLocalQuota()
     }
@@ -60,6 +64,8 @@ final class ClaudeProvider: BuiltinUsageProvider {
         }
         return .valid
     }
+
+    var statuslineIssue: String? { readIssue }
 
     var stateLabel: String {
         switch dataState {
@@ -98,6 +104,7 @@ final class ClaudeProvider: BuiltinUsageProvider {
         _ = timeRevision
         var result = receipt.map { Self.mapToSnapshot($0, now: now()) } ?? UsageSnapshot()
         result.monthlyEstimatedCost = monthlyCost
+        result.localUsage = localUsage
         return result
     }
 
@@ -111,16 +118,22 @@ final class ClaudeProvider: BuiltinUsageProvider {
         let roots = logRoots
         let cache = costCacheURL
         let date = now()
-        monthlyCost = await Task.detached(priority: .utility) {
-            Self.computeMonthlyCostSync(roots: roots, now: date, cacheURL: cache)
+        let (cost, usage) = await Task.detached(priority: .utility) {
+            (Self.computeMonthlyCostSync(roots: roots, now: date, cacheURL: cache),
+             ClaudeLogParser.scanLocalUsage(roots: roots, now: date))
         }.value
+        monthlyCost = cost
+        localUsage = usage
         await recordDailyCostsToLedger()
     }
 
     private func readLocalQuota() {
         defer { scheduleTimeTransition() }
-        connected = bridge.isInstalled
-        readIssue = bridge.hasInstallation && !connected
+        localAccount = ClaudeLocalAccount.read(from: accountURL)
+        let state = bridge.integrationState
+        bridgeState = state
+        connected = (state == .installed || state == .appMoved)
+        readIssue = state == .modifiedExternally
             ? "The configured statusline no longer matches MyUsage. Your configuration was preserved." : nil
         do {
             let read = try store.read()
@@ -138,8 +151,9 @@ final class ClaudeProvider: BuiltinUsageProvider {
         guard let receipt else { return }
         let date = now().timeIntervalSince1970
         let boundaries = [receipt.rateLimits.fiveHour?.resetsAt, receipt.rateLimits.sevenDay?.resetsAt,
-                          receipt.receivedAt + Self.staleAfter + 0.01, receipt.receivedAt - 60]
-        guard let next = boundaries.compactMap({ $0 }).filter({ $0 > date }).min() else { return }
+                          receipt.receivedAt + Self.staleAfter + 0.01, receipt.receivedAt - 60].compactMap { $0 }
+        let grantExpirations = receipt.resetCredits?.compactMap(\.endsAt) ?? []
+        guard let next = (boundaries + grantExpirations).filter({ $0 > date }).min() else { return }
         transitionTask = Task { [weak self] in
             do { try await Task.sleep(for: .seconds(next - date)) } catch { return }
             guard let self else { return }
@@ -160,6 +174,34 @@ final class ClaudeProvider: BuiltinUsageProvider {
         snapshot.sessionUsage = window(receipt.rateLimits.fiveHour, duration: 5 * 3600)
         snapshot.weeklyUsage = window(receipt.rateLimits.sevenDay, duration: 7 * 86400)
         snapshot.lastRefreshed = Date(timeIntervalSince1970: receipt.receivedAt)
+        if let grants = receipt.resetCredits {
+            let active = grants.filter { grant in
+                grant.isValid && grant.resetsLeft > 0 && grant.usableNow != false
+                    && (grant.endsAt.map { $0 > now.timeIntervalSince1970 } ?? true)
+            }
+            if !active.isEmpty {
+                let sorted = active.sorted { left, right in
+                    switch (left.endsAt, right.endsAt) {
+                    case let (a?, b?) where a != b: return a < b
+                    case (_?, nil): return true
+                    case (nil, _?): return false
+                    default: return left.id < right.id
+                    }
+                }
+                snapshot.resetCredits = ResetCreditInventory(
+                    reportedAvailableCount: active.reduce(0) { $0 + $1.resetsLeft },
+                    availableCredits: sorted.map { grant in
+                        ResetCredit(
+                            id: grant.id,
+                            label: grant.label,
+                            count: grant.resetsLeft,
+                            expiresAt: grant.endsAt.map { Date(timeIntervalSince1970: $0) }
+                        )
+                    },
+                    fetchedAt: snapshot.lastRefreshed
+                )
+            }
+        }
         // Statusline provides no account/profile information or per-model subscription caps.
         return snapshot
     }

@@ -4,10 +4,14 @@ import AppKit
 @main
 enum MyUsageMain {
     static func main() {
-        if CommandLine.arguments.dropFirst().first == "--claude-statusline" {
+        switch CommandLine.arguments.dropFirst().first {
+        case "--claude-statusline":
             exit(ClaudeStatuslineCommand.run(arguments: CommandLine.arguments))
+        case "--antigravity-statusline":
+            exit(AntigravityStatuslineCommand.run(arguments: CommandLine.arguments))
+        default:
+            MyUsageApp.main()
         }
-        MyUsageApp.main()
     }
 }
 

@@ -56,7 +56,7 @@ struct LimitNotifierTests {
                 to: fixture.store.snapshotsDirectory.appendingPathComponent("damaged.json"))
         }
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge,
-                                      logRoots: [], now: { now })
+                                      logRoots: [], accountURL: fixture.accountURL, now: { now })
         provider.isEnabled = scenario != .disabled
         let expectedState: ClaudeProvider.DataState = switch scenario {
         case .valid, .disabled: .valid
@@ -83,6 +83,64 @@ struct LimitNotifierTests {
         let notifier = LimitNotifier(center: dispatcher, defaults: defaults)
         await notifier.evaluate(observations: observations, warnThreshold: 80, critThreshold: 95, enabled: true)
         #expect(state(defaults)["claude.weekly"] == (scenario == .valid ? "crit" : "warn"))
+        #expect((await dispatcher.firstTitle() != nil) == (scenario == .valid))
+    }
+
+    @Test("Only valid, enabled Antigravity statusline snapshots can generate new notifications",
+          arguments: ClaudeSnapshotScenario.allCases)
+    @MainActor
+    func antigravityStatuslineNotificationEligibility(scenario: ClaudeSnapshotScenario) async throws {
+        let fixture = try AntigravityStatuslineFixture()
+        defer { fixture.cleanup() }
+        try fixture.bridge.enable()
+        let now = fixture.now
+        let quota = """
+        "gemini-5h":{"remaining_fraction":0.03,"resets_at":\(now.timeIntervalSince1970 + 3600)},
+        "gemini-weekly":{"remaining_fraction":0.03,"resets_at":\(now.timeIntervalSince1970 + 7 * 86400)}
+        """
+        try fixture.store.write(
+            fixture.input(quota: scenario == .waiting ? "" : quota),
+            now: scenario == .stale ? now.addingTimeInterval(-86400) : now
+        )
+        if scenario == .disconnected { try fixture.bridge.disable() }
+        if scenario == .invalid {
+            try ClaudePrivateFiles.atomicWrite(
+                Data("broken".utf8),
+                to: fixture.store.snapshotsDirectory.appendingPathComponent("damaged.json")
+            )
+        }
+        let provider = AntigravityProvider(
+            directory: fixture.directory,
+            bridge: fixture.bridge,
+            logRoots: [],
+            now: { now },
+            processFinder: { [] },
+            hasLocalInstallation: { false }
+        )
+        provider.isEnabled = scenario != .disabled
+        let expectedState: StatuslineDataState = switch scenario {
+        case .valid, .disabled: .valid
+        case .stale: .stale
+        case .disconnected: .notConnected
+        case .waiting: .waiting
+        case .invalid: .invalid
+        }
+        #expect(provider.statuslineDataState == expectedState)
+        if scenario != .waiting {
+            #expect(provider.snapshot?.modelQuotas.count == 2)
+        }
+        let observations = LimitNotifier.observations(from: provider)
+        #expect(LimitNotifier.observations(from: [provider]) == observations)
+        #expect(observations.count == (scenario == .valid ? 2 : 0))
+
+        let suite = "LimitNotifierTests.AntigravityStatusline.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(["antigravity.model.gemini-weekly": "warn"], forKey: "MyUsage.notifierState")
+        let dispatcher = RecordingNotificationDispatcher()
+        let notifier = LimitNotifier(center: dispatcher, defaults: defaults)
+        await notifier.evaluate(observations: observations, warnThreshold: 80, critThreshold: 95, enabled: true)
+        #expect(state(defaults)["antigravity.model.gemini-weekly"] == (scenario == .valid ? "crit" : "warn"))
         #expect((await dispatcher.firstTitle() != nil) == (scenario == .valid))
     }
 

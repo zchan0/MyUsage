@@ -237,6 +237,38 @@ final class CapacityFocusTests: XCTestCase {
         XCTAssertEqual(CapacityFocus.select(from: [unknown, past], now: now), past)
     }
 
+    func testAntigravityGroupedRollingBucketsComputePaceAndRisk() throws {
+        var snapshot = UsageSnapshot()
+        snapshot.modelQuotas = [
+            ModelQuota(
+                label: "Gemini Models · 7d",
+                remainingFraction: 0.40, // 60% used
+                resetsAt: now.addingTimeInterval(5 * 86_400), // 2d of 7d elapsed (~28.6%)
+                groupName: "Gemini Models",
+                windowLabel: "7d",
+                windowDuration: 7 * 86_400,
+                bucketId: "gemini-weekly"
+            ),
+            ModelQuota(
+                label: "Gemini Models · 5h",
+                remainingFraction: 0.90, // 10% used
+                resetsAt: now.addingTimeInterval(3 * 3_600), // 2h of 5h elapsed (40%)
+                groupName: "Gemini Models",
+                windowLabel: "5h",
+                windowDuration: 5 * 3_600,
+                bucketId: "gemini-5h"
+            ),
+        ]
+
+        let metrics = CapacityFocus.metrics(providerKind: .antigravity, snapshot: snapshot, now: now)
+        XCTAssertEqual(metrics.count, 2)
+
+        let weekly = try XCTUnwrap(metrics.first { $0.label == "Gemini Models · 7d" })
+        XCTAssertEqual(try XCTUnwrap(weekly.pacePercent), 2.0 / 7.0 * 100, accuracy: 0.01)
+        XCTAssertTrue(weekly.hasCapacityRisk)
+        XCTAssertEqual(CapacityFocus.select(from: metrics, now: now)?.label, "Gemini Models · 7d")
+    }
+
     private func metric(
         _ provider: ProviderKind,
         _ label: String,

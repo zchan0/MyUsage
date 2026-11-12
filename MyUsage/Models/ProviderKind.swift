@@ -4,8 +4,8 @@ import SwiftUI
 enum ProviderKind: String, CaseIterable, Identifiable, Codable {
     case claude = "claude"
     case codex = "codex"
-    case cursor = "cursor"
     case antigravity = "antigravity"
+    case cursor = "cursor"
 
     var id: String { rawValue }
 
