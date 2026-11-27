@@ -11,7 +11,6 @@ struct ClaudeProviderTests {
         defer { fixture.cleanup() }
         let now = fixture.now
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
-                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"),
                                       accountURL: fixture.accountURL, now: { now })
         #expect(provider.dataState == .notConnected)
         #expect(!FileManager.default.fileExists(atPath: fixture.settings.path))
@@ -29,7 +28,6 @@ struct ClaudeProviderTests {
         #expect(provider.snapshot?.weeklyUsage?.percentUsed == 0)
         #expect(provider.snapshot?.email == nil)
         #expect(provider.snapshot?.planName == nil)
-        #expect(provider.snapshot?.monthlyEstimatedCost == 0)
         #expect(provider.snapshot?.weeklyByModel.isEmpty == true)
         #expect(provider.snapshot?.lastRefreshed == now)
         #expect(provider.sourceMessage.contains("Received locally"))
@@ -48,9 +46,7 @@ struct ClaudeProviderTests {
         let suite = "claude-menu-bar-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let ledger = LedgerSync(store: try LedgerStore(path: LedgerStore.inMemoryPath),
-                                syncRoot: LocalSyncRoot(url: fixture.root))
-        let manager = UsageManager(ledger: ledger, providers: [provider], startsLedger: false, defaults: defaults)
+        let manager = UsageManager(providers: [provider], backgroundServicesEnabled: false, defaults: defaults)
         manager.iconTrackProvider = provider.id.rawValue
         #expect(provider.dataState == (stale ? .stale : .valid))
         #expect(manager.menuBarText(for: .claude) == "7d · 41%")
@@ -70,7 +66,6 @@ struct ClaudeProviderTests {
         #expect(mapped.weeklyUsage?.percentUsed == 41.2)
         try fixture.store.write(fixture.input(), now: fixture.now)
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
-                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"),
                                       accountURL: fixture.accountURL, now: { afterFiveHourReset })
         #expect(provider.dataState == .stale)
         #expect(provider.snapshot?.lastRefreshed == fixture.now)
@@ -146,13 +141,11 @@ struct ClaudeProviderTests {
         defer { fixture.cleanup() }
         let now = fixture.now
         let provider = ClaudeProvider(directory: fixture.directory, bridge: fixture.bridge, logRoots: [],
-                                      costCacheURL: fixture.root.appendingPathComponent("cost.json"),
                                       accountURL: fixture.accountURL, now: { now })
         let suite = "claude-manager-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let ledger = LedgerSync(store: try LedgerStore(path: LedgerStore.inMemoryPath), syncRoot: LocalSyncRoot(url: fixture.root))
-        let manager = UsageManager(ledger: ledger, providers: [provider], startsLedger: false, defaults: defaults)
+        let manager = UsageManager(providers: [provider], backgroundServicesEnabled: false, defaults: defaults)
         provider.isEnabled = true
         for trigger in [UsageRefreshTrigger.automatic, .manual] {
             await manager.refreshAll(trigger: trigger)
@@ -221,11 +214,10 @@ struct ClaudeProviderTests {
     }
 
     @Test @MainActor
-    func costsKeepDailyStorageKeysWithoutReusingAccountIdentityOrDuplicatingHistory() async throws {
+    func localUsageScanPopulatesReportedCostsAndTokensWithoutAccountIdentity() async throws {
         let f = try ClaudeStatuslineFixture()
         defer { f.cleanup() }
         let date = Date.now
-        let days = (0..<3).map { LedgerCalendar.dayKey(for: date.addingTimeInterval(Double(-86400 * $0))) }
         let logs = f.root.appendingPathComponent("synthetic-logs")
         try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
         let rows = (0..<3).map { i in
@@ -235,36 +227,11 @@ struct ClaudeProviderTests {
             """
         }.joined(separator: "\n")
         try Data(rows.utf8).write(to: logs.appendingPathComponent("session.jsonl"))
-        let store = try LedgerStore(path: LedgerStore.inMemoryPath)
-        let ledger = LedgerSync(store: store, syncRoot: LocalSyncRoot(url: f.root.appendingPathComponent("sync")))
-        let oldDate = date.addingTimeInterval(-100)
-        _ = try store.upsert([
-            LedgerEntry(deviceId: ledger.selfDeviceID, accountId: "legacy-storage-key", provider: .claude,
-                        day: days[0], costUSD: 0.5, recordedAt: oldDate),
-            LedgerEntry(deviceId: ledger.selfDeviceID, accountId: "legacy-a", provider: .claude,
-                        day: days[2], costUSD: 1, recordedAt: oldDate),
-            LedgerEntry(deviceId: ledger.selfDeviceID, accountId: "legacy-b", provider: .claude,
-                        day: days[2], costUSD: 2, recordedAt: oldDate),
-            LedgerEntry(deviceId: ledger.selfDeviceID, accountId: "other-provider", provider: .codex,
-                        day: days[0], costUSD: 9, recordedAt: oldDate)
-        ])
-        let provider = ClaudeProvider(ledger: ledger, directory: f.directory, bridge: f.bridge, logRoots: [logs],
-                                      costCacheURL: f.root.appendingPathComponent("cost.json"), accountURL: f.accountURL)
+        let provider = ClaudeProvider(directory: f.directory, bridge: f.bridge, logRoots: [logs], accountURL: f.accountURL)
         await provider.refresh(trigger: .manual)
-        await provider.refresh(trigger: .automatic)
-        let entries = try store.entries(forDevice: ledger.selfDeviceID)
-        let claude = entries.filter { $0.provider == "claude" }
-        #expect(claude.count == 4)
-        #expect(claude.first { $0.day == days[0] }?.accountId == "legacy-storage-key")
-        #expect(claude.first { $0.day == days[0] }?.costUSD == 2)
-        #expect(claude.first { $0.day == days[0] }?.tokenUsage?.input == 10)
-        #expect(claude.first { $0.day == days[1] }?.accountId == "default")
-        #expect(claude.filter { $0.day == days[2] }.map(\.costUSD).sorted() == [1, 2])
-        #expect(entries.first { $0.provider == "codex" }?.costUSD == 9)
         #expect(provider.snapshot?.localUsage?.summary30d.reportedCostUSD == 6)
         #expect(provider.snapshot?.localUsage?.summary30d.totalTokens == 33)
         #expect(provider.snapshot?.email == nil)
         #expect(provider.snapshot?.planName == nil)
-        #expect(provider.sourceMessage.contains("Ambiguous legacy cost days were preserved"))
     }
 }

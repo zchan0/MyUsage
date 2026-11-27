@@ -5,345 +5,41 @@ import Foundation
 @Suite("ClaudeLogParser Tests")
 struct ClaudeLogParserTests {
 
-    // MARK: - Line parsing
-
-    @Test("Parses a typical assistant row")
-    func parsesAssistantRow() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":10,"cache_read_input_tokens":200}}}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50, cacheWrite: 10, cacheRead: 200))
-    }
-
-    @Test("Lowercases model name for stable lookup")
-    func lowercasesModel() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"Claude-Sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc["claude-sonnet-4-5"] != nil)
-    }
-
-    @Test("Ignores non-assistant rows")
-    func ignoresNonAssistant() {
-        let jsonl = """
-        {"type":"user","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":1000,"output_tokens":2000}}}
-        {"type":"progress"}
-        {"type":"queue-operation"}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc.isEmpty)
-    }
-
-    @Test("Ignores rows with zero tokens")
-    func ignoresZero() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":0,"output_tokens":0}}}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc.isEmpty)
-    }
-
-    @Test("Handles missing optional cache fields")
-    func missingCacheFields() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-opus-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc["claude-opus-4-5"] == TokenUsage(input: 100, output: 50))
-    }
-
-    @Test("Skips malformed lines and continues")
-    func skipsMalformed() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}
-        {not json
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":20,"output_tokens":10}}}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc["claude-sonnet-4-5"] == TokenUsage(input: 30, output: 15))
-    }
-
-    @Test("Aggregates multiple models")
-    func multipleModels() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        {"type":"assistant","message":{"model":"claude-opus-4-5","usage":{"input_tokens":200,"output_tokens":100}}}
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}
-        """.data(using: .utf8)!
-        var acc: UsageByModel = [:]
-        ClaudeLogParser.parse(data: jsonl, into: &acc)
-        #expect(acc["claude-sonnet-4-5"] == TokenUsage(input: 110, output: 55))
-        #expect(acc["claude-opus-4-5"] == TokenUsage(input: 200, output: 100))
-    }
-
-    // MARK: - File scanning
-
-    @Test("Scans only files modified since the cutoff")
-    func scansSinceCutoff() throws {
-        let fm = FileManager.default
-        let tmpRoot = fm.temporaryDirectory.appendingPathComponent("claude-log-test-\(UUID().uuidString)")
-        try fm.createDirectory(at: tmpRoot, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: tmpRoot) }
-
-        let nested = tmpRoot.appendingPathComponent("-Users-me/proj")
-        try fm.createDirectory(at: nested, withIntermediateDirectories: true)
-
-        let recentFile = nested.appendingPathComponent("recent.jsonl")
-        let oldFile    = nested.appendingPathComponent("old.jsonl")
-        let irrelevantFile = nested.appendingPathComponent("ignore.txt")
-
-        let row = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        """
-        try row.write(to: recentFile, atomically: true, encoding: .utf8)
-        try row.write(to: oldFile, atomically: true, encoding: .utf8)
-        try "plain text".write(to: irrelevantFile, atomically: true, encoding: .utf8)
-
-        // Push old file's mtime 60 days back
-        let oldDate = Date(timeIntervalSinceNow: -60 * 24 * 3600)
-        try fm.setAttributes([.modificationDate: oldDate], ofItemAtPath: oldFile.path)
-
-        let cutoff = Date(timeIntervalSinceNow: -24 * 3600) // yesterday
-        let result = ClaudeLogParser.scan(roots: [tmpRoot], since: cutoff)
-
-        // Only the recent one should count
-        #expect(result["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
-    }
-
-    @Test("Non-existent root is OK")
+    @Test("Non-existent root yields empty local usage report")
     func nonexistentRoot() {
         let fake = URL(fileURLWithPath: "/tmp/__nope_\(UUID().uuidString)__")
-        let result = ClaudeLogParser.scan(roots: [fake], since: .distantPast)
-        #expect(result.isEmpty)
+        let report = ClaudeLogParser.scanLocalUsage(roots: [fake], now: .now)
+        #expect(report.summary30d.totalTokens == 0)
+        #expect(report.orderedModelNames.isEmpty)
+        #expect(!report.hasReportedCost)
     }
 
-    // MARK: - maxMtime
-
-    @Test("maxMtime returns nil for empty / missing roots")
-    func maxMtimeEmpty() {
-        let fake = URL(fileURLWithPath: "/tmp/__nope_\(UUID().uuidString)__")
-        #expect(ClaudeLogParser.maxMtime(roots: [fake], since: .distantPast) == nil)
-    }
-
-    @Test("maxMtime returns the latest in-scope mtime")
-    func maxMtimeLatest() throws {
+    @Test("Skips malformed lines, non-assistant rows, and zero-token rows")
+    func skipsMalformedAndNoise() throws {
         let fm = FileManager.default
-        let root = fm.temporaryDirectory
-            .appendingPathComponent("claude-mtime-\(UUID().uuidString)", isDirectory: true)
+        let root = fm.temporaryDirectory.appendingPathComponent("claude-local-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
 
-        let a = root.appendingPathComponent("a.jsonl")
-        let b = root.appendingPathComponent("b.jsonl")
-        let c = root.appendingPathComponent("c.jsonl")
-        try "{}".write(to: a, atomically: true, encoding: .utf8)
-        try "{}".write(to: b, atomically: true, encoding: .utf8)
-        try "{}".write(to: c, atomically: true, encoding: .utf8)
-
-        let t1 = Date(timeIntervalSince1970: 1_700_000_000)
-        let t2 = Date(timeIntervalSince1970: 1_700_000_100)
-        let t3 = Date(timeIntervalSince1970: 1_700_000_050)
-        try fm.setAttributes([.modificationDate: t1], ofItemAtPath: a.path)
-        try fm.setAttributes([.modificationDate: t2], ofItemAtPath: b.path)
-        try fm.setAttributes([.modificationDate: t3], ofItemAtPath: c.path)
-
-        let max = ClaudeLogParser.maxMtime(roots: [root], since: .distantPast)
-        #expect(max != nil)
-        #expect(abs((max ?? .distantPast).timeIntervalSince(t2)) < 1)
-    }
-
-    @Test("maxMtime ignores files older than since and non-jsonl files")
-    func maxMtimeFilter() throws {
-        let fm = FileManager.default
-        let root = fm.temporaryDirectory
-            .appendingPathComponent("claude-mtime-\(UUID().uuidString)", isDirectory: true)
-        try fm.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: root) }
-
-        let old = root.appendingPathComponent("old.jsonl")
-        let txt = root.appendingPathComponent("new.txt")
-        try "{}".write(to: old, atomically: true, encoding: .utf8)
-        try "hi".write(to: txt, atomically: true, encoding: .utf8)
-
-        let ancient = Date(timeIntervalSinceNow: -60 * 24 * 3600)
-        try fm.setAttributes([.modificationDate: ancient], ofItemAtPath: old.path)
-
-        let cutoff = Date(timeIntervalSinceNow: -24 * 3600)
-        // Only ancient jsonl exists and it's older than cutoff; txt is filtered by extension.
-        #expect(ClaudeLogParser.maxMtime(roots: [root], since: cutoff) == nil)
-    }
-
-    // MARK: - costUSD breakdown
-
-    @Test("costUSD row contributes to preComputedCost and skips tokens")
-    func costUSDPreferred() {
-        let jsonl = """
-        {"type":"assistant","costUSD":0.1234,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":1000,"output_tokens":500}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
-        #expect(acc.preComputedCost == 0.1234)
-        #expect(acc.tokensByModel.isEmpty)
-    }
-
-    @Test("Row without costUSD falls back to token bucket")
-    func noCostUSDFallsBackToTokens() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
-        #expect(acc.preComputedCost == 0)
-        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
-    }
-
-    // MARK: - Row-level window filtering
-    //
-    // Regression cover for the monthly cost estimate reading ~$123 on
-    // 2026-08-01 when actual August spend was ~$11: a session resumed that day
-    // rewrote a file whose transcript reached back into July, and every July
-    // row was charged to August because only the *file* mtime was checked.
-
-    private static let augustStart = ISO8601DateFormatter()
-        .date(from: "2026-08-01T00:00:00Z")!
-
-    @Test("Rows older than the window are excluded even when the file is in range")
-    func rowsBeforeWindowAreDropped() {
-        let jsonl = """
-        {"type":"assistant","timestamp":"2026-07-28T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":900,"output_tokens":900}}}
-        {"type":"assistant","timestamp":"2026-08-01T10:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-
-        ClaudeLogParser.parseBreakdown(
-            data: jsonl,
-            into: &acc,
-            since: Self.augustStart,
-            fallback: Self.augustStart
-        )
-
-        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
-    }
-
-    @Test("Pre-window costUSD rows are excluded too")
-    func preComputedCostRespectsWindow() {
-        let jsonl = """
-        {"type":"assistant","costUSD":9.99,"timestamp":"2026-07-28T10:00:00Z","message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
-        {"type":"assistant","costUSD":0.25,"timestamp":"2026-08-02T10:00:00Z","message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-
-        ClaudeLogParser.parseBreakdown(
-            data: jsonl,
-            into: &acc,
-            since: Self.augustStart,
-            fallback: Self.augustStart
-        )
-
-        #expect(abs(acc.preComputedCost - 0.25) < 1e-9)
-    }
-
-    /// A row with no timestamp cannot be placed, so it inherits the file's
-    /// mtime — which the caller already checked is in range.
-    @Test("Undated rows fall back to the file mtime")
-    func undatedRowsUseFallback() {
-        let jsonl = """
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-
-        ClaudeLogParser.parseBreakdown(
-            data: jsonl,
-            into: &acc,
-            since: Self.augustStart,
-            fallback: Self.augustStart.addingTimeInterval(3_600)
-        )
-
-        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
-    }
-
-    @Test("Omitting the window keeps counting every row")
-    func noWindowCountsEverything() {
-        let jsonl = """
-        {"type":"assistant","timestamp":"2020-01-01T00:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-
-        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
-
-        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
-    }
-
-    @Test("Mixed rows split between cost and token buckets")
-    func mixedRows() {
-        let jsonl = """
-        {"type":"assistant","costUSD":0.05,"message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
-        {"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":100,"output_tokens":50}}}
-        {"type":"assistant","costUSD":0.10,"message":{"model":"claude-opus-4-5","usage":{"input_tokens":1,"output_tokens":1}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
-        #expect(abs(acc.preComputedCost - 0.15) < 1e-9)
-        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 100, output: 50))
-        #expect(acc.tokensByModel["claude-opus-4-5"] == nil)
-    }
-
-    @Test("Zero costUSD is treated as missing and falls back to tokens")
-    func zeroCostUSDFallsBack() {
-        let jsonl = """
-        {"type":"assistant","costUSD":0,"message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}
-        """.data(using: .utf8)!
-        var acc = ClaudeLogParser.Breakdown()
-        ClaudeLogParser.parseBreakdown(data: jsonl, into: &acc)
-        #expect(acc.preComputedCost == 0)
-        #expect(acc.tokensByModel["claude-sonnet-4-5"] == TokenUsage(input: 10, output: 5))
-    }
-
-    // MARK: - Model family normalization
-
-    @Test("normalizeModelFamily extracts the family token and capitalises it")
-    func normalizeModelFamilyHappy() {
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-opus-4-7") == "Opus")
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-sonnet-4-5-20251201") == "Sonnet")
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-haiku-4-5") == "Haiku")
-        // Hyphen-less tail (no version suffix) — full tail becomes the family.
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-opus") == "Opus")
-        // Case-insensitive input.
-        #expect(ClaudeLogParser.normalizeModelFamily("CLAUDE-Sonnet-4-5") == "Sonnet")
-        // Current-generation families must not fall through to "Other".
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-fable-5") == "Fable")
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-mythos-5") == "Mythos")
-    }
-
-    @Test("normalizeModelFamily returns nil for non-claude / synthetic model strings")
-    func normalizeModelFamilyRejects() {
-        #expect(ClaudeLogParser.normalizeModelFamily("<synthetic>") == nil)
-        #expect(ClaudeLogParser.normalizeModelFamily("gpt-4-turbo") == nil)
-        #expect(ClaudeLogParser.normalizeModelFamily("claude-") == nil)
-        #expect(ClaudeLogParser.normalizeModelFamily("") == nil)
-    }
-
-    // MARK: - Start-of-month helper
-
-    @Test("startOfCurrentMonth returns day 1 at 00:00 in given calendar")
-    func startOfMonthHelper() {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
-        let now = cal.date(from: DateComponents(year: 2026, month: 4, day: 17, hour: 15))!
-        let start = Date.startOfCurrentMonth(calendar: cal, now: now)
-        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: start)
-        #expect(comps.year == 2026)
-        #expect(comps.month == 4)
-        #expect(comps.day == 1)
-        #expect(comps.hour == 0)
-        #expect(comps.minute == 0)
+        let now = ISO8601DateFormatter().date(from: "2026-11-25T15:00:00Z")!
+
+        let jsonl = """
+        {"type":"user","timestamp":"2026-11-25T14:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":1000,"output_tokens":2000}}}
+        {"type":"progress"}
+        {not json
+        {"type":"assistant","timestamp":"2026-11-25T14:00:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":0,"output_tokens":0}}}
+        {"type":"assistant","timestamp":"2026-11-25T14:10:00Z","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}
+        {"type":"assistant","timestamp":"2026-11-25T14:20:00Z","message":{"model":"CLAUDE-SONNET-4-5","usage":{"input_tokens":20,"output_tokens":10}}}
+        """
+        let file = root.appendingPathComponent("session.jsonl")
+        try jsonl.write(to: file, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.modificationDate: now], ofItemAtPath: file.path)
+
+        let report = ClaudeLogParser.scanLocalUsage(roots: [root], now: now, calendar: cal)
+        #expect(report.orderedModelNames == ["Sonnet 4.5"])
+        #expect(report.summaryToday.totalTokens == 45)
+        #expect(report.hours[14].totalTokens == 45)
     }
 }

@@ -83,9 +83,7 @@ enum LimitSafety {
     enum Level: Comparable {
         case healthy, warn, crit
 
-        /// Numeric weight so callers can `max(a, b)` two levels — used by
-        /// `LimitBar.level` to take the higher of (current-usage band,
-        /// projection-alarm band).
+        /// Numeric weight so callers can `max(a, b)` two levels.
         var severity: Int {
             switch self {
             case .healthy: 0

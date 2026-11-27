@@ -121,3 +121,40 @@ extension ProviderKind {
         }
     }
 }
+
+/// Loads provider SVG icons as template `NSImage`s suitable for the menu bar.
+///
+/// Template images are auto-tinted by AppKit to match the menu bar's light/dark
+/// appearance, and accept SwiftUI `.foregroundStyle()` tinting. We cache one
+/// instance per resource because `NSImage` loading from SVG isn't free.
+@MainActor
+enum ProviderTemplateIcon {
+    private static let size = NSSize(width: 18, height: 18)
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(for kind: ProviderKind) -> NSImage? {
+        image(resource: "ProviderIcon-\(kind.rawValue)")
+    }
+
+    static func image(for source: ProviderSource) -> NSImage? {
+        switch source {
+        case .builtin(let kind): image(for: kind)
+        case .gateway(let vendor): image(resource: "ProviderIcon-\(vendor.rawValue)")
+        }
+    }
+
+    private static func image(resource: String) -> NSImage? {
+        if let cached = cache[resource] { return cached }
+
+        guard let url = AppResources.url(
+            forResource: resource,
+            withExtension: "svg",
+            subdirectory: "Icons"
+        ), let image = NSImage(contentsOf: url) else { return nil }
+
+        image.size = size
+        image.isTemplate = true
+        cache[resource] = image
+        return image
+    }
+}

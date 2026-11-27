@@ -30,13 +30,9 @@ enum PreviewFixtures {
                 providers.append(GatewayPreviewFixtures.provider(gateway, index: index))
             }
         }
-        let store = try! LedgerStore(path: LedgerStore.inMemoryPath)
-        seedLedger(store)
-        let ledger = LedgerSync(store: store, syncRoot: PreviewSyncRoot())
-        ledger.reloadForPreview()
         let defaults = UserDefaults(suiteName: "MyUsage.preview.\(UUID().uuidString)")!
         defaults.set(false, forKey: "notificationsEnabled")
-        let manager = UsageManager(ledger: ledger, providers: providers, startsLedger: false, defaults: defaults)
+        let manager = UsageManager(providers: providers, backgroundServicesEnabled: false, defaults: defaults)
         manager.providers.forEach { $0.isEnabled = true }
         return manager
     }
@@ -84,7 +80,6 @@ enum PreviewFixtures {
             fetchedAt: now
         )
         claude.localUsage = localUsage(for: .claude, now: now)
-        claude.monthlyEstimatedCost = 112.40
         claude.lastRefreshed = now.addingTimeInterval(-32)
 
         var codex = UsageSnapshot()
@@ -110,7 +105,6 @@ enum PreviewFixtures {
             fetchedAt: now
         )
         codex.localUsage = localUsage(for: .codex, now: now)
-        codex.monthlyEstimatedCost = 43.62
         codex.lastRefreshed = now.addingTimeInterval(-32)
 
         var cursor = UsageSnapshot()
@@ -121,7 +115,6 @@ enum PreviewFixtures {
         cursor.billingCycleEnd = now.addingTimeInterval(12 * 86_400)
         cursor.spentAmount = CreditInfo(amount: 16.40, limit: 20, currency: "USD")
         cursor.onDemandSpend = CreditInfo(amount: 7.20, limit: 50, currency: "USD")
-        cursor.monthlyEstimatedCost = 23.60
         cursor.lastRefreshed = now.addingTimeInterval(-32)
 
         var antigravity = UsageSnapshot()
@@ -229,54 +222,5 @@ enum PreviewFixtures {
             ? ["GPT-6.1 Sol": .init(tokens: sol), "GPT-6.2 Sol": .init(tokens: other)]
             : ["GPT-6.2 Sol": .init(tokens: sol)]
     }
-
-    private static func seedLedger(_ store: LedgerStore) {
-        let entries = (0..<30).flatMap { offset -> [LedgerEntry] in
-            let date = Date.now.addingTimeInterval(Double(-offset) * 86_400)
-            let day = LedgerCalendar.dayKey(for: date)
-            let claudeOpus = 1.1 + abs(sin(Double(offset) * 1.27)) * 3.0
-            let claudeSonnet = 0.7 + abs(cos(Double(offset) * 0.83)) * 1.8
-            let codexCost = 0.8 + abs(sin(Double(offset) * 1.08 + 0.7)) * 3.5
-            let codexSol = codexCost * 0.78
-            let codexStandard = codexCost - codexSol
-            return [
-                LedgerEntry(
-                    deviceId: "preview-this-mac",
-                    accountId: "alex@example.com",
-                    provider: .claude,
-                    day: day,
-                    costUSD: claudeOpus + claudeSonnet,
-                    costByModel: ["Opus": claudeOpus, "Sonnet": claudeSonnet],
-                    tokenUsage: TokenUsage(
-                        input: 410_000 + offset * 900,
-                        output: 102_000 + offset * 300,
-                        cacheRead: 6_750_000 + offset * 1_100
-                    )
-                ),
-                LedgerEntry(
-                    deviceId: "preview-this-mac",
-                    accountId: "alex@example.com",
-                    provider: .codex,
-                    day: day,
-                    costUSD: codexCost,
-                    costByModel: [
-                        "GPT-5.6 Sol": codexSol,
-                        "GPT-5.5": codexStandard,
-                    ],
-                    tokenUsage: TokenUsage(
-                        input: 620_000 + offset * 700,
-                        output: 160_000 + offset * 240,
-                        cachedInput: 1_580_000 + offset * 800
-                    )
-                ),
-            ]
-        }
-        _ = try? store.upsert(entries)
-    }
-}
-
-private struct PreviewSyncRoot: SyncRoot {
-    let rootURL: URL? = nil
-    let isAvailable = false
 }
 #endif

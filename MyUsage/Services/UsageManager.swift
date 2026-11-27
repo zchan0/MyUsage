@@ -12,11 +12,6 @@ final class UsageManager {
     private(set) var isRefreshing = false
     private(set) var lastRefreshed: Date?
 
-    /// Multi-device usage ledger — see `specs/12a-sync-folder.md`.
-    /// Lives on the manager so every provider can read/write through a single
-    /// instance and the UI can observe aggregate state.
-    let ledger: LedgerSync
-
     // MARK: - Settings
 
     var refreshInterval: RefreshInterval {
@@ -61,11 +56,6 @@ final class UsageManager {
         didSet { defaults.set(providerOrder, forKey: "providerOrder.v2") }
     }
 
-    /// Whether provider cards display the estimated monthly spend row.
-    var showEstimatedCost: Bool {
-        didSet { defaults.set(showEstimatedCost, forKey: "showEstimatedCost") }
-    }
-
     /// Master toggle for limit-pressure notifications.
     var notificationsEnabled: Bool {
         didSet { defaults.set(notificationsEnabled, forKey: "notificationsEnabled") }
@@ -96,14 +86,13 @@ final class UsageManager {
     // MARK: - Init
 
     init(
-        ledger: LedgerSync = LedgerSync(),
         providers initialProviders: [any UsageProvider]? = nil,
-        startsLedger: Bool = true,
+        backgroundServicesEnabled: Bool = true,
         defaults: UserDefaults = .standard,
         gatewayStore: GatewayConnectionStore? = nil
     ) {
         self.defaults = defaults
-        self.backgroundServicesEnabled = startsLedger
+        self.backgroundServicesEnabled = backgroundServicesEnabled
         self.gatewayStore = gatewayStore ?? GatewayConnectionStore(defaults: defaults)
         let savedInterval = defaults.string(forKey: "refreshInterval")
         self.refreshInterval = RefreshInterval(rawValue: savedInterval ?? "") ?? .fiveMinutes
@@ -114,19 +103,17 @@ final class UsageManager {
             ?? defaults.string(forKey: "iconTrackProvider") ?? storedOrder?.first ?? "claude").rawValue
         self.menuBarMode = defaults.string(forKey: "menuBarMode")
             .flatMap(MenuBarMode.init(rawValue:)) ?? .merged
-        self.showEstimatedCost = defaults.object(forKey: "showEstimatedCost") as? Bool ?? true
         self.notificationsEnabled = defaults.object(forKey: "notificationsEnabled") as? Bool ?? true
         self.notifyWarnThreshold = (defaults.object(forKey: "notifyWarnThreshold") as? Double) ?? 80
         self.notifyCritThreshold = (defaults.object(forKey: "notifyCritThreshold") as? Double) ?? 95
-        self.ledger = ledger
 
         if let initialProviders {
             for provider in initialProviders {
                 register(provider)
             }
         } else {
-            register(ClaudeProvider(ledger: ledger))
-            register(CodexProvider(ledger: ledger))
+            register(ClaudeProvider())
+            register(CodexProvider())
             register(CursorProvider())
             register(AntigravityProvider())
             do {
@@ -136,37 +123,39 @@ final class UsageManager {
             } catch { gatewaySettingsError = error.localizedDescription }
         }
 
-        // One-time cleanup: the multi-account registry was removed.
-        // Its persisted `accounts.json` is now orphaned — delete it
-        // best-effort so we don't leave dead state behind. Harmless if
-        // already gone. The ledger (which still carries account_id rows
-        // for spec 13 cross-device sync) is untouched.
-        if startsLedger { Self.removeOrphanedAccountStore() }
-
-        // Pick up `defaults write MyUsage menuBarMode …` while running —
-        // used by automated testing and handy for scripting. KVO (not
-        // didChangeNotification) because only KVO sees writes made by
-        // OTHER processes via cfprefsd.
-        if startsLedger {
+        // One-time best-effort cleanup of retired local app-owned caches and
+        // databases (multi-account registry, local ledger DB, pricing/cost
+        // caches). Never touches any user-selected external sync folder.
+        if backgroundServicesEnabled {
+            Self.removeOrphanedLocalFiles()
+            // Pick up `defaults write MyUsage menuBarMode …` while running —
+            // used by automated testing and handy for scripting. KVO (not
+            // didChangeNotification) because only KVO sees writes made by
+            // OTHER processes via cfprefsd.
             menuBarModeObserver = DefaultsKeyObserver(key: "menuBarMode") { [weak self] in
                 Task { @MainActor [weak self] in self?.syncMenuBarModeFromDefaults() }
             }
-            Task { await ledger.start() }
         }
     }
 
     private var menuBarModeObserver: DefaultsKeyObserver?
 
-    /// Deletes the orphaned `~/Library/Application Support/MyUsage/accounts.json`
-    /// left behind by the removed multi-account feature.
-    private static func removeOrphanedAccountStore() {
-        guard let support = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first else { return }
-        let url = support
-            .appendingPathComponent("MyUsage", isDirectory: true)
-            .appendingPathComponent("accounts.json", isDirectory: false)
-        try? FileManager.default.removeItem(at: url)
+    /// Deletes app-owned local files left behind by retired features without
+    /// touching any user-owned folders.
+    private static func removeOrphanedLocalFiles() {
+        let fm = FileManager.default
+        if let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let appSupport = support.appendingPathComponent("MyUsage", isDirectory: true)
+            for name in ["accounts.json", "ledger.sqlite3", "ledger.sqlite3-wal", "ledger.sqlite3-shm"] {
+                try? fm.removeItem(at: appSupport.appendingPathComponent(name, isDirectory: false))
+            }
+        }
+        if let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let appCaches = caches.appendingPathComponent("MyUsage", isDirectory: true)
+            for name in ["claude-cost.json", "pricing-remote.json"] {
+                try? fm.removeItem(at: appCaches.appendingPathComponent(name, isDirectory: false))
+            }
+        }
     }
 
     // MARK: - Public API
@@ -203,13 +192,6 @@ final class UsageManager {
         defer {
             isRefreshing = false
             lastRefreshed = .now
-        }
-
-        // Keep the pricing catalog fresh (LiteLLM, ≤ once per 24h).
-        // Fire-and-forget: cost estimates for THIS refresh use whatever
-        // catalog is installed; the swap benefits the next one.
-        if backgroundServicesEnabled {
-            Task.detached(priority: .utility) { await PricingUpdater.refreshIfStale() }
         }
 
         // Refresh independent providers concurrently. Claude reads local statusline files;

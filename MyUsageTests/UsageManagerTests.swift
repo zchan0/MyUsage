@@ -58,21 +58,11 @@ final class UsageManagerTests: XCTestCase {
     }
 
     @MainActor
-    func testManualRefreshTriggerIsForwardedToProviders() async throws {
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("manager-trigger-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tmp) }
-
+    func testManualRefreshTriggerIsForwardedToProviders() async {
         let provider = TriggerRecordingProvider()
-        let ledger = LedgerSync(
-            store: try LedgerStore(path: LedgerStore.inMemoryPath),
-            syncRoot: LocalSyncRoot(url: tmp)
-        )
         let manager = UsageManager(
-            ledger: ledger,
             providers: [provider],
-            startsLedger: false
+            backgroundServicesEnabled: false
         )
         provider.isEnabled = true
 

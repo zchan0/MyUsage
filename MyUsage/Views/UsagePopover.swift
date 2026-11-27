@@ -38,12 +38,9 @@ struct UsagePopover: View {
                 PopoverPage {
                     ProviderDeck(provider: active)
                         .id(active.id)
-                        .transition(.asymmetric(
-                            insertion: .offset(y: 3).combined(with: .opacity),
-                            removal: .opacity
-                        ))
+                        .transition(.opacity)
                 }
-                .animation(PopoverMotion.selection, value: active.id)
+                .animation(.easeOut(duration: 0.14), value: active.id)
             } else {
                 emptyState
             }
@@ -90,7 +87,7 @@ struct UsagePopover: View {
             .frame(maxWidth: .infinity)
             .padding(24)
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, PopoverLayout.horizontalPadding)
         .padding(.top, 10)
         .padding(.bottom, 4)
     }

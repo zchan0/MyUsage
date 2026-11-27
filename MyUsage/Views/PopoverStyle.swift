@@ -1,14 +1,37 @@
+import AppKit
 import SwiftUI
 
 enum PopoverLayout {
     static let width: CGFloat = 356
+    static let outerCornerRadius: CGFloat = 26
+    static let sheetCornerRadius: CGFloat = 16
+    static let horizontalPadding: CGFloat = 10
+    static let menuBarGap: CGFloat = 6
 }
 
 enum PopoverMotion {
-    static let selection = Animation.spring(duration: 0.28, bounce: 0.08)
-    static let meter = Animation.spring(duration: 0.42, bounce: 0.0)
+    static let selection = Animation.snappy(duration: 0.20, extraBounce: 0.0)
+    static let meter = Animation.easeOut(duration: 0.26)
     static let hover = Animation.easeOut(duration: 0.12)
+    static let numeric = Animation.easeOut(duration: 0.16)
+    static let disclosure = Animation.snappy(duration: 0.22, extraBounce: 0.0)
     static let continuousDuration: TimeInterval = 0.85
+}
+
+@MainActor
+enum SettingsWindowActivator {
+    static func bringToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            NSApp.activate(ignoringOtherApps: true)
+            let settings = NSApp.windows.first {
+                $0.identifier?.rawValue.contains("Settings") == true
+                    || $0.frameAutosaveName.contains("Settings")
+            }
+            settings?.makeKeyAndOrderFront(nil)
+            settings?.orderFrontRegardless()
+        }
+    }
 }
 
 /// Deterministic timeline-driven spinner that avoids SwiftUI's `repeatForever`
@@ -51,64 +74,67 @@ enum PopoverPalette {
 
     private var isDark: Bool { self == .dark }
 
-    // AppKit's popover material already tints the backdrop. These are the
-    // additional tint and highlights applied above that material.
-    var chassisTint: Color { tone(0xEC_EDEF, 0x1A_1C21).opacity(isDark ? 0.80 : 0.68) }
-    var chassisSpecular: Color { Color.white.opacity(isDark ? 0.08 : 0.86) }
+    // Subtle readability veil over macOS 26's native NSGlassEffectView shell.
+    var chassisVeil: Color { isDark ? Color.black.opacity(0.14) : Color.white.opacity(0.08) }
+    var chassisSpecular: Color { Color.white.opacity(isDark ? 0.11 : 0.52) }
 
-    var wellBackground: Color { isDark ? .black.opacity(0.28) : Self.rgb(0x0F_121A).opacity(0.046) }
+    var wellBackground: Color { isDark ? .black.opacity(0.24) : Self.rgb(0x0F_121A).opacity(0.055) }
     var wellBorder: LinearGradient {
         gradient([
-            (isDark ? Color.black : Self.rgb(0x0F_121A)).opacity(isDark ? 0.36 : 0.055),
-            Color.white.opacity(isDark ? 0.045 : 0.72),
+            (isDark ? Color.black : Self.rgb(0x0F_121A)).opacity(isDark ? 0.34 : 0.06),
+            Color.white.opacity(isDark ? 0.08 : 0.58),
         ])
     }
 
     var lensGradient: LinearGradient {
-        gradient(isDark ? [.white.opacity(0.145), .white.opacity(0.09)] : [.white, Self.rgb(0xF6_F7FA)])
+        gradient(isDark ? [.white.opacity(0.17), .white.opacity(0.10)] : [.white.opacity(0.92), Self.rgb(0xF6_F7FA).opacity(0.84)])
     }
+    var lensEdge: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.16 : 0.08) }
+    var lensShadow: Color { tone(0x0F_1420, 0x00_0000).opacity(isDark ? 0.34 : 0.09) }
+    var lensSpecular: Color { .white.opacity(isDark ? 0.18 : 1.0) }
 
-    var lensEdge: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.13 : 0.075) }
-    var lensShadow: Color { tone(0x0F_1420, 0x00_0000).opacity(isDark ? 0.32 : 0.08) }
-    var lensSpecular: Color { .white.opacity(isDark ? 0.12 : 1) }
+    // Crisp translucent inner data sheets (intentionally non-glass to avoid muddy glass-on-glass).
     var sheetGradient: LinearGradient {
-        gradient([.white.opacity(isDark ? 0.068 : 0.90), .white.opacity(isDark ? 0.044 : 0.78)])
+        gradient([
+            .white.opacity(isDark ? 0.088 : 0.74),
+            .white.opacity(isDark ? 0.056 : 0.62),
+        ])
     }
 
-    var sheetEdge: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.078 : 0.068) }
-    var sheetSpecular: Color { .white.opacity(isDark ? 0.055 : 0.95) }
-    var sheetShadow: Color { tone(0x0F_1420, 0x00_0000).opacity(isDark ? 0.18 : 0.028) }
+    var sheetEdge: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.11 : 0.08) }
+    var sheetSpecular: Color { .white.opacity(isDark ? 0.10 : 0.90) }
+    var sheetShadow: Color { tone(0x0F_1420, 0x00_0000).opacity(isDark ? 0.22 : 0.04) }
 
-    var inkPrimary: Color { tone(0x1D_2026, 0xF0_F2F6) }
-    var inkSecondary: Color { tone(0x63_6975, 0xB0_B7C4) }
-    var inkTertiary: Color { tone(0x88_8F9C, 0x8A_92A2) }
-    var inkQuaternary: Color { tone(0xB5_BBC6, 0x5C_6473) }
+    var inkPrimary: Color { tone(0x16_1920, 0xF3_F5F9) }
+    var inkSecondary: Color { tone(0x56_5D6B, 0xB4_BCCB) }
+    var inkTertiary: Color { tone(0x7B_8392, 0x8D_96A8) }
+    var inkQuaternary: Color { tone(0xAE_B5C2, 0x5E_6778) }
 
-    var divider: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.068 : 0.065) }
-    var rowHover: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.04 : 0.032) }
-    var track: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.095 : 0.078) }
-    var paceTick: Color { tone(0x78_7F8C, 0x8C_94A3) }
+    var divider: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.08 : 0.07) }
+    var rowHover: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.055 : 0.045) }
+    var track: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.11 : 0.085) }
+    var paceTick: Color { tone(0x70_7888, 0x94_9DAE) }
 
-    var okFill: Color { tone(0x34_A866, 0x43_BC76) }
-    var okInk: Color { tone(0x24_8A50, 0x62_CF8F) }
-    var warnFill: Color { tone(0xD9_822B, 0xE6_953E) }
-    var warnInk: Color { tone(0xB8_6614, 0xF0_AB5D) }
-    var warnPillBackground: Color { warnFill.opacity(isDark ? 0.15 : 0.12) }
-    var critFill: Color { tone(0xDC_4C46, 0xEB_635D) }
-    var critInk: Color { tone(0xBF_3630, 0xF4_817C) }
-    var critPillBackground: Color { critFill.opacity(isDark ? 0.15 : 0.12) }
+    var okFill: Color { tone(0x30_A664, 0x45_C279) }
+    var okInk: Color { tone(0x1E_844C, 0x64_D392) }
+    var warnFill: Color { tone(0xD9_822B, 0xEB_9842) }
+    var warnInk: Color { tone(0xB3_6110, 0xF3_B062) }
+    var warnPillBackground: Color { warnFill.opacity(isDark ? 0.17 : 0.13) }
+    var critFill: Color { tone(0xDC_4C46, 0xEE_6660) }
+    var critInk: Color { tone(0xBA_322C, 0xF7_8681) }
+    var critPillBackground: Color { critFill.opacity(isDark ? 0.17 : 0.13) }
 
-    var sparkIdle: Color { inkPrimary.opacity(isDark ? 0.21 : 0.16) }
-    var sparkEmpty: Color { inkPrimary.opacity(isDark ? 0.055 : 0.05) }
-    var sparkFocus: Color { tone(0x2C_313B, 0xF2_F4F8) }
+    var sparkIdle: Color { inkPrimary.opacity(isDark ? 0.22 : 0.17) }
+    var sparkEmpty: Color { inkPrimary.opacity(isDark ? 0.06 : 0.055) }
+    var sparkFocus: Color { tone(0x22_2832, 0xF5_F7FA) }
     var sparkToday: Color { okFill }
 
     func brandHex(for kind: ProviderKind) -> String {
         switch kind {
-        case .claude: isDark ? "#DF835B" : "#CF6D44"
-        case .codex: isDark ? "#56BF9F" : "#2A9475"
-        case .antigravity: isDark ? "#7B98F5" : "#4C70E0"
-        case .cursor: isDark ? "#A5ADBD" : "#3C424F"
+        case .claude: isDark ? "#E58B63" : "#CF6D44"
+        case .codex: isDark ? "#5AC7A6" : "#2A9475"
+        case .antigravity: isDark ? "#84A0F8" : "#4C70E0"
+        case .cursor: isDark ? "#B0B8C8" : "#3C424F"
         }
     }
 
@@ -129,23 +155,25 @@ enum PopoverPalette {
     }
 }
 
+/// Light atmospheric veil layered gently over `NSGlassEffectView` so native
+/// Liquid Glass refraction remains visible while ink stays high-contrast.
 struct PopoverGlassSurface: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let palette = PopoverPalette(colorScheme)
-        palette.chassisTint
+        palette.chassisVeil
             .overlay(alignment: .top) {
                 LinearGradient(
                     stops: [
                         .init(color: palette.chassisSpecular, location: 0),
-                        .init(color: palette.chassisSpecular.opacity(0.22), location: 0.015),
+                        .init(color: palette.chassisSpecular.opacity(0.18), location: 0.025),
                         .init(color: .clear, location: 1),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 42)
+                .frame(height: 36)
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -158,13 +186,13 @@ struct GlassSheet<Content: View>: View {
 
     var body: some View {
         let palette = PopoverPalette(colorScheme)
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: PopoverLayout.sheetCornerRadius, style: .continuous)
         content()
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipShape(shape)
             .background {
                 shape.fill(palette.sheetGradient)
-                    .shadow(color: palette.sheetShadow, radius: colorScheme == .dark ? 5 : 4, y: 2)
+                    .shadow(color: palette.sheetShadow, radius: colorScheme == .dark ? 6 : 4, y: 2)
             }
             .overlay {
                 shape.strokeBorder(palette.sheetEdge, lineWidth: 0.5)
@@ -185,6 +213,8 @@ struct PopoverWell<Surface: InsettableShape>: View {
     }
 }
 
+/// Crisp elevated lens fill layered inside a SwiftUI `.glassEffect` container
+/// so active capsules keep unmistakable figure-ground contrast on any backdrop.
 struct PopoverLens<Surface: InsettableShape>: View {
     let shape: Surface
     @Environment(\.colorScheme) private var colorScheme

@@ -2,347 +2,569 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 
-/// App settings window — restyled to match the popover's visual system.
-/// Keeps the existing 4-tab layout (General, Providers, Devices, About);
-/// inside each tab the stock `Form` is replaced by `SettingsCard`-based
-/// glass sections so the chrome reads consistently with the popover.
+/// macOS 26 Settings window with a 4-section floating Liquid Glass sidebar:
+/// General, Providers, Notifications, and About.
 struct SettingsView: View {
+    enum Section: String, CaseIterable, Identifiable {
+        case general = "General"
+        case providers = "Providers"
+        case notifications = "Notifications"
+        case about = "About"
+
+        var id: String { rawValue }
+
+        var symbol: String {
+            switch self {
+            case .general: "gearshape.fill"
+            case .providers: "square.stack.3d.up.fill"
+            case .notifications: "bell.badge.fill"
+            case .about: "info.circle.fill"
+            }
+        }
+
+        var badgeTint: Color {
+            switch self {
+            case .general: Color(red: 0.28, green: 0.54, blue: 0.94)
+            case .providers: Color(red: 0.20, green: 0.66, blue: 0.56)
+            case .notifications: Color(red: 0.90, green: 0.53, blue: 0.20)
+            case .about: Color(red: 0.48, green: 0.52, blue: 0.60)
+            }
+        }
+    }
+
     @Environment(UsageManager.self) private var manager
     @Environment(UpdateChecker.self) private var updateChecker
+    @Environment(\.colorScheme) private var colorScheme
+
+    @Namespace private var sidebarNamespace
+    @State private var selection: Section = .general
+    @State private var hoveredSection: Section?
     @State private var installer = UpdateInstaller.shared
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var crashLogStatus: String?
     @State private var gatewayEditor: GatewayEditorTarget?
 
+    init(initialSection: Section = .general) {
+        _selection = State(initialValue: initialSection)
+    }
+
+    private var palette: PopoverPalette { PopoverPalette(colorScheme) }
+
+    private var windowCanvas: Color {
+        colorScheme == .dark
+            ? Color(red: 0.11, green: 0.12, blue: 0.145)
+            : Color(red: 0.953, green: 0.957, blue: 0.968)
+    }
+
     var body: some View {
-        @Bindable var mgr = manager
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 196)
+                .padding(.leading, 12)
+                .padding(.vertical, 12)
 
-        TabView {
-            generalTab(refreshInterval: $mgr.refreshInterval)
-                .tabItem { Label("General", systemImage: "gear") }
-
-            providersTab
-                .tabItem { Label("Providers", systemImage: "square.stack.3d.up") }
-
-            DevicesTab()
-                .tabItem { Label("Devices", systemImage: "laptopcomputer.and.iphone") }
-
-            aboutTab
-                .tabItem { Label("About", systemImage: "info.circle") }
+            detailPane
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 540, height: 460)
-        .sheet(item: $gatewayEditor) { target in GatewayConnectionEditor(connection: target.connection) }
+        .background(windowCanvas)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .frame(width: 700, height: 520)
+        .onKeyPress(keys: [.upArrow, .downArrow], phases: .down) { press in
+            let all = Section.allCases
+            guard let index = all.firstIndex(of: selection) else { return .ignored }
+            let offset = press.key == .upArrow ? -1 : 1
+            withAnimation(PopoverMotion.selection) {
+                selection = all[(index + offset + all.count) % all.count]
+            }
+            return .handled
+        }
+        .sheet(item: $gatewayEditor) { target in
+            GatewayConnectionEditor(connection: target.connection)
+        }
+    }
+
+    // MARK: - Floating Liquid Glass Sidebar
+
+    private var sidebar: some View {
+        let isDark = colorScheme == .dark
+        let sidebarShape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            GlassEffectContainer(spacing: 4) {
+                VStack(spacing: 3) {
+                    ForEach(Section.allCases) { section in
+                        sidebarRow(section)
+                    }
+                }
+            }
+            .padding(8)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 7) {
+                if let icon = NSApp.applicationIconImage {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .frame(width: 16, height: 16)
+                }
+                Text("MyUsage")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(palette.inkSecondary)
+                Spacer(minLength: 4)
+                Text("v\(AppInfo.version)")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(palette.inkTertiary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+        }
+        .frame(maxHeight: .infinity)
+        .background {
+            sidebarShape
+                .fill(
+                    LinearGradient(
+                        colors: isDark
+                            ? [Color.white.opacity(0.068), Color.white.opacity(0.042)]
+                            : [Color.white.opacity(0.76), Color.white.opacity(0.62)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .shadow(color: .black.opacity(isDark ? 0.24 : 0.05), radius: isDark ? 8 : 5, y: 2)
+        }
+        .overlay {
+            sidebarShape
+                .strokeBorder(
+                    (isDark ? Color.white : Color.black).opacity(isDark ? 0.11 : 0.07),
+                    lineWidth: 0.5
+                )
+                .allowsHitTesting(false)
+        }
+        .glassEffect(.clear, in: sidebarShape)
+    }
+
+    private func sidebarRow(_ section: Section) -> some View {
+        let selected = selection == section
+        let hovered = hoveredSection == section
+        let rowShape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let isDark = colorScheme == .dark
+
+        return Button {
+            withAnimation(PopoverMotion.selection) {
+                selection = section
+            }
+        } label: {
+            HStack(spacing: 9) {
+                SettingsSidebarBadge(symbol: section.symbol, tint: section.badgeTint)
+                Text(section.rawValue)
+                    .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected || hovered ? palette.inkPrimary : palette.inkSecondary)
+                Spacer(minLength: 4)
+                sidebarAccessory(for: section)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if selected {
+                    rowShape
+                        .fill(
+                            isDark
+                                ? Color.white.opacity(0.13)
+                                : Color.white.opacity(0.95)
+                        )
+                        .overlay {
+                            rowShape.strokeBorder(
+                                (isDark ? Color.white : Color.black).opacity(isDark ? 0.14 : 0.08),
+                                lineWidth: 0.5
+                            )
+                        }
+                        .shadow(color: .black.opacity(isDark ? 0.24 : 0.06), radius: 3, y: 1)
+                        .matchedGeometryEffect(id: "sidebarSelection", in: sidebarNamespace)
+                } else if hovered {
+                    rowShape.fill(palette.rowHover)
+                }
+            }
+            .glassEffect(selected ? .clear.interactive() : .identity, in: rowShape)
+            .contentShape(rowShape)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            withAnimation(PopoverMotion.hover) {
+                if inside { hoveredSection = section }
+                else if hoveredSection == section { hoveredSection = nil }
+            }
+        }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func sidebarAccessory(for section: Section) -> some View {
+        switch section {
+        case .providers where hasProviderAttention:
+            Circle()
+                .fill(palette.warnFill)
+                .frame(width: 7, height: 7)
+                .help("A statusline integration needs attention")
+        case .about where updateChecker.updateAvailable != nil:
+            Circle()
+                .fill(Color.accentColor)
+                .frame(width: 7, height: 7)
+                .help("Update available")
+        default:
+            EmptyView()
+        }
+    }
+
+    private var hasProviderAttention: Bool {
+        if let claude = manager.providers.first(where: { $0 is ClaudeProvider }) as? ClaudeProvider,
+           claude.bridgeState == .appMoved || claude.bridgeState == .modifiedExternally {
+            return true
+        }
+        if let antigravity = manager.providers.first(where: { $0 is AntigravityProvider }) as? AntigravityProvider,
+           antigravity.statuslineBridgeState == .appMoved || antigravity.statuslineBridgeState == .modifiedExternally {
+            return true
+        }
+        return false
+    }
+
+    // MARK: - Detail Router
+
+    private var detailPane: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("detailTop")
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch selection {
+                        case .general:
+                            generalPane
+                        case .providers:
+                            providersPane
+                        case .notifications:
+                            notificationsPane
+                        case .about:
+                            aboutPane
+                        }
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .scrollEdgeEffectHidden(true, for: .all)
+            .onChange(of: selection) { _, _ in
+                proxy.scrollTo("detailTop", anchor: .top)
+            }
+        }
     }
 
     // MARK: - General
 
-    private func generalTab(refreshInterval: Binding<RefreshInterval>) -> some View {
+    private var generalPane: some View {
         @Bindable var mgr = manager
+        return Group {
+            SettingsPageHeader(
+                "General",
+                subtitle: "Configure menu bar layout, polling cadence, and login behavior."
+            )
 
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            SettingsCard("Menu Bar") {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("Icon Layout")
+                            .font(.system(size: 12.5, weight: .medium))
 
-                SettingsCard("Refresh") {
-                    SettingsRow("Interval", caption: "How often providers re-poll their sources.") {
-                        Picker("", selection: refreshInterval) {
-                            ForEach(RefreshInterval.allCases) { interval in
-                                Text(interval.displayName).tag(interval)
-                            }
+                        HStack(spacing: 10) {
+                            menuBarModeTile(
+                                mode: .merged,
+                                title: "Merged",
+                                detail: "Single icon + dock",
+                                symbol: "menubar.dock.rectangle"
+                            )
+                            menuBarModeTile(
+                                mode: .separate,
+                                title: "One per provider",
+                                detail: "One icon per tool",
+                                symbol: "square.grid.2x2"
+                            )
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: 160)
                     }
-                }
+                    .padding(.vertical, 9)
 
-                SettingsCard("Menu Bar") {
-                    VStack(alignment: .leading, spacing: 0) {
+                    if manager.menuBarMode == .merged {
+                        CardDivider()
+
                         SettingsRow(
-                            "Icons",
-                            caption: "Merged: one icon with provider tabs. One per provider: each enabled provider gets its own icon and panel."
+                            "Tracked provider",
+                            caption: "Supplies the icon and live percentage shown in the menu bar."
                         ) {
-                            Picker("", selection: $mgr.menuBarMode) {
-                                Text("Merged").tag(UsageManager.MenuBarMode.merged)
-                                Text("One per provider").tag(UsageManager.MenuBarMode.separate)
+                            Picker("", selection: $mgr.iconTrackProvider) {
+                                Text("None").tag("")
+                                ForEach(manager.orderedProviders, id: \.id) { provider in
+                                    Text(provider.displayName).tag(provider.id.rawValue)
+                                }
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
-                            .frame(maxWidth: 160)
+                            .frame(maxWidth: 165)
                         }
-
-                        if manager.menuBarMode == .merged {
-                            CardDivider()
-
-                            SettingsRow("Tracked provider", caption: "Drives the icon's tint and percentage.") {
-                                Picker("", selection: $mgr.iconTrackProvider) {
-                                    Text("None").tag("")
-                                    ForEach(manager.orderedProviders, id: \.id) { provider in
-                                        Text(provider.displayName).tag(provider.id.rawValue)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .frame(maxWidth: 160)
-                            }
-                        }
+                        .transition(.opacity.combined(with: .offset(y: -4)))
                     }
                 }
-
-                notificationsCard
-
-                syncCard
-
-                SettingsCard("System") {
-                    SettingsRow(
-                        "Launch at Login",
-                        caption: "Open MyUsage automatically when you log in."
-                    ) {
-                        Toggle("", isOn: $launchAtLogin)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .onChange(of: launchAtLogin) { _, newValue in
-                                do {
-                                    if newValue {
-                                        try SMAppService.mainApp.register()
-                                    } else {
-                                        try SMAppService.mainApp.unregister()
-                                    }
-                                } catch {
-                                    launchAtLogin = SMAppService.mainApp.status == .enabled
-                                }
-                            }
-                    }
-                }
-
+                .animation(PopoverMotion.disclosure, value: manager.menuBarMode)
             }
-            .padding(16)
-        }
-        .scrollContentBackground(.hidden)
-    }
 
-    // MARK: - Notifications card
-
-    /// Notifications fire after each refresh when any limit crosses up
-     /// into a new pressure tier (warn or crit). Idempotent — same tier
-     /// doesn't re-fire until the limit window resets / user retreats.
-    private var notificationsCard: some View {
-        @Bindable var mgr = manager
-        return SettingsCard("Notifications") {
-            VStack(alignment: .leading, spacing: 0) {
+            SettingsCard("Refresh") {
                 SettingsRow(
-                    "Notify when limits get tight",
-                    caption: "Sends a macOS notification the first time a limit crosses each threshold."
+                    "Polling interval",
+                    caption: "How often active providers refresh. Local statusline sources never make network requests."
                 ) {
-                    Toggle("", isOn: $mgr.notificationsEnabled)
+                    Picker("", selection: $mgr.refreshInterval) {
+                        ForEach(RefreshInterval.allCases) { interval in
+                            Text(interval.displayName).tag(interval)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 145)
+                }
+            }
+
+            SettingsCard("System") {
+                SettingsRow(
+                    "Launch at Login",
+                    caption: "Start MyUsage automatically in the menu bar when you sign in."
+                ) {
+                    Toggle("", isOn: $launchAtLogin)
                         .toggleStyle(.switch)
                         .labelsHidden()
-                }
-
-                CardDivider()
-
-                SettingsRow(
-                    "Warn at",
-                    caption: "First-tier alert. Bar visually turns amber from 75%; this is when a notification fires."
-                ) {
-                    thresholdStepper(
-                        value: $mgr.notifyWarnThreshold,
-                        in: 50...90,
-                        ceiling: { mgr.notifyCritThreshold - 1 }
-                    )
-                }
-
-                CardDivider()
-
-                SettingsRow(
-                    "Critical at",
-                    caption: "Stronger alert prefixed with ⚠︎. Bar visually turns red from 90%."
-                ) {
-                    thresholdStepper(
-                        value: $mgr.notifyCritThreshold,
-                        in: 80...99,
-                        floor: { mgr.notifyWarnThreshold + 1 }
-                    )
-                }
-
-            }
-        }
-    }
-
-    /// Stepper that clamps to a per-row range and additionally enforces
-    /// `warn < crit` via the optional dynamic floor / ceiling closures.
-    private func thresholdStepper(
-        value: Binding<Double>,
-        in range: ClosedRange<Double>,
-        floor: (() -> Double)? = nil,
-        ceiling: (() -> Double)? = nil
-    ) -> some View {
-        HStack(spacing: 6) {
-            Text("\(Int(value.wrappedValue))%")
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .monospacedDigit()
-                .frame(minWidth: 38, alignment: .trailing)
-            Stepper("", value: Binding(
-                get: { value.wrappedValue },
-                set: { newValue in
-                    var v = max(range.lowerBound, min(range.upperBound, newValue))
-                    if let f = floor?() { v = max(v, f) }
-                    if let c = ceiling?() { v = min(v, c) }
-                    value.wrappedValue = v
-                }
-            ), in: range, step: 1)
-            .labelsHidden()
-        }
-    }
-
-    // MARK: - Sync card
-
-    private var syncCard: some View {
-        SettingsCard("Sync Folder") {
-            VStack(alignment: .leading, spacing: 0) {
-                SettingsRow("Folder", caption: manager.ledger.syncFolderDisplayPath) {
-                    HStack(spacing: 6) {
-                        if manager.ledger.canRevealSyncFolder {
-                            Button("Reveal") {
-                                manager.ledger.revealSyncFolderInFinder()
+                        .onChange(of: launchAtLogin) { _, newValue in
+                            do {
+                                if newValue {
+                                    try SMAppService.mainApp.register()
+                                } else {
+                                    try SMAppService.mainApp.unregister()
+                                }
+                            } catch {
+                                launchAtLogin = SMAppService.mainApp.status == .enabled
                             }
-                            .controlSize(.small)
                         }
-                        Button("Choose…") {
-                            Task { await manager.ledger.chooseSyncFolder() }
-                        }
-                        .controlSize(.small)
-                    }
                 }
-
-                CardDivider()
-
-                HStack(alignment: .center, spacing: 8) {
-                    Circle()
-                        .fill(syncStatusColor(manager.ledger.syncFolderStatusKind))
-                        .frame(width: 7, height: 7)
-                    Text(manager.ledger.syncFolderStatusText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Spacer()
-                }
-                .padding(.vertical, 8)
             }
         }
     }
 
-    private func syncStatusColor(_ kind: LedgerSync.SyncFolderStatusKind) -> Color {
-        switch kind {
-        case .idle: .secondary
-        case .available: Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55)
-        case .warning: Color(hue: 38.0/360.0, saturation: 0.92, brightness: 0.62)
-        case .error: Color(hue: 8.0/360.0, saturation: 0.78, brightness: 0.62)
+    private func menuBarModeTile(
+        mode: UsageManager.MenuBarMode,
+        title: String,
+        detail: String,
+        symbol: String
+    ) -> some View {
+        let selected = manager.menuBarMode == mode
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        return Button {
+            withAnimation(PopoverMotion.selection) {
+                manager.menuBarMode = mode
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        (selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05)),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(detail)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                shape.fill(selected ? Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.09) : Color.primary.opacity(0.03))
+            }
+            .overlay {
+                shape.strokeBorder(
+                    selected ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.08),
+                    lineWidth: selected ? 1.2 : 0.5
+                )
+            }
+            .contentShape(shape)
         }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - Providers
 
-    private var providersTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                SettingsCard("Providers") {
-                    VStack(alignment: .leading, spacing: 0) {
-                        let kinds = manager.orderedProviders
-                        ForEach(Array(kinds.enumerated()), id: \.element.id) { index, provider in
-                            providerRow(provider, at: index, total: kinds.count)
-                            if index < kinds.count - 1 {
-                                CardDivider()
-                            }
+    private var providersPane: some View {
+        let ordered = manager.orderedProviders
+        let hasGateways = ordered.contains { $0 is GatewayProvider }
+        return Group {
+            SettingsPageHeader(
+                "Providers",
+                subtitle: "Toggle visibility, set dock order, and configure integrations."
+            )
+
+            if let error = manager.gatewaySettingsError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(palette.warnFill)
+                    Text(error)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(palette.warnPillBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            SettingsCard("Active Providers") {
+                Text("\(ordered.filter(\.isEnabled).count) of \(ordered.count) enabled")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            } content: {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(ordered.enumerated()), id: \.element.id) { index, provider in
+                        providerRow(provider, at: index, total: ordered.count)
+                        if index < ordered.count - 1 {
+                            CardDivider()
                         }
                     }
                 }
-
-                StatuslineIntegrationsCard(
-                    claude: manager.providers.first { $0 is ClaudeProvider } as? ClaudeProvider,
-                    antigravity: manager.providers.first { $0 is AntigravityProvider } as? AntigravityProvider
-                )
-
-                HStack {
-                    if let error = manager.gatewaySettingsError {
-                        Text(error).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Add Gateway…") { gatewayEditor = .init(connection: nil) }
-                }
-
-                Text("Use the arrow buttons to reorder. Toggle providers off to hide them from the menu-bar popover.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 4)
             }
-            .padding(16)
+
+            SettingsCard("Custom Gateways") {
+                SettingsRow(
+                    hasGateways ? "Add another LiteLLM gateway" : "Connect a LiteLLM gateway",
+                    caption: "Track team or personal API spend and model usage alongside local coding tools."
+                ) {
+                    Button("Add Gateway…") {
+                        gatewayEditor = .init(connection: nil)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+
+            Text("Statusline integrations wrap each CLI's statusLine command without altering other settings. Snapshots stay local on this Mac.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 4)
         }
-        .scrollContentBackground(.hidden)
     }
 
     private func providerRow(_ provider: any UsageProvider, at index: Int, total: Int) -> some View {
-        HStack(spacing: 12) {
-            ProviderInstanceIcon(source: provider.source, size: 24, glyph: 14)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                ProviderInstanceIcon(source: provider.source, size: 26, glyph: 15)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(provider.displayName)
-                    .lineLimit(1).help(provider.displayName)
-                    .font(.system(size: 12.5, weight: .semibold))
-                detectionLabel(provider)
-            }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(provider.displayName)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .lineLimit(1)
+                            .help(provider.displayName)
 
-            Spacer(minLength: 12)
-
-            if let gateway = provider as? GatewayProvider {
-                Button { gatewayEditor = .init(connection: gateway.connection) } label: {
-                    Image(systemName: "pencil").font(.system(size: 11))
-                }.buttonStyle(.plain).help("Edit \(provider.displayName)")
-            }
-            reorderButtons(at: index, total: total)
-
-            Toggle("", isOn: Binding(
-                get: { provider.isEnabled },
-                set: { newValue in
-                    manager.setEnabled(newValue, for: provider)
+                        if provider is GatewayProvider {
+                            Text("Gateway")
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1.5)
+                                .background(Color.primary.opacity(0.06), in: Capsule())
+                        }
+                    }
+                    detectionLabel(provider)
                 }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
+
+                Spacer(minLength: 10)
+
+                if let gateway = provider as? GatewayProvider {
+                    Button {
+                        gatewayEditor = .init(connection: gateway.connection)
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .help("Edit \(provider.displayName)")
+                }
+
+                reorderButtons(at: index, total: total)
+
+                Toggle("", isOn: Binding(
+                    get: { provider.isEnabled },
+                    set: { newValue in
+                        manager.setEnabled(newValue, for: provider)
+                    }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+            }
+
+            if let claude = provider as? ClaudeProvider {
+                StatuslineStripFactory.claude(claude)
+                    .padding(.leading, 38)
+            } else if let antigravity = provider as? AntigravityProvider {
+                StatuslineStripFactory.antigravity(antigravity)
+                    .padding(.leading, 38)
+            }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
     }
 
-    /// Up / down arrow pair for moving a provider in the popover order.
-    /// Replaces the previous `List`-based drag handle (drag inside a custom
-    /// VStack-in-glass-card layout isn't supported without rebuilding the
-    /// drop targets ourselves).
     private func reorderButtons(at index: Int, total: Int) -> some View {
         HStack(spacing: 2) {
             Button {
-                manager.moveProvider(from: IndexSet([index]), to: index - 1)
+                withAnimation(PopoverMotion.selection) {
+                    manager.moveProvider(from: IndexSet([index]), to: index - 1)
+                }
             } label: {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 10, weight: .semibold))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .opacity(index == 0 ? 0.3 : 1)
+            .opacity(index == 0 ? 0.28 : 1)
             .disabled(index == 0)
             .help("Move up")
 
             Button {
-                // SwiftUI's IndexSet move semantics: to-index is the
-                // post-removal target, so down-by-one needs +2.
-                manager.moveProvider(from: IndexSet([index]), to: index + 2)
+                withAnimation(PopoverMotion.selection) {
+                    manager.moveProvider(from: IndexSet([index]), to: index + 2)
+                }
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
-                    .frame(width: 18, height: 18)
+                    .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .opacity(index == total - 1 ? 0.3 : 1)
+            .opacity(index == total - 1 ? 0.28 : 1)
             .disabled(index == total - 1)
             .help("Move down")
         }
@@ -352,18 +574,22 @@ struct SettingsView: View {
     private func detectionLabel(_ provider: any UsageProvider) -> some View {
         if let gateway = provider as? GatewayProvider {
             Text("\(gateway.connection.vendor.displayName) · \(gateway.connection.baseURL.host ?? "")")
-                .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         } else if let claude = provider as? ClaudeProvider {
             Text(claude.stateLabel)
-                .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
         } else if let antigravity = provider as? AntigravityProvider, antigravity.quotaSource == .statusline {
             Text(antigravity.statuslineStateLabel)
-                .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
         } else if provider.isAvailable {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Circle()
-                    .fill(Color(hue: 145.0/360.0, saturation: 0.45, brightness: 0.55))
-                    .frame(width: 5, height: 5)
+                    .fill(palette.okFill)
+                    .frame(width: 5.5, height: 5.5)
                 Text("Detected")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
@@ -375,99 +601,254 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Notifications
+
+    private var notificationsPane: some View {
+        @Bindable var mgr = manager
+        return Group {
+            SettingsPageHeader(
+                "Notifications",
+                subtitle: "Send a macOS alert when any tracked window crosses your warning or critical threshold."
+            )
+
+            SettingsCard("Limit Pressure Alerts") {
+                VStack(alignment: .leading, spacing: 0) {
+                    SettingsRow(
+                        "Notify when limits get tight",
+                        caption: "Delivers one alert per threshold crossing until that window resets."
+                    ) {
+                        Toggle("", isOn: $mgr.notificationsEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    CardDivider()
+
+                    thresholdPreviewBar
+                        .padding(.vertical, 12)
+                        .opacity(manager.notificationsEnabled ? 1 : 0.45)
+
+                    CardDivider()
+
+                    thresholdRow(
+                        title: "Warn at",
+                        caption: "First-tier alert. Bars visually turn amber at 75%.",
+                        value: $mgr.notifyWarnThreshold,
+                        range: 50...90,
+                        tint: palette.warnFill,
+                        ceiling: { mgr.notifyCritThreshold - 1 }
+                    )
+                    .disabled(!manager.notificationsEnabled)
+                    .opacity(manager.notificationsEnabled ? 1 : 0.5)
+
+                    CardDivider()
+
+                    thresholdRow(
+                        title: "Critical at",
+                        caption: "Urgent ⚠︎ alert. Bars visually turn red at 90%.",
+                        value: $mgr.notifyCritThreshold,
+                        range: 80...99,
+                        tint: palette.critFill,
+                        floor: { mgr.notifyWarnThreshold + 1 }
+                    )
+                    .disabled(!manager.notificationsEnabled)
+                    .opacity(manager.notificationsEnabled ? 1 : 0.5)
+                }
+            }
+
+            Text("Only active, valid snapshots generate notifications. Stale, waiting, or disconnected statusline receipts are excluded.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    private var thresholdPreviewBar: some View {
+        let warn = manager.notifyWarnThreshold / 100
+        let crit = manager.notifyCritThreshold / 100
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Alert zones")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                HStack(spacing: 10) {
+                    zoneLegend(color: palette.warnFill, text: "Warn \(Int(manager.notifyWarnThreshold))%")
+                    zoneLegend(color: palette.critFill, text: "Critical \(Int(manager.notifyCritThreshold))%")
+                }
+                .contentTransition(.numericText())
+                .animation(PopoverMotion.numeric, value: manager.notifyWarnThreshold)
+                .animation(PopoverMotion.numeric, value: manager.notifyCritThreshold)
+            }
+
+            GeometryReader { geo in
+                let w = geo.size.width
+                let warnW = max(0, w * warn)
+                let critW = max(0, w * max(0, crit - warn))
+                let tailW = max(0, w - warnW - critW)
+
+                HStack(spacing: 1.5) {
+                    Rectangle().fill(palette.okFill.opacity(0.78)).frame(width: warnW)
+                    Rectangle().fill(palette.warnFill.opacity(0.9)).frame(width: critW)
+                    Rectangle().fill(palette.critFill.opacity(0.92)).frame(width: tailW)
+                }
+                .clipShape(Capsule())
+                .animation(PopoverMotion.meter, value: warn)
+                .animation(PopoverMotion.meter, value: crit)
+            }
+            .frame(height: 7)
+        }
+    }
+
+    private func zoneLegend(color: Color, text: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text)
+                .font(.system(size: 10.5, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func thresholdRow(
+        title: String,
+        caption: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        tint: Color,
+        floor: (() -> Double)? = nil,
+        ceiling: (() -> Double)? = nil
+    ) -> some View {
+        let clampedBinding = Binding<Double>(
+            get: { value.wrappedValue },
+            set: { newValue in
+                var v = max(range.lowerBound, min(range.upperBound, newValue.rounded()))
+                if let f = floor?() { v = max(v, f) }
+                if let c = ceiling?() { v = min(v, c) }
+                value.wrappedValue = v
+            }
+        )
+
+        return SettingsRow(title, caption: caption) {
+            HStack(spacing: 8) {
+                Slider(value: clampedBinding, in: range)
+                    .tint(tint)
+                    .frame(width: 112)
+
+                Text("\(Int(value.wrappedValue))%")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(PopoverMotion.numeric, value: value.wrappedValue)
+                    .frame(width: 36, alignment: .trailing)
+
+                Stepper("", value: clampedBinding, in: range, step: 1)
+                    .labelsHidden()
+            }
+        }
+    }
+
     // MARK: - About
 
-    private var aboutTab: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if let release = updateChecker.updateAvailable {
-                    updateBanner(release)
-                }
+    private var aboutPane: some View {
+        Group {
+            SettingsPageHeader(
+                "About",
+                subtitle: "Version details, updates, and local diagnostics."
+            )
 
-                VStack(spacing: 10) {
+            if let release = updateChecker.updateAvailable {
+                updateBanner(release)
+            }
+
+            SettingsCard {
+                HStack(spacing: 16) {
                     if let icon = NSApp.applicationIconImage {
                         Image(nsImage: icon)
                             .resizable()
-                            .frame(width: 72, height: 72)
+                            .frame(width: 64, height: 64)
+                            .shadow(color: .black.opacity(0.14), radius: 6, y: 3)
                     } else {
                         Image(systemName: "chart.bar.fill")
-                            .font(.system(size: 36))
+                            .font(.system(size: 34))
                             .foregroundStyle(.tint)
+                            .frame(width: 64, height: 64)
                     }
 
-                    VStack(spacing: 2) {
-                        Text("MyUsage")
-                            .font(.system(size: 17, weight: .semibold))
-                        Text("Version \(AppInfo.versionWithBuild)")
-                            .font(.system(size: 11, design: .monospaced))
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("MyUsage")
+                                .font(.system(size: 17, weight: .bold))
+                            Text("v\(AppInfo.versionWithBuild)")
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.primary.opacity(0.06), in: Capsule())
+                        }
+
+                        Text("Monitor AI coding tool limits, local usage, and gateways from your menu bar.")
+                            .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Monitor AI coding tool usage from your menu bar.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-
-                    Link(destination: URL(string: "https://github.com/zchan0/MyUsage")!) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.system(size: 10))
-                            Text("GitHub")
-                                .font(.system(size: 11, weight: .medium))
+                        HStack(spacing: 8) {
+                            Link(destination: URL(string: "https://github.com/zchan0/MyUsage")!) {
+                                Label("GitHub", systemImage: "arrow.up.right.square")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
+                        .padding(.top, 2)
                     }
-                    .foregroundStyle(.tint)
+
+                    Spacer(minLength: 0)
                 }
-                .padding(.top, 8)
-                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+            }
 
-                SettingsCard("Help & Feedback") {
-                    VStack(alignment: .leading, spacing: 0) {
-                        SettingsRow(
-                            "Report an issue",
-                            caption: "Opens GitHub Issues with version and macOS pre-filled."
-                        ) {
-                            Button("Open") { SupportActions.openIssueWithDiagnostics() }
-                                .controlSize(.small)
-                        }
+            SettingsCard("Help & Diagnostics") {
+                VStack(alignment: .leading, spacing: 0) {
+                    SettingsRow(
+                        "Report an issue",
+                        caption: "Opens GitHub Issues with your MyUsage and macOS version pre-filled."
+                    ) {
+                        Button("Open") { SupportActions.openIssueWithDiagnostics() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
 
-                        CardDivider()
+                    CardDivider()
 
-                        SettingsRow(
-                            "Copy crash log",
-                            caption: crashLogStatus
-                                ?? "Scans ~/Library/Logs/DiagnosticReports for the newest MyUsage crash."
-                        ) {
-                            Button("Copy") { copyLatestCrashLog() }
-                                .controlSize(.small)
-                        }
+                    SettingsRow(
+                        "Copy crash log",
+                        caption: crashLogStatus
+                            ?? "Scans ~/Library/Logs/DiagnosticReports for the newest MyUsage crash."
+                    ) {
+                        Button("Copy") { copyLatestCrashLog() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                     }
                 }
             }
-            .padding(16)
         }
-        .scrollContentBackground(.hidden)
     }
 
-    /// Banner shown at the top of the About tab when `UpdateChecker` has
-    /// flagged a newer release on GitHub. State-driven action button:
-    /// idle → "Download", downloading → progress bar, ready → "Show in
-    /// Finder" (the .app is sitting in ~/Downloads waiting to be dragged
-    /// into /Applications). Falls back to "Open Release" when the release
-    /// has no .zip asset.
     private func updateBanner(_ release: UpdateChecker.ReleaseInfo) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 11) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(.tint)
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Update available — \(release.tag)")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
                     Text(updateBannerSubtitle(release))
-                        .font(.system(size: 10.5))
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
 
@@ -482,30 +863,23 @@ struct SettingsView: View {
                     .controlSize(.mini)
             }
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color.accentColor.opacity(0.10))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 0.5)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background {
+            shape.fill(Color.accentColor.opacity(colorScheme == .dark ? 0.16 : 0.10))
+        }
+        .overlay {
+            shape.strokeBorder(Color.accentColor.opacity(0.28), lineWidth: 0.5)
+        }
     }
 
     private func updateBannerSubtitle(_ release: UpdateChecker.ReleaseInfo) -> String {
         switch installer.state {
-        case .idle:
-            return "Currently running v\(AppInfo.versionWithBuild)"
-        case .downloading(let progress):
-            return "Downloading… \(Int(progress * 100))%"
-        case .extracting:
-            return "Extracting…"
-        case .ready:
-            return "Drag MyUsage.app into /Applications, then relaunch."
-        case .failed(let message):
-            return message
+        case .idle: "Currently running v\(AppInfo.versionWithBuild)"
+        case .downloading(let progress): "Downloading… \(Int(progress * 100))%"
+        case .extracting: "Extracting…"
+        case .ready: "Drag MyUsage.app into /Applications, then relaunch."
+        case .failed(let message): message
         }
     }
 
@@ -517,11 +891,13 @@ struct SettingsView: View {
                 Button("Download") {
                     Task { await installer.install(release: release) }
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             } else {
                 Button("Open Release") {
                     NSWorkspace.shared.open(release.url)
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
         case .downloading, .extracting:
@@ -530,11 +906,13 @@ struct SettingsView: View {
             Button("Show in Finder") {
                 installer.revealReady()
             }
+            .buttonStyle(.borderedProminent)
             .controlSize(.small)
         case .failed:
             Button("Retry") {
                 Task { await installer.install(release: release) }
             }
+            .buttonStyle(.bordered)
             .controlSize(.small)
         }
     }
@@ -634,8 +1012,33 @@ private extension URL {
     }
 }
 
-#Preview {
-    SettingsView()
-        .environment(UsageManager())
+#if DEBUG
+#Preview("Settings · General") {
+    let manager = PreviewFixtures.manager(providerCount: 4, gateway: .full)
+    SettingsView(initialSection: .general)
+        .environment(manager)
         .environment(UpdateChecker())
 }
+
+#Preview("Settings · Providers") {
+    let manager = PreviewFixtures.manager(providerCount: 4, gateway: .full)
+    SettingsView(initialSection: .providers)
+        .environment(manager)
+        .environment(UpdateChecker())
+}
+
+#Preview("Settings · Notifications · Dark") {
+    let manager = PreviewFixtures.manager(providerCount: 4)
+    SettingsView(initialSection: .notifications)
+        .environment(manager)
+        .environment(UpdateChecker())
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Settings · About") {
+    let manager = PreviewFixtures.manager(providerCount: 4)
+    SettingsView(initialSection: .about)
+        .environment(manager)
+        .environment(UpdateChecker())
+}
+#endif

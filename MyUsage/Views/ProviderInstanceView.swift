@@ -50,8 +50,15 @@ struct PopoverPage<Content: View>: View {
             content()
                 .frame(maxWidth: .infinity)
                 .fixedSize(horizontal: false, vertical: true)
-                .onSizeChange { contentHeight = $0.height }
+                .onSizeChange { size in
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        contentHeight = size.height
+                    }
+                }
         }
+        .scrollEdgeEffectHidden(true, for: .all)
         .frame(height: min(contentHeight, max(180, (NSScreen.main?.visibleFrame.height ?? 800) - 130)))
     }
 }

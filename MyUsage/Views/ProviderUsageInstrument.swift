@@ -59,6 +59,8 @@ struct ProviderUsageInstrument: View {
                         .tracking(-0.475)
                         .monospacedDigit()
                         .foregroundStyle(palette.inkPrimary)
+                        .contentTransition(.numericText())
+                        .animation(PopoverMotion.numeric, value: tokens)
                     Text("tokens")
                         .font(.system(size: 11))
                         .foregroundStyle(palette.inkTertiary)
@@ -111,36 +113,39 @@ struct ProviderUsageInstrument: View {
     }
 
     private var scopePill: some View {
-        HStack(spacing: 0) {
-            ForEach(Scope.allCases, id: \.self) { option in
-                let selected = option == scope
-                Button {
-                    withAnimation(PopoverMotion.selection) {
-                        scope = option
-                        hoveredIndex = nil
-                    }
-                } label: {
-                    Text(option.rawValue)
-                        .font(.system(size: 10, weight: selected ? .semibold : .medium))
-                        .foregroundStyle(selected || hoveredScope == option ? palette.inkPrimary : palette.inkSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 3)
-                        .background {
-                            if selected {
-                                PopoverLens(shape: Capsule())
-                                    .matchedGeometryEffect(id: "scopeLens", in: scopeNamespace)
-                                    .transition(.identity)
-                            }
+        GlassEffectContainer(spacing: 2) {
+            HStack(spacing: 0) {
+                ForEach(Scope.allCases, id: \.self) { option in
+                    let selected = option == scope
+                    Button {
+                        withAnimation(PopoverMotion.selection) {
+                            scope = option
+                            hoveredIndex = nil
                         }
-                        .contentShape(Capsule())
+                    } label: {
+                        Text(option.rawValue)
+                            .font(.system(size: 10, weight: selected ? .semibold : .medium))
+                            .foregroundStyle(selected || hoveredScope == option ? palette.inkPrimary : palette.inkSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 3)
+                            .background {
+                                if selected {
+                                    PopoverLens(shape: Capsule())
+                                        .matchedGeometryEffect(id: "scopeLens", in: scopeNamespace)
+                                        .transition(.identity)
+                                }
+                            }
+                            .glassEffect(selected ? .clear.interactive() : .identity, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { inside in
+                        if inside { hoveredScope = option }
+                        else if hoveredScope == option { hoveredScope = nil }
+                    }
+                    .animation(PopoverMotion.hover, value: hoveredScope)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
-                .onHover { inside in
-                    if inside { hoveredScope = option }
-                    else if hoveredScope == option { hoveredScope = nil }
-                }
-                .animation(PopoverMotion.hover, value: hoveredScope)
-                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .padding(2)
@@ -172,7 +177,8 @@ struct ProviderUsageInstrument: View {
                     let height = tokens > 0 ? max(0.11, sqrt(Double(tokens) / Double(maxTokens))) : 0.04
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(barColor(tokens: tokens, focused: focused, isCurrent: isCurrent))
-                        .opacity(dimmed ? 0.38 : (isCurrent && !focused ? 0.85 : 1))
+                        .opacity(dimmed ? 0.34 : (isCurrent && !focused ? 0.88 : 1))
+                        .scaleEffect(x: focused ? 1.12 : 1, y: focused ? 1.03 : 1, anchor: .bottom)
                         .animation(PopoverMotion.hover, value: hoveredIndex)
                         .frame(width: width, height: max(2, geometry.size.height * height))
                         .animation(PopoverMotion.meter, value: height)
@@ -260,6 +266,8 @@ struct ProviderUsageInstrument: View {
             Text(TokenCountFormatter.string(row.tokens))
                 .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(palette.inkPrimary)
+                .contentTransition(.numericText())
+                .animation(PopoverMotion.numeric, value: row.tokens)
                 .frame(minWidth: 44, alignment: .trailing)
                 .accessibilityLabel("\(row.tokens) tokens")
 
@@ -267,6 +275,8 @@ struct ProviderUsageInstrument: View {
                 Text(row.reportedCostUSD > 0 ? costText(row.reportedCostUSD) : "—")
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(palette.inkSecondary)
+                    .contentTransition(.numericText())
+                    .animation(PopoverMotion.numeric, value: row.reportedCostUSD)
                     .frame(minWidth: 44, alignment: .trailing)
             }
         }

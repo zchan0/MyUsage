@@ -27,7 +27,7 @@ struct BuiltinProviderDeck: View {
                 }
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, PopoverLayout.horizontalPadding)
         .padding(.top, 10)
         .padding(.bottom, 4)
     }
@@ -249,23 +249,11 @@ struct BuiltinProviderDeck: View {
         SettingsLink {
             Text("Settings")
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(palette.inkPrimary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(palette.rowHover, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
         .simultaneousGesture(TapGesture().onEnded {
-            NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                NSApp.activate(ignoringOtherApps: true)
-                let settings = NSApp.windows.first {
-                    $0.identifier?.rawValue.contains("Settings") == true
-                        || $0.frameAutosaveName.contains("Settings")
-                }
-                settings?.makeKeyAndOrderFront(nil)
-                settings?.orderFrontRegardless()
-            }
+            SettingsWindowActivator.bringToFront()
         })
         .help(help)
     }

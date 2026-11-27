@@ -50,7 +50,7 @@ struct GatewayProviderDeck: View {
                 historyStatus("Model usage · \(issue.message)")
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, PopoverLayout.horizontalPadding)
         .padding(.top, 10)
         .padding(.bottom, 4)
         .task(id: LoadID(connection: provider.connection, isVisible: presentation?.isVisible ?? true)) {

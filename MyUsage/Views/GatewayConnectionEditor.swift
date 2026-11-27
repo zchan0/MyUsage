@@ -24,63 +24,116 @@ struct GatewayConnectionEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(connection == nil ? "Add Gateway" : "Edit Gateway")
-                .font(.system(size: 14, weight: .semibold))
+            HStack(spacing: 12) {
+                ProviderInstanceIcon(source: .gateway(.litellm), size: 30, glyph: 17)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(connection == nil ? "Add Gateway" : "Edit Gateway")
+                        .font(.system(size: 16, weight: .bold))
+                    Text("Connect a LiteLLM endpoint with an API key stored in Keychain.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             SettingsCard {
-                SettingsRow("Vendor") { Text("LiteLLM").foregroundStyle(.secondary) }
+                SettingsRow("Vendor") {
+                    Text("LiteLLM")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
                 CardDivider()
-                SettingsRow("Name") { TextField("Company gateway", text: $name).frame(width: 280) }
+                SettingsRow("Name") {
+                    TextField("Company gateway", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 280)
+                }
                 CardDivider()
-                SettingsRow("Base URL") { TextField("https://ai.example.com", text: $host).frame(width: 280) }
+                SettingsRow("Base URL") {
+                    TextField("https://ai.example.com", text: $host)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 280)
+                }
                 CardDivider()
-                SettingsRow("API key", caption: connection == nil ? "Stored in this Mac's Keychain." : "Leave empty to keep the saved key.") {
-                    SecureField("API key", text: $key).frame(width: 280)
+                SettingsRow(
+                    "API key",
+                    caption: connection == nil ? "Stored in this Mac's Keychain." : "Leave empty to keep the saved key."
+                ) {
+                    SecureField("API key", text: $key)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 280)
                 }
                 if showUserID {
                     CardDivider()
                     SettingsRow("User ID", caption: "Only needed if your key cannot identify its user.") {
-                        TextField("LiteLLM user ID", text: $userID).frame(width: 280)
+                        TextField("LiteLLM user ID", text: $userID)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 280)
                     }
                 }
                 if let inspection, !inspection.usableScopes.isEmpty {
                     CardDivider()
-                    SettingsRow("Usage for", caption: selectedScope?.kind == .user
-                                ? "Your account includes its linked keys." : "Only this API key's usage.") {
+                    SettingsRow(
+                        "Usage for",
+                        caption: selectedScope?.kind == .user
+                            ? "Your account includes its linked keys." : "Only this API key's usage."
+                    ) {
                         if inspection.usableScopes.count > 1 {
                             Picker("Usage for", selection: $selectedScope) {
                                 ForEach(inspection.usableScopes, id: \.scope) { result in
                                     Text(result.scope.label).tag(Optional(result.scope))
                                 }
-                            }.labelsHidden().frame(width: 180)
+                            }
+                            .labelsHidden()
+                            .frame(width: 180)
                         } else {
                             Text(inspection.usableScopes[0].scope.label).foregroundStyle(.secondary)
                         }
                     }
                 }
             }
+
             HStack(alignment: .center, spacing: 10) {
-                Button("Check Usage Access", action: check).disabled(checking || name.trimmingCharacters(in: .whitespaces).isEmpty || host.isEmpty)
+                Button("Check Usage Access", action: check)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(checking || name.trimmingCharacters(in: .whitespaces).isEmpty || host.isEmpty)
                 if checking { ProgressView().controlSize(.small) }
-                Text(resultMessage).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(resultMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let message { Text(message).font(.system(size: 11)).foregroundStyle(.red) }
-            Divider()
+
+            if let message {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+            }
+
+            CardDivider()
+
             HStack {
                 if connection != nil {
                     Button("Remove…", role: .destructive) { confirmRemove = true }
+                        .buttonStyle(.bordered)
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
                 if inspection != nil && selectedResult == nil {
-                    Button("Save for Later") { save(verified: false) }.disabled(checking)
+                    Button("Save for Later") { save(verified: false) }
+                        .buttonStyle(.bordered)
+                        .disabled(checking)
                 }
                 Button(connection == nil ? "Add Provider" : "Save") { save(verified: true) }
+                    .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(checking || !canSave)
             }
         }
-        .padding(20).frame(width: 540)
+        .padding(20)
+        .frame(width: 540)
         .onAppear {
             name = connection?.name ?? ""; host = connection?.baseURL.absoluteString ?? ""
             userID = connection?.explicitUserID ?? ""; selectedScope = connection?.scope

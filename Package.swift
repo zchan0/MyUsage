@@ -1,9 +1,9 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "MyUsage",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     targets: [
         .executableTarget(
             name: "MyUsage",
@@ -11,8 +11,7 @@ let package = Package(
             exclude: ["Resources/Info.plist"],
             resources: [
                 .copy("Resources/Icons"),
-                .copy("Resources/AppIcon.appiconset"),
-                .process("Resources/pricing.json")
+                .copy("Resources/AppIcon.appiconset")
             ]
         ),
         .testTarget(

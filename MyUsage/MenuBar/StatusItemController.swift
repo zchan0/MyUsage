@@ -188,7 +188,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // manifests as needing several clicks to keep the popover open.
         DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
         panel.presentation.isVisible = true
+        panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
         globalMonitor?.start()
         Logger.general.info("StatusItem[\(self.label, privacy: .public)] showPanel; frame=\(String(describing: self.panel.frame), privacy: .public) visible=\(self.panel.isVisible, privacy: .public)")
         DebugLog.info("StatusItem[\(label)] showPanel frame=\(panel.frame) visible=\(panel.isVisible)")
@@ -236,7 +242,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let buttonFrame = buttonWindow.frame
 
         var frame = CGRect(origin: buttonFrame.origin, size: size)
-        frame.origin.y = buttonFrame.origin.y - size.height
+        frame.origin.y = buttonFrame.origin.y - size.height - PopoverLayout.menuBarGap
         frame.origin.x = buttonFrame.origin.x + (buttonFrame.width / 2) - (size.width / 2)
 
         if let screen = buttonWindow.screen {
@@ -274,7 +280,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 return
             }
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.28
+                context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
                 context.allowsImplicitAnimation = true
                 self.panel.animator().setFrame(frame, display: true)

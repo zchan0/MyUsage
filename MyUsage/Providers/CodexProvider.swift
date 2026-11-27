@@ -230,16 +230,12 @@ final class CodexProvider: BuiltinUsageProvider {
 
     // MARK: - State
 
-    /// Optional multi-device ledger (spec 12). Written after each successful
-    /// `computeMonthlyCost`.
-    private weak var ledger: LedgerSync?
     private var localUsage: LocalUsageReport?
     private let logRoots: [URL]
 
     // MARK: - Init
 
-    init(ledger: LedgerSync? = nil, logRoots: [URL]? = nil) {
-        self.ledger = ledger
+    init(logRoots: [URL]? = nil) {
         self.logRoots = logRoots ?? CodexLogParser.defaultRoots()
         detectAvailability()
     }
@@ -333,7 +329,6 @@ final class CodexProvider: BuiltinUsageProvider {
                 var mapped = Self.mapToSnapshot(usageBundle.usage)
                 mapped.email = identity?.email
                 mapped.resetCredits = usageBundle.resetCredits
-                mapped.monthlyEstimatedCost = await Self.computeMonthlyCost()
                 let roots = logRoots
                 localUsage = await Task.detached(priority: .utility) {
                     CodexLogParser.scanLocalUsage(roots: roots)
@@ -342,10 +337,6 @@ final class CodexProvider: BuiltinUsageProvider {
                 snapshot = mapped
             }
 
-            // Tag ledger writes with the current account identity so
-            // cross-device aggregates stay attributable (spec 13).
-            await recordDailyCostsToLedger(accountID: identity?.id ?? "default")
-
             // If usage never came back this cycle, keep showing whatever we
             // had — but don't pretend success.
             guard usageBundle != nil else { return }
@@ -353,34 +344,6 @@ final class CodexProvider: BuiltinUsageProvider {
         } catch {
             self.error = error.localizedDescription
         }
-    }
-
-    private func recordDailyCostsToLedger(accountID: String) async {
-        guard let ledger else { return }
-        let breakdown = await Task.detached(priority: .utility) {
-            CodexLogParser.scanDailyBreakdown(
-                roots: CodexLogParser.defaultRoots(),
-                since: Date.ledgerBackfillStart()
-            )
-        }.value
-        guard !breakdown.total.isEmpty || !breakdown.tokensByDay.isEmpty else { return }
-        await ledger.recordDailyCosts(
-            provider: .codex,
-            byDay: breakdown.total,
-            perModelByDay: breakdown.byModel.isEmpty ? nil : breakdown.byModel,
-            tokensByDay: breakdown.tokensByDay.isEmpty ? nil : breakdown.tokensByDay,
-            accountID: accountID
-        )
-    }
-
-    /// Scan `~/.codex/sessions` + `archived_sessions` modified since the first
-    /// of the current calendar month and compute estimated spend.
-    nonisolated static func computeMonthlyCost() async -> Double {
-        await Task.detached(priority: .utility) {
-            let since = Date.startOfCurrentMonth()
-            let byModel = CodexLogParser.scan(since: since)
-            return CostCalculator.totalCost(of: byModel, catalog: PricingCatalog.shared)
-        }.value
     }
 
     // MARK: - Detection

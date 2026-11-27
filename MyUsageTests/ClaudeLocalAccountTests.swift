@@ -71,7 +71,6 @@ struct ClaudeLocalAccountTests {
         try f.store.write(f.input(), now: now)
         let settingsBefore = try Data(contentsOf: f.settings)
         let provider = ClaudeProvider(directory: f.directory, bridge: f.bridge, logRoots: [],
-                                      costCacheURL: f.root.appendingPathComponent("cost.json"),
                                       accountURL: f.accountURL, now: { now })
         #expect(provider.localAccount == nil)
         for (email, trigger) in [("first@example.com", UsageRefreshTrigger.automatic), ("second@example.com", .manual)] {

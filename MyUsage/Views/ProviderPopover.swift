@@ -36,44 +36,48 @@ struct PopoverFooterBar: View {
 
             Spacer()
 
-            Button {
-                Task { await manager.refreshAll(trigger: .manual) }
-            } label: {
-                FooterIcon(symbol: "arrow.clockwise", spinning: manager.isRefreshing)
-            }
-            .buttonStyle(.plain)
-            .disabled(manager.isRefreshing)
-            .accessibilityLabel("Refresh")
-            .help(manager.isRefreshing ? "Refreshing…" : "Refresh")
+            GlassEffectContainer(spacing: 4) {
+                HStack(spacing: 2) {
+                    Button {
+                        Task { await manager.refreshAll(trigger: .manual) }
+                    } label: {
+                        FooterIcon(symbol: "arrow.clockwise", spinning: manager.isRefreshing)
+                    }
+                    .buttonStyle(FooterIconButtonStyle())
+                    .disabled(manager.isRefreshing)
+                    .accessibilityLabel("Refresh")
+                    .help(manager.isRefreshing ? "Refreshing…" : "Refresh")
 
-            settingsButton
+                    settingsButton
 
-            if let update = updateChecker.updateAvailable {
-                Button {
-                    NSWorkspace.shared.open(update.url)
-                } label: {
-                    FooterIcon(symbol: "arrow.up.circle", highlighted: true)
+                    if let update = updateChecker.updateAvailable {
+                        Button {
+                            NSWorkspace.shared.open(update.url)
+                        } label: {
+                            FooterIcon(symbol: "arrow.up.circle", highlighted: true)
+                        }
+                        .buttonStyle(FooterIconButtonStyle())
+                        .accessibilityLabel("Update available")
+                        .help("Update available")
+                    }
+
+                    Menu {
+                        Button("About MyUsage") {
+                            NSApp.activate(ignoringOtherApps: true)
+                            NSApp.orderFrontStandardAboutPanel(nil)
+                        }
+                        Divider()
+                        Button("Quit MyUsage") { NSApp.terminate(nil) }
+                    } label: {
+                        FooterIcon(symbol: "ellipsis")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .frame(width: 24, height: 24)
+                    .accessibilityLabel("More")
+                    .help("More · MyUsage v\(AppInfo.version)")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Update available")
-                .help("Update available")
             }
-
-            Menu {
-                Button("About MyUsage") {
-                    NSApp.activate(ignoringOtherApps: true)
-                    NSApp.orderFrontStandardAboutPanel(nil)
-                }
-                Divider()
-                Button("Quit MyUsage") { NSApp.terminate(nil) }
-            } label: {
-                FooterIcon(symbol: "ellipsis")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: 24, height: 24)
-            .accessibilityLabel("More")
-            .help("More · MyUsage v\(AppInfo.version)")
         }
         .padding(.horizontal, 14)
         .padding(.top, 4)
@@ -124,21 +128,20 @@ struct PopoverFooterBar: View {
         SettingsLink {
             FooterIcon(symbol: "gearshape")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FooterIconButtonStyle())
         .accessibilityLabel("Settings")
         .help("Settings")
         .simultaneousGesture(TapGesture().onEnded {
-            NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                NSApp.activate(ignoringOtherApps: true)
-                let settings = NSApp.windows.first {
-                    $0.identifier?.rawValue.contains("Settings") == true
-                        || $0.frameAutosaveName.contains("Settings")
-                }
-                settings?.makeKeyAndOrderFront(nil)
-                settings?.orderFrontRegardless()
-            }
+            SettingsWindowActivator.bringToFront()
         })
+    }
+}
+
+private struct FooterIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.90 : 1)
+            .animation(PopoverMotion.hover, value: configuration.isPressed)
     }
 }
 
@@ -160,8 +163,15 @@ private struct FooterIcon: View {
         )
         .foregroundStyle(highlighted ? palette.warnInk : hovered ? palette.inkPrimary : palette.inkSecondary)
         .frame(width: 24, height: 24)
-        .background(hovered ? palette.rowHover : .clear, in: RoundedRectangle(cornerRadius: 7))
-        .contentShape(Rectangle())
+        .background {
+            if hovered {
+                Circle()
+                    .fill(palette.rowHover)
+                    .transition(.scale(scale: 0.84).combined(with: .opacity))
+            }
+        }
+        .glassEffect(hovered ? .clear.interactive() : .identity, in: Circle())
+        .contentShape(Circle())
         .onHover { isHovered = $0 }
         .animation(PopoverMotion.hover, value: hovered)
     }

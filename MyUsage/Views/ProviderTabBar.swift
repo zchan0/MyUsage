@@ -26,20 +26,25 @@ struct ProviderTabBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredID: ProviderID?
 
+    private static let wellRadius: CGFloat = 24
+    private static let lensRadius: CGFloat = 20
+
     var body: some View {
-        Group {
-            if items.count <= 4 {
-                HStack(spacing: 0) {
-                    ForEach(items) { slot($0, equalWidth: true) }
+        GlassEffectContainer(spacing: 4) {
+            Group {
+                if items.count <= 4 {
+                    HStack(spacing: 0) {
+                        ForEach(items) { slot($0, equalWidth: true) }
+                    }
+                } else {
+                    overflowDock
                 }
-            } else {
-                overflowDock
             }
         }
         .padding(4)
-        .background { PopoverWell(shape: RoundedRectangle(cornerRadius: 25, style: .continuous)) }
-        .padding(.horizontal, 11)
-        .padding(.top, 11)
+        .background { PopoverWell(shape: RoundedRectangle(cornerRadius: Self.wellRadius, style: .continuous)) }
+        .padding(.horizontal, PopoverLayout.horizontalPadding)
+        .padding(.top, 10)
         .animation(PopoverMotion.selection, value: selection)
         .onKeyPress(keys: [.leftArrow, .rightArrow], phases: .down) { press in
             guard let index = items.firstIndex(where: { $0.id == selection }) else { return .ignored }
@@ -111,21 +116,21 @@ struct ProviderTabBar: View {
         let palette = PopoverPalette(colorScheme)
         let selected = selection == item.id
         let hovered = hoveredID == item.id
+        let lensShape = RoundedRectangle(cornerRadius: Self.lensRadius, style: .continuous)
         return Button {
             select(item.id)
         } label: {
             VStack(spacing: 3.5) {
                 glyph(for: item.source, palette: palette)
                     .frame(width: 16, height: 16)
-                    .opacity(selected ? 1 : 0.72)
-                    .offset(y: selected ? -0.5 : 0)
+                    .opacity(selected ? 1 : (hovered ? 0.90 : 0.72))
                     .overlay(alignment: .topTrailing) {
                         Circle()
                             .fill(palette.warnFill)
                             .frame(width: 5, height: 5)
                             .offset(x: 5, y: -1)
                             .opacity(!selected && item.needsAttention ? 1 : 0)
-                            .animation(PopoverMotion.selection, value: item.needsAttention)
+                            .animation(PopoverMotion.hover, value: item.needsAttention)
                     }
                     .accessibilityHidden(true)
 
@@ -140,15 +145,16 @@ struct ProviderTabBar: View {
             .padding(.bottom, 6)
             .background {
                 if selected {
-                    PopoverLens(shape: RoundedRectangle(cornerRadius: 21, style: .continuous))
+                    PopoverLens(shape: lensShape)
                         .matchedGeometryEffect(id: "dockLens", in: dockNamespace)
                         .transition(.identity)
                 } else {
-                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                    lensShape
                         .fill(hovered ? palette.rowHover : .clear)
                 }
             }
-            .contentShape(Rectangle())
+            .glassEffect(selected ? .clear.interactive() : .identity, in: lensShape)
+            .contentShape(lensShape)
         }
         .buttonStyle(DockButtonStyle())
         .keyboardShortcut(shortcut(for: item.id))
@@ -180,7 +186,7 @@ struct ProviderTabBar: View {
     }
 
     private func select(_ id: ProviderID) {
-        withAnimation(PopoverMotion.selection) { selection = id }
+        selection = id
     }
 
     private func shortcut(for id: ProviderID) -> KeyboardShortcut? {

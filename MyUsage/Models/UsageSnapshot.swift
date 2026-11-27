@@ -318,12 +318,6 @@ struct UsageSnapshot: Sendable {
     var onDemandSpend: CreditInfo?
     var lastRefreshed: Date = .now
 
-    /// Estimated spend (USD) so far this calendar month.
-    /// - Claude/Codex: computed from local JSONL logs × API pricing.
-    /// - Cursor: sum of included spend + on-demand spend from the billing API.
-    /// - nil when the provider doesn't compute one.
-    var monthlyEstimatedCost: Double?
-
     var localUsage: LocalUsageReport? = nil
 
     // MARK: - Computed

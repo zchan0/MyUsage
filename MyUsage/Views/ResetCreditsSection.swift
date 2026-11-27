@@ -14,7 +14,7 @@ struct ResetCreditsSection: View {
             PopoverHairline()
             if hasExpiryDetails {
                 Button {
-                    withAnimation(PopoverMotion.selection) { isExpanded.toggle() }
+                    withAnimation(PopoverMotion.disclosure) { isExpanded.toggle() }
                 } label: {
                     header
                         .background(isHovered ? palette.rowHover : .clear)
@@ -30,9 +30,10 @@ struct ResetCreditsSection: View {
 
             if isExpanded && hasExpiryDetails {
                 drawer
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .offset(y: -4)))
             }
         }
+        .clipped()
         .accessibilityElement(children: .contain)
     }
 

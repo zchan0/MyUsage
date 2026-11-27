@@ -1,50 +1,44 @@
 import Foundation
 
-/// Parses Claude Code's JSONL session logs to aggregate token usage by model.
+/// Parses Claude Code's local JSONL session logs to build `LocalUsageReport`
+/// (token activity, prompt-cache hit rates, and agent-reported costs).
 ///
 /// Log location: `~/.claude/projects/**/*.jsonl` (legacy) or
 /// `~/.config/claude/projects/**/*.jsonl` (Claude Code v1.0.30+).
-///
-/// Each `type=assistant` line looks like:
-/// ```
-/// { "type": "assistant",
-///   "message": {
-///     "model": "claude-sonnet-4-5",
-///     "usage": {
-///       "input_tokens": 19258,
-///       "output_tokens": 2,
-///       "cache_creation_input_tokens": 0,
-///       "cache_read_input_tokens": 0
-///     }
-///   }, ... }
-/// ```
 enum ClaudeLogParser {
 
     // MARK: - Decoded shape (lenient)
 
-    private struct Row: Decodable {
+    private struct LocalUsageRow: Decodable {
         let type: String?
-        let message: Message?
-        /// Pre-computed USD cost written by Claude Code v1.x. When present we
-        /// trust it instead of re-pricing tokens locally (matches ccusage's
-        /// `auto` mode).
-        let costUSD: Double?
-        /// ISO 8601 timestamp at the top level of each JSONL row (Claude Code
-        /// writes this for assistant / user messages). Used by the ledger
-        /// to bucket costs by UTC day. Falls back to file mtime when missing.
         let timestamp: String?
+        let message: Message?
+        let costUSD: Double?
+        let modelUsage: [String: ModelCostEntry]?
+
+        enum CodingKeys: String, CodingKey {
+            case type, timestamp, message, costUSD, modelUsage
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            type = try? values.decode(String.self, forKey: .type)
+            timestamp = try? values.decode(String.self, forKey: .timestamp)
+            message = type == "assistant" ? try? values.decode(Message.self, forKey: .message) : nil
+            costUSD = type == "assistant" ? try? values.decode(Double.self, forKey: .costUSD) : nil
+            modelUsage = type == "cost-state" ? try? values.decode([String: ModelCostEntry].self, forKey: .modelUsage) : nil
+        }
 
         struct Message: Decodable {
             let model: String?
             let usage: Usage?
         }
+
         struct Usage: Decodable {
             let inputTokens: Int?
             let outputTokens: Int?
             let cacheCreationInputTokens: Int?
             let cacheReadInputTokens: Int?
-            /// Per-TTL split of the cache-creation total. Present on current
-            /// Claude Code builds; absent on older transcripts.
             let cacheCreation: CacheCreation?
 
             enum CodingKeys: String, CodingKey {
@@ -65,11 +59,6 @@ enum ClaudeLogParser {
                 }
             }
 
-            /// Cache-write tokens split by TTL, which bill at different rates.
-            ///
-            /// Rows without the `cache_creation` breakdown fall back to
-            /// charging the flat total at the 5-minute rate — the cheaper one,
-            /// so an old transcript is never revalued upward on a guess.
             var cacheWriteByTTL: (fiveMinute: Int, oneHour: Int) {
                 guard let cacheCreation,
                       cacheCreation.ephemeral5mInputTokens != nil
@@ -96,27 +85,6 @@ enum ClaudeLogParser {
         }
     }
 
-    private struct LocalUsageRow: Decodable {
-        let type: String?
-        let timestamp: String?
-        let message: Row.Message?
-        let costUSD: Double?
-        let modelUsage: [String: ModelCostEntry]?
-
-        enum CodingKeys: String, CodingKey {
-            case type, timestamp, message, costUSD, modelUsage
-        }
-
-        init(from decoder: Decoder) throws {
-            let values = try decoder.container(keyedBy: CodingKeys.self)
-            type = try? values.decode(String.self, forKey: .type)
-            timestamp = try? values.decode(String.self, forKey: .timestamp)
-            message = type == "assistant" ? try? values.decode(Row.Message.self, forKey: .message) : nil
-            costUSD = type == "assistant" ? try? values.decode(Double.self, forKey: .costUSD) : nil
-            modelUsage = type == "cost-state" ? try? values.decode([String: ModelCostEntry].self, forKey: .modelUsage) : nil
-        }
-    }
-
     private struct ModelCostEntry: Decodable {
         let costUSD: Double?
 
@@ -127,20 +95,6 @@ enum ClaudeLogParser {
             let values = try? decoder.container(keyedBy: CodingKeys.self)
             costUSD = try? values?.decode(Double.self, forKey: .costUSD)
         }
-    }
-
-    // MARK: - Breakdown (cost-aware)
-
-    /// Output of a cost-aware scan.
-    ///
-    /// - `preComputedCost`: sum of `costUSD` fields from rows that already
-    ///   carry a server-computed dollar amount.
-    /// - `tokensByModel`: tokens from rows that did **not** have `costUSD`;
-    ///   callers should price these via `CostCalculator` and add the result
-    ///   to `preComputedCost` for the final monthly estimate.
-    struct Breakdown: Equatable {
-        var preComputedCost: Double = 0
-        var tokensByModel: UsageByModel = [:]
     }
 
     // MARK: - Default roots
@@ -155,204 +109,6 @@ enum ClaudeLogParser {
     }
 
     // MARK: - Public API
-
-    /// Scan the default roots, summing tokens by model for all `.jsonl` files
-    /// modified on or after `since`.
-    static func scan(since: Date) -> UsageByModel {
-        scan(roots: defaultRoots(), since: since)
-    }
-
-    /// Scan the given roots. Useful for tests.
-    static func scan(roots: [URL], since: Date) -> UsageByModel {
-        scanBreakdown(roots: roots, since: since).tokensByModel
-    }
-
-    /// Parse a single JSONL file, adding tokens into `into`.
-    /// Errors are swallowed silently — logs may be partial or mid-write.
-    static func parseFile(url: URL, into result: inout UsageByModel) {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
-        parse(data: data, into: &result)
-    }
-
-    /// Parse raw JSONL bytes.
-    static func parse(data: Data, into result: inout UsageByModel) {
-        var breakdown = Breakdown(tokensByModel: result)
-        parseBreakdown(data: data, into: &breakdown)
-        result = breakdown.tokensByModel
-    }
-
-    // MARK: - Cost-aware API
-
-    /// Scan default roots, producing a cost-aware breakdown.
-    static func scanBreakdown(since: Date) -> Breakdown {
-        scanBreakdown(roots: defaultRoots(), since: since)
-    }
-
-    /// Scan the given roots, producing a cost-aware breakdown.
-    static func scanBreakdown(roots: [URL], since: Date) -> Breakdown {
-        var result = Breakdown()
-        let fm = FileManager.default
-        for root in roots {
-            guard fm.fileExists(atPath: root.path) else { continue }
-            guard let enumerator = fm.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-
-            for case let url as URL in enumerator {
-                guard url.pathExtension == "jsonl" else { continue }
-                guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                      values.isRegularFile == true,
-                      let mtime = values.contentModificationDate,
-                      mtime >= since
-                else { continue }
-
-                parseFileBreakdown(url: url, into: &result, since: since, fallback: mtime)
-            }
-        }
-        return result
-    }
-
-    /// Latest `contentModificationDate` across all in-scope JSONL files,
-    /// or `nil` if no such files exist. Used by the cost cache as the
-    /// invalidation key — cheap stat-only walk, no parsing.
-    static func maxMtime(roots: [URL] = defaultRoots(), since: Date) -> Date? {
-        let fm = FileManager.default
-        var best: Date?
-        for root in roots {
-            guard fm.fileExists(atPath: root.path) else { continue }
-            guard let enumerator = fm.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-
-            for case let url as URL in enumerator {
-                guard url.pathExtension == "jsonl" else { continue }
-                guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                      values.isRegularFile == true,
-                      let mtime = values.contentModificationDate,
-                      mtime >= since
-                else { continue }
-
-                if best.map({ mtime > $0 }) ?? true {
-                    best = mtime
-                }
-            }
-        }
-        return best
-    }
-
-    /// Parse a single JSONL file into a cost-aware breakdown.
-    static func parseFileBreakdown(
-        url: URL,
-        into result: inout Breakdown,
-        since: Date? = nil,
-        fallback: Date? = nil
-    ) {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return }
-        parseBreakdown(data: data, into: &result, since: since, fallback: fallback)
-    }
-
-    // MARK: - Per-day cost breakdown (ledger)
-
-    /// Per-day breakdown returned by the ledger scan. `total[day]` is the
-    /// authoritative dollar amount that goes into a `LedgerEntry.costUSD`;
-    /// `byModel[day]` is a parallel `[modelFamily: USD]` dict — labels
-    /// already normalised via `normalizeModelFamily` so callers can pass
-    /// it straight to `LedgerEntry.costByModel`.
-    ///
-    /// `byModel[day]` is missing (not present) for days where every line
-    /// took the "server-provided costUSD" fast path — we don't have token
-    /// counts for those, so we can't attribute by model.
-    struct DailyBreakdown: Sendable, Equatable {
-        var total: [String: Double] = [:]
-        var byModel: [String: [String: Double]] = [:]
-        var tokensByDay: [String: TokenUsage] = [:]
-    }
-
-    /// Scan default roots, producing a per-day cost + per-model breakdown
-    /// for all JSONL files modified since `since`. Used by the multi-device
-    /// ledger — each day is one ledger entry, the per-model dict goes into
-    /// that entry's `costByModel`.
-    static func scanDailyBreakdown(
-        since: Date,
-        catalog: PricingCatalog = .shared
-    ) -> DailyBreakdown {
-        scanDailyBreakdown(roots: defaultRoots(), since: since, catalog: catalog)
-    }
-
-    /// Testable core of `scanDailyBreakdown`.
-    static func scanDailyBreakdown(
-        roots: [URL],
-        since: Date,
-        catalog: PricingCatalog = .shared
-    ) -> DailyBreakdown {
-        var result = DailyBreakdown()
-        let fm = FileManager.default
-        for root in roots {
-            guard fm.fileExists(atPath: root.path) else { continue }
-            guard let enumerator = fm.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-
-            for case let url as URL in enumerator {
-                guard url.pathExtension == "jsonl" else { continue }
-                guard let values = try? url.resourceValues(
-                    forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                      values.isRegularFile == true,
-                      let mtime = values.contentModificationDate,
-                      mtime >= since
-                else { continue }
-
-                parseFileDaily(url: url, mtime: mtime, into: &result, catalog: catalog)
-            }
-        }
-        return result
-    }
-
-    /// Backwards-compatible convenience — returns just the day → total cost
-    /// map. Prefer `scanDailyBreakdown` for new callers that also want
-    /// the per-model breakdown.
-    static func scanDailyCost(
-        since: Date,
-        catalog: PricingCatalog = .shared
-    ) -> [String: Double] {
-        scanDailyBreakdown(since: since, catalog: catalog).total
-    }
-
-    /// Testable core (legacy signature). See `scanDailyBreakdown` for the
-    /// richer return type.
-    static func scanDailyCost(
-        roots: [URL],
-        since: Date,
-        catalog: PricingCatalog = .shared
-    ) -> [String: Double] {
-        scanDailyBreakdown(roots: roots, since: since, catalog: catalog).total
-    }
-
-    /// Normalise a raw Anthropic model identifier (e.g.
-    /// `"claude-opus-4-7-20251201"`) into a display family
-    /// (`"Opus"`). Drops version suffixes, capitalises the family,
-    /// returns nil for `"<synthetic>"` and other non-conforming
-    /// strings so callers can skip them.
-    static func normalizeModelFamily(_ raw: String) -> String? {
-        let lc = raw.lowercased()
-        guard lc.hasPrefix("claude-") else { return nil }
-        let rest = lc.dropFirst("claude-".count)
-        // Family token is the first segment before the next '-' (which
-        // begins the version digits). e.g. "opus-4-7" → "opus".
-        guard let dashIdx = rest.firstIndex(of: "-") else {
-            // No version suffix at all — treat the whole tail as the family.
-            return rest.isEmpty ? nil : rest.capitalized
-        }
-        let family = String(rest[..<dashIdx])
-        guard !family.isEmpty else { return nil }
-        return family.capitalized
-    }
 
     /// Keep the display version while dropping dated releases and tags.
     static func normalizeDisplayModel(_ raw: String) -> String? {
@@ -400,168 +156,5 @@ enum ClaudeLogParser {
             }
         }
         return scan.report()
-    }
-
-    private static func parseFileDaily(
-        url: URL,
-        mtime: Date,
-        into result: inout DailyBreakdown,
-        catalog: PricingCatalog
-    ) {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-              let text = String(data: data, encoding: .utf8)
-        else { return }
-
-        let decoder = JSONDecoder()
-        let fallbackDay = LedgerCalendar.dayKey(for: mtime)
-        var acc = result
-
-        text.enumerateLines { line, _ in
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { return }
-            guard let row = try? decoder.decode(Row.self, from: lineData) else { return }
-            guard row.type == "assistant",
-                  let message = row.message,
-                  let model = message.model,
-                  let usage = message.usage
-            else { return }
-
-            let day = row.timestamp
-                .flatMap(Self.parseTimestamp)
-                .map(LedgerCalendar.dayKey) ?? fallbackDay
-
-            let tokens = usage.tokens
-            if !tokens.isEmpty {
-                acc.tokensByDay[day, default: .zero] += tokens
-            }
-
-            // Server-provided costUSD is authoritative for cost. Token
-            // buckets are still recorded above; only model-cost attribution
-            // is unavailable because the row's price cannot be decomposed.
-            if let cost = row.costUSD, cost > 0 {
-                acc.total[day, default: 0] += cost
-                return
-            }
-
-            guard !tokens.isEmpty else { return }
-
-            let usd = CostCalculator.cost(
-                usage: tokens,
-                model: model.lowercased(),
-                catalog: catalog
-            )
-            guard usd > 0 else { return }
-
-            acc.total[day, default: 0] += usd
-
-            // Attribute to a normalised family. Skip non-conforming model
-            // strings (e.g. "<synthetic>") rather than littering the
-            // breakdown with one-off labels.
-            if let family = normalizeModelFamily(model) {
-                var dayMap = acc.byModel[day, default: [:]]
-                dayMap[family, default: 0] += usd
-                acc.byModel[day] = dayMap
-            }
-        }
-        result = acc
-    }
-
-    private static func parseTimestamp(_ raw: String) -> Date? {
-        let frac = ISO8601DateFormatter()
-        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = frac.date(from: raw) { return d }
-        let basic = ISO8601DateFormatter()
-        return basic.date(from: raw)
-    }
-
-    /// Parse raw JSONL bytes into a cost-aware breakdown.
-    /// `since` filters **rows**, not just files.
-    ///
-    /// Selecting files by modification time is not enough: a session resumed
-    /// today rewrites a file whose transcript reaches back weeks, so counting
-    /// every row in it charges the whole history to the current window. On
-    /// 2026-08-01 that put 50.4M July cache-read tokens into August and
-    /// reported ~$123 for a month whose real spend was ~$11.
-    ///
-    /// Rows with no parseable timestamp fall back to the file's mtime, which
-    /// the caller has already established is in range — the same rule
-    /// `scanDailyBreakdown` uses for day bucketing.
-    static func parseBreakdown(
-        data: Data,
-        into result: inout Breakdown,
-        since: Date? = nil,
-        fallback: Date? = nil
-    ) {
-        guard let text = String(data: data, encoding: .utf8) else { return }
-        let decoder = JSONDecoder()
-        var acc = result
-        text.enumerateLines { line, _ in
-            guard !line.isEmpty, let lineData = line.data(using: .utf8) else { return }
-            Self.handleLine(
-                lineData,
-                decoder: decoder,
-                result: &acc,
-                since: since,
-                fallback: fallback
-            )
-        }
-        result = acc
-    }
-
-    // MARK: - Single-line dispatch
-
-    private static func handleLine(
-        _ lineData: Data,
-        decoder: JSONDecoder,
-        result: inout Breakdown,
-        since: Date? = nil,
-        fallback: Date? = nil
-    ) {
-        guard let row = try? decoder.decode(Row.self, from: lineData) else { return }
-        guard row.type == "assistant",
-              let message = row.message,
-              let model = message.model,
-              let usage = message.usage
-        else { return }
-
-        if let since,
-           let stamp = row.timestamp.flatMap(Self.parseTimestamp) ?? fallback,
-           stamp < since {
-            return
-        }
-
-        // Prefer server-computed costUSD when present. Matches ccusage `auto`
-        // mode and insulates us from pricing drift / prompt-cache quirks.
-        if let cost = row.costUSD, cost > 0 {
-            result.preComputedCost += cost
-            return
-        }
-
-        let tokens = usage.tokens
-        // Skip no-op rows that all sum to 0 (queue-ops, errors, etc.)
-        guard tokens.input + tokens.output + tokens.cacheWrite + tokens.cacheRead > 0 else { return }
-
-        result.tokensByModel.add(tokens, for: model.lowercased())
-    }
-}
-
-// MARK: - Calendar helper
-
-extension Date {
-    /// Start of the current calendar month in the provided calendar (local time).
-    static func startOfCurrentMonth(calendar: Calendar = .current, now: Date = .now) -> Date {
-        let comps = calendar.dateComponents([.year, .month], from: now)
-        return calendar.date(from: comps) ?? now
-    }
-
-    /// Scan window for ledger daily-cost recording: the earlier of the
-    /// month start and 30 days back. The monthly cost row only needs the
-    /// current month, but the daily chart shows a trailing 30 days — early
-    /// in a month, month-start-only scanning would leave last month's tail
-    /// permanently un(re)attributed (the "Codex chart is all Other" bug:
-    /// rows written before per-model attribution existed were never
-    /// rescanned because they fell outside the month window).
-    static func ledgerBackfillStart(calendar: Calendar = .current, now: Date = .now) -> Date {
-        min(startOfCurrentMonth(calendar: calendar, now: now),
-            now.addingTimeInterval(-30 * 86_400))
     }
 }

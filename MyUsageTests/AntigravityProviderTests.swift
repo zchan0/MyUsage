@@ -342,21 +342,12 @@ struct AntigravityProviderTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("antigravity-menubar-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
         let provider = StubAntigravityProvider()
         var localOnly = UsageSnapshot()
         localOnly.planName = "Antigravity 2.35.1"
         provider.snapshot = localOnly
 
-        let ledger = LedgerSync(
-            store: try LedgerStore(path: LedgerStore.inMemoryPath),
-            syncRoot: LocalSyncRoot(url: tempDir)
-        )
-        let manager = UsageManager(ledger: ledger, providers: [provider], startsLedger: false, defaults: defaults)
+        let manager = UsageManager(providers: [provider], backgroundServicesEnabled: false, defaults: defaults)
         #expect(manager.menuBarText(for: .antigravity) == nil)
 
         var withQuotas = UsageSnapshot()
@@ -531,8 +522,7 @@ struct AntigravityProviderTests {
         let suite = "antigravity-statusline-menubar-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let ledger = LedgerSync(store: try LedgerStore(path: LedgerStore.inMemoryPath), syncRoot: LocalSyncRoot(url: f.root))
-        let manager = UsageManager(ledger: ledger, providers: [staleProvider], startsLedger: false, defaults: defaults)
+        let manager = UsageManager(providers: [staleProvider], backgroundServicesEnabled: false, defaults: defaults)
         #expect(manager.menuBarText(for: .antigravity) == "7d · 41%")
 
         // After all buckets expire, snapshot has no active quotas and menu bar text is nil.
@@ -545,7 +535,7 @@ struct AntigravityProviderTests {
             processFinder: { [] },
             hasLocalInstallation: { false }
         )
-        let managerExpired = UsageManager(ledger: ledger, providers: [expiredProvider], startsLedger: false, defaults: defaults)
+        let managerExpired = UsageManager(providers: [expiredProvider], backgroundServicesEnabled: false, defaults: defaults)
         #expect(expiredProvider.snapshot?.modelQuotas.isEmpty == true)
         #expect(managerExpired.menuBarText(for: .antigravity) == nil)
     }
