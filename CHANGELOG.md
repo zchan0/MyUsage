@@ -6,6 +6,56 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.21.0 — 2026-11-27
+
+### Added
+- **Redesigned macOS 26 Settings window.** Replaced the top-tab preferences layout
+  with a 4-section floating Liquid Glass sidebar (`General`, `Providers`,
+  `Notifications`, and `About`) supporting keyboard arrow navigation and live
+  sidebar status badges.
+- **Unified Providers & inline statusline controls.** Claude Code and Antigravity
+  CLI statusline integration status and actions (`Connect`, `Disconnect`,
+  `Reconnect`, `Reveal`, `Reset`) now live directly inside each provider row
+  alongside visibility and dock-ordering controls, with LiteLLM gateway setup
+  grouped cleanly below.
+- **Dedicated Notifications pane with live alert-zone preview.** Separated limit
+  alerts from `General` and added a real-time color-coded threshold bar paired
+  with continuous sliders and steppers for warning and critical thresholds.
+
+### Changed
+- **Requires macOS 26+ (Tahoe) and native Liquid Glass chrome.** Raised the
+  minimum macOS target to `26.0` (Swift 6.2 / `macos-26` CI & release builds).
+  The menu-bar panel now renders on native `NSGlassEffectView` with concentric
+  corners (`26pt` outer / `16pt` inner sheets), interactive Liquid Glass dock
+  and scope pills, crisp non-bouncing provider transitions, and smooth numeric
+  readouts.
+
+### Removed
+- **Removed cross-device cost sync and API pricing estimation.** Dropped the
+  multi-device sync folder ledger, `Devices` settings tab, remote LiteLLM
+  pricing catalog fetches, and legacy estimated-cost views. Claude Code and
+  Codex refreshes now scan local session logs once for `LocalUsageReport`
+  (tokens, prompt-cache hit rates, and Claude-reported costs). Retired local
+  app-owned ledger/cache files are cleaned up silently on startup without
+  touching any external user sync folder.
+
+### 中文
+
+- **全新 macOS 26 侧边栏设置窗口**：重构为 4 分区浮动液态玻璃侧边栏
+  （`General`、`Providers`、`Notifications`、`About`），支持键盘上下切换与侧边栏状态提示点。
+- **统一 Providers 与内联 Statusline 控制**：将 Claude Code 和 Antigravity CLI 的
+  statusline 接入状态与操作（`Connect` / `Disconnect` / `Reconnect` / `Reveal` / `Reset`）
+  直接整合进对应工具行内，消除原先上下重复展示的割裂感，并在下方提供统一的自定义网关入口。
+- **独立 Notifications 提醒页**：从 General 拆分出独立额度提醒页面，新增实时三段式
+  `Alert zones` 阈值预览条，配合平滑滑块与步进器调节警告与危急阈值。
+- **升级至 macOS 26+ 与原生 Liquid Glass 质感**：最低系统版本提升至 macOS 26.0（CI 与
+  Release 同步切至 `macos-26`）；菜单栏弹窗改用原生 `NSGlassEffectView` 浮动面板与同心圆角，
+  交互控件接入液态玻璃反馈，并优化了切页与高度缩放动效，消除顶部灰条闪烁。
+- **移除跨设备成本同步与 API 定价估算体系**：移除跨设备账本同步、`Devices` 设置页、
+  远端价格表拉取及遗留旧视图；Claude Code 与 Codex 每次刷新仅单次扫描本地日志生成用量图表
+  （保留 token、缓存命中率及 Claude 日志原生费用）。启动时自动静默清理本机遗留账本与缓存文件，
+  不会触碰用户外部同步文件夹。
+
 ## v0.20.0 — 2026-11-27
 
 ### Added
