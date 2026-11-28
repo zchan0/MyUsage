@@ -193,25 +193,26 @@ struct AntigravityProviderTests {
         #expect(snapshot.email == "dev@example.com")
         #expect(snapshot.modelQuotas.count == 4)
 
-        // 7d is ordered above 5h within each group even when API returned 5h first.
+        // 5h is ordered above 7d within each group even when API returned 7d first.
         #expect(snapshot.modelQuotas[0].groupName == "Gemini Models")
-        #expect(snapshot.modelQuotas[0].windowLabel == "7d")
-        #expect(snapshot.modelQuotas[0].windowDuration == TimeInterval(7 * 86_400))
-        #expect(snapshot.modelQuotas[0].bucketId == "gemini-weekly")
-        #expect(abs(snapshot.modelQuotas[0].percentUsed - 1.0) < 0.01)
+        #expect(snapshot.modelQuotas[0].windowLabel == "5h")
+        #expect(snapshot.modelQuotas[0].windowDuration == TimeInterval(5 * 3_600))
+        #expect(snapshot.modelQuotas[0].bucketId == "gemini-5h")
+        #expect(abs(snapshot.modelQuotas[0].percentUsed - 2.0) < 0.01)
 
         #expect(snapshot.modelQuotas[1].groupName == "Gemini Models")
-        #expect(snapshot.modelQuotas[1].windowLabel == "5h")
-        #expect(snapshot.modelQuotas[1].windowDuration == TimeInterval(5 * 3_600))
-        #expect(abs(snapshot.modelQuotas[1].percentUsed - 2.0) < 0.01)
+        #expect(snapshot.modelQuotas[1].windowLabel == "7d")
+        #expect(snapshot.modelQuotas[1].windowDuration == TimeInterval(7 * 86_400))
+        #expect(snapshot.modelQuotas[1].bucketId == "gemini-weekly")
+        #expect(abs(snapshot.modelQuotas[1].percentUsed - 1.0) < 0.01)
 
         #expect(snapshot.modelQuotas[2].groupName == "Claude and GPT models")
-        #expect(snapshot.modelQuotas[2].windowLabel == "7d")
-        #expect(abs(snapshot.modelQuotas[2].percentUsed - 3.0) < 0.01)
+        #expect(snapshot.modelQuotas[2].windowLabel == "5h")
+        #expect(snapshot.modelQuotas[2].percentUsed == 0.0)
 
         #expect(snapshot.modelQuotas[3].groupName == "Claude and GPT models")
-        #expect(snapshot.modelQuotas[3].windowLabel == "5h")
-        #expect(snapshot.modelQuotas[3].percentUsed == 0.0)
+        #expect(snapshot.modelQuotas[3].windowLabel == "7d")
+        #expect(abs(snapshot.modelQuotas[3].percentUsed - 3.0) < 0.01)
 
         #expect(snapshot.worstUsage.label == "7d")
         #expect(abs(snapshot.worstUsage.percent - 3.0) < 0.01)
@@ -406,25 +407,26 @@ struct AntigravityProviderTests {
         #expect(snap.email == "synthetic@example.com")
         #expect(snap.lastRefreshed == now)
         #expect(snap.modelQuotas.count == 4)
-        // Canonical ordering: Gemini Models (7d then 5h), then Claude & GPT Models (7d then 5h).
+        // Canonical ordering: Gemini Models (5h then 7d), then Claude & GPT Models (5h then 7d).
         #expect(snap.modelQuotas[0].groupName == "Gemini Models")
-        #expect(snap.modelQuotas[0].windowLabel == "7d")
-        #expect(snap.modelQuotas[0].windowDuration == TimeInterval(7 * 86_400))
-        #expect(snap.modelQuotas[0].bucketId == "gemini-weekly")
-        #expect(abs(snap.modelQuotas[0].percentUsed - 15.0) < 0.01)
+        #expect(snap.modelQuotas[0].windowLabel == "5h")
+        #expect(snap.modelQuotas[0].windowDuration == TimeInterval(5 * 3_600))
+        #expect(snap.modelQuotas[0].bucketId == "gemini-5h")
+        #expect(abs(snap.modelQuotas[0].percentUsed - 23.5) < 0.01)
 
         #expect(snap.modelQuotas[1].groupName == "Gemini Models")
-        #expect(snap.modelQuotas[1].windowLabel == "5h")
-        #expect(snap.modelQuotas[1].windowDuration == TimeInterval(5 * 3_600))
-        #expect(abs(snap.modelQuotas[1].percentUsed - 23.5) < 0.01)
+        #expect(snap.modelQuotas[1].windowLabel == "7d")
+        #expect(snap.modelQuotas[1].windowDuration == TimeInterval(7 * 86_400))
+        #expect(snap.modelQuotas[1].bucketId == "gemini-weekly")
+        #expect(abs(snap.modelQuotas[1].percentUsed - 15.0) < 0.01)
 
         #expect(snap.modelQuotas[2].groupName == "Claude & GPT Models")
-        #expect(snap.modelQuotas[2].windowLabel == "7d")
-        #expect(abs(snap.modelQuotas[2].percentUsed - 41.0) < 0.01)
+        #expect(snap.modelQuotas[2].windowLabel == "5h")
+        #expect(snap.modelQuotas[2].percentUsed == 0.0)
 
         #expect(snap.modelQuotas[3].groupName == "Claude & GPT Models")
-        #expect(snap.modelQuotas[3].windowLabel == "5h")
-        #expect(snap.modelQuotas[3].percentUsed == 0.0)
+        #expect(snap.modelQuotas[3].windowLabel == "7d")
+        #expect(abs(snap.modelQuotas[3].percentUsed - 41.0) < 0.01)
         #expect(provider.statuslineSourceMessage.contains("Received locally"))
 
         // Disabling retains the dated snapshot while suppressing new notifications.

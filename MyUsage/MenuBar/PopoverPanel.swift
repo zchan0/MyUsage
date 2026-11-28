@@ -4,9 +4,12 @@ import SwiftUI
 /// Borderless macOS 26 Liquid Glass status-bar panel that hosts `UsagePopover`
 /// and sizes itself deterministically to the SwiftUI content's measured height.
 ///
-/// Uses `NSGlassEffectView` as the window's content view with concentric
-/// continuous corners (`PopoverLayout.outerCornerRadius`), setting the
-/// `NSHostingView` as `glassView.contentView` per AppKit's z-order contract.
+/// Hosts `NSGlassEffectView` inside a continuous-rounded, layer-masked container
+/// `NSView` (`PopoverLayout.outerCornerRadius`), with `NSHostingView` assigned
+/// to `glassView.contentView` per AppKit's z-order contract. Masking the
+/// container clips the glass view's internal `CABackdropLayer` to the rounded
+/// silhouette so WindowServer casts a matching rounded shadow without a
+/// rectangular frame or corner bleed.
 @MainActor
 final class PopoverPanel: NSPanel {
     let presentation = PopoverPresentation()
@@ -18,6 +21,7 @@ final class PopoverPanel: NSPanel {
     /// Last ideal size SwiftUI reported via `onSizeChange`.
     private(set) var lastReportedContentSize: CGSize?
 
+    private let containerView: NSView
     private let glassView: NSGlassEffectView
     private let hostingView: NSHostingView<AnyView>
 
@@ -28,7 +32,18 @@ final class PopoverPanel: NSPanel {
 
     /// Host an arbitrary SwiftUI root (separate mode passes a single provider's popover).
     init(manager: UsageManager, updateChecker: UpdateChecker, rootView: AnyView) {
-        let glass = NSGlassEffectView()
+        let initialBounds = NSRect(x: 0, y: 0, width: PopoverLayout.width, height: 200)
+
+        let container = NSView(frame: initialBounds)
+        container.wantsLayer = true
+        container.layer?.cornerRadius = PopoverLayout.outerCornerRadius
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
+        container.translatesAutoresizingMaskIntoConstraints = true
+        container.autoresizingMask = [.width, .height]
+        self.containerView = container
+
+        let glass = NSGlassEffectView(frame: initialBounds)
         glass.style = .regular
         glass.cornerRadius = PopoverLayout.outerCornerRadius
         glass.translatesAutoresizingMaskIntoConstraints = true
@@ -38,7 +53,7 @@ final class PopoverPanel: NSPanel {
         self.hostingView = NSHostingView(rootView: AnyView(EmptyView()))
 
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: PopoverLayout.width, height: 200),
+            contentRect: initialBounds,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -76,11 +91,12 @@ final class PopoverPanel: NSPanel {
         hostingView.autoresizingMask = [.width, .height]
 
         glass.contentView = hostingView
-        contentView = glass
+        container.addSubview(glass)
+        contentView = container
 
         // Force an initial layout pass so intrinsicContentSize reflects real SwiftUI content
         // before the panel first appears.
-        glass.layoutSubtreeIfNeeded()
+        container.layoutSubtreeIfNeeded()
         setContentSize(Self.sanitized(hostingView.intrinsicContentSize))
     }
 

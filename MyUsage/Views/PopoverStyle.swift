@@ -123,6 +123,8 @@ enum PopoverPalette {
     var critFill: Color { tone(0xDC_4C46, 0xEE_6660) }
     var critInk: Color { tone(0xBA_322C, 0xF7_8681) }
     var critPillBackground: Color { critFill.opacity(isDark ? 0.17 : 0.13) }
+    var neutralPillBackground: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.10 : 0.06) }
+    var neutralPillEdge: Color { tone(0x0F_121A, 0xFF_FFFF).opacity(isDark ? 0.14 : 0.09) }
 
     var sparkIdle: Color { inkPrimary.opacity(isDark ? 0.22 : 0.17) }
     var sparkEmpty: Color { inkPrimary.opacity(isDark ? 0.06 : 0.055) }

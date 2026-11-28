@@ -122,15 +122,6 @@ enum PreviewFixtures {
         antigravity.email = "alex@example.com"
         antigravity.modelQuotas = [
             ModelQuota(
-                label: "Gemini Models · 7d",
-                remainingFraction: 0.99,
-                resetsAt: now.addingTimeInterval(6 * 86_400),
-                groupName: "Gemini Models",
-                windowLabel: "7d",
-                windowDuration: 7 * 86_400,
-                bucketId: "gemini-weekly"
-            ),
-            ModelQuota(
                 label: "Gemini Models · 5h",
                 remainingFraction: 0.98,
                 resetsAt: now.addingTimeInterval(4 * 3_600 + 50 * 60),
@@ -140,13 +131,13 @@ enum PreviewFixtures {
                 bucketId: "gemini-5h"
             ),
             ModelQuota(
-                label: "Claude & GPT Models · 7d",
-                remainingFraction: 0.97,
-                resetsAt: now.addingTimeInterval(3 * 86_400 + 5 * 3_600),
-                groupName: "Claude & GPT Models",
+                label: "Gemini Models · 7d",
+                remainingFraction: 0.99,
+                resetsAt: now.addingTimeInterval(6 * 86_400),
+                groupName: "Gemini Models",
                 windowLabel: "7d",
                 windowDuration: 7 * 86_400,
-                bucketId: "3p-weekly"
+                bucketId: "gemini-weekly"
             ),
             ModelQuota(
                 label: "Claude & GPT Models · 5h",
@@ -156,6 +147,15 @@ enum PreviewFixtures {
                 windowLabel: "5h",
                 windowDuration: 5 * 3_600,
                 bucketId: "3p-5h"
+            ),
+            ModelQuota(
+                label: "Claude & GPT Models · 7d",
+                remainingFraction: 0.97,
+                resetsAt: now.addingTimeInterval(3 * 86_400 + 5 * 3_600),
+                groupName: "Claude & GPT Models",
+                windowLabel: "7d",
+                windowDuration: 7 * 86_400,
+                bucketId: "3p-weekly"
             ),
         ]
         antigravity.lastRefreshed = now.addingTimeInterval(-32)

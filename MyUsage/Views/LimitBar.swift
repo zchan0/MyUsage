@@ -29,8 +29,6 @@ struct QuotaRunwayRow: View {
                     .help(win)
 
                 track
-                    .padding(.top, 6)
-                    .padding(.bottom, 1)
 
                 Text(percent / 100, format: .percent.precision(.fractionLength(0)))
                     .font(.system(size: 11.5, weight: .semibold))
@@ -41,8 +39,8 @@ struct QuotaRunwayRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(width: 34, alignment: .trailing)
-                    .padding(.top, 5)
             }
+            .padding(.top, 3)
 
             if reset != nil || verdict != nil {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -68,7 +66,7 @@ struct QuotaRunwayRow: View {
                 .font(.system(size: 10))
                 .monospacedDigit()
                 .padding(.leading, wide ? 71 : 33)
-                .padding(.top, 3.5)
+                .padding(.top, 2.5)
             }
         }
     }

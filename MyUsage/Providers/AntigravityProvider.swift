@@ -257,7 +257,7 @@ struct AntigravityModelConfigsResponse: Codable, Sendable {
 /// spawned by Antigravity 2.0, Antigravity IDE, or the `agy` CLI, and supports
 /// an opt-in local statusline fallback from Antigravity CLI (`agy`).
 ///
-/// Primary live quota source is `RetrieveUserQuotaSummary` (grouped 7d / 5h rolling
+/// Primary live quota source is `RetrieveUserQuotaSummary` (grouped 5h / 7d rolling
 /// buckets), enriched with account identity & tier from `GetUserStatus`, with
 /// automatic fallback to legacy `GetUserStatus.clientModelConfigs` and
 /// `GetCommandModelConfigs`. When live process RPC is unavailable (for example,
@@ -1088,7 +1088,8 @@ final class AntigravityProvider: BuiltinUsageProvider {
                 ))
             }
 
-            // Show longer rolling windows (7d) above shorter windows (5h) within each group.
+            // Show shorter rolling windows (5h) above longer windows (7d) within each group,
+            // matching Claude and Codex.
             groupQuotas.sort { lhs, rhs in
                 windowSortRank(lhs.windowDuration) < windowSortRank(rhs.windowDuration)
             }
@@ -1112,10 +1113,10 @@ final class AntigravityProvider: BuiltinUsageProvider {
     }
 
     private nonisolated static func windowSortRank(_ duration: TimeInterval?) -> Int {
-        guard let duration else { return 2 }
-        if duration >= 6 * 86_400 { return 0 } // weekly / 7d first
-        if duration <= 6 * 3_600 { return 1 }  // 5h second
-        return 2
+        guard let duration else { return 3 }
+        if duration <= 6 * 3_600 { return 0 }  // 5h first
+        if duration < 6 * 86_400 { return 1 }  // intermediate (e.g. 24h)
+        return 2                               // weekly / 7d
     }
 
     private nonisolated static func statuslineGroupSortRank(_ title: String?) -> Int {

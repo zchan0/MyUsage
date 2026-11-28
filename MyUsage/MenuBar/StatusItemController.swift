@@ -270,6 +270,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         DebugLog.info("StatusItem[\(label)] setPanelFrame size=\(size) immediate=\(immediate)")
         if immediate {
             panel.setFrame(frame, display: true, animate: false)
+            panel.invalidateShadow()
             return
         }
         let animate = panel.isVisible
@@ -277,14 +278,19 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             guard let self else { return }
             guard animate, panel.isVisible else {
                 panel.setFrame(frame, display: true, animate: false)
+                panel.invalidateShadow()
                 return
             }
-            NSAnimationContext.runAnimationGroup { context in
+            NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
                 context.allowsImplicitAnimation = true
                 self.panel.animator().setFrame(frame, display: true)
-            }
+            }, completionHandler: { [weak self] in
+                Task { @MainActor in
+                    self?.panel.invalidateShadow()
+                }
+            })
         }
     }
 }

@@ -86,49 +86,64 @@ struct BuiltinProviderDeck: View {
     private func accountHeader(_ snapshot: UsageSnapshot, metrics: [CapacityFocus.Metric]) -> some View {
         let claude = provider as? ClaudeProvider
         let antigravity = provider as? AntigravityProvider
-        let email = claude?.localAccount?.email ?? snapshot.email
-        let plan = claude?.localAccount?.planName ?? snapshot.planName
-        return HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(planTitle(plan))
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(-0.13)
-                .foregroundStyle(palette.inkPrimary)
-                .lineLimit(1)
-                .layoutPriority(1)
-                .help(planTitle(plan))
-
-            if let email {
+        let header = AccountHeaderPresentation.make(
+            kind: provider.kind,
+            rawPlan: claude?.localAccount?.planName ?? snapshot.planName,
+            email: claude?.localAccount?.email ?? snapshot.email
+        )
+        return HStack(alignment: .center, spacing: 5.5) {
+            if let email = header.email {
                 Text(email)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(palette.inkTertiary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.inkSecondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.88)
                     .truncationMode(.middle)
                     .help(claude?.localAccount?.helpText ?? email)
+            } else if header.planBadge == nil {
+                Text(header.fallbackTitle)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(palette.inkSecondary)
+                    .lineLimit(1)
             }
 
-            if let claude {
-                StatuslineDataIndicator(state: claude.dataState)
-                    .help(claude.sourceMessage)
-            } else if let antigravity, antigravity.quotaSource == .statusline {
-                StatuslineDataIndicator(state: antigravity.statuslineDataState)
-                    .help(antigravity.statuslineSourceMessage)
+            if let planBadge = header.planBadge {
+                planPill(planBadge, help: header.planFullName ?? planBadge)
+                    .fixedSize()
             }
 
-            Spacer(minLength: 2)
+            statuslineWarningIndicator(claude: claude, antigravity: antigravity)
+
+            Spacer(minLength: 4)
 
             runwayBadge(snapshot, metrics: metrics)
                 .fixedSize()
         }
     }
 
-    private func planTitle(_ plan: String?) -> String {
-        let name = provider.kind.shortName
-        guard let plan = plan?.trimmingCharacters(in: .whitespacesAndNewlines), !plan.isEmpty else { return name }
-        if provider.kind == .antigravity || plan.compare(name, options: .caseInsensitive) == .orderedSame
-            || plan.lowercased().hasPrefix(name.lowercased() + " ") {
-            return plan
+    @ViewBuilder
+    private func statuslineWarningIndicator(claude: ClaudeProvider?, antigravity: AntigravityProvider?) -> some View {
+        if let claude, claude.dataState == .stale || claude.dataState == .invalid {
+            StatuslineDataIndicator(state: claude.dataState)
+                .help(claude.sourceMessage)
+        } else if let antigravity,
+                  antigravity.quotaSource == .statusline,
+                  antigravity.statuslineDataState == .stale || antigravity.statuslineDataState == .invalid {
+            StatuslineDataIndicator(state: antigravity.statuslineDataState)
+                .help(antigravity.statuslineSourceMessage)
         }
-        return "\(name) \(plan)"
+    }
+
+    private func planPill(_ text: String, help: String) -> some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .medium))
+            .foregroundStyle(palette.inkSecondary)
+            .lineLimit(1)
+            .padding(.horizontal, 5.5)
+            .padding(.vertical, 1.5)
+            .background(palette.neutralPillBackground, in: Capsule())
+            .overlay(Capsule().strokeBorder(palette.neutralPillEdge, lineWidth: 0.5))
+            .help(help)
     }
 
     @ViewBuilder
@@ -306,6 +321,49 @@ struct BuiltinProviderDeck: View {
         .padding(.vertical, 14)
     }
 }
+enum AccountHeaderPresentation {
+    struct Model: Equatable, Sendable {
+        let email: String?
+        let planBadge: String?
+        let planFullName: String?
+        let fallbackTitle: String
+    }
+
+    static func normalizedEmail(_ rawEmail: String?) -> String? {
+        guard let trimmed = rawEmail?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    static func make(kind: ProviderKind, rawPlan: String?, email rawEmail: String?) -> Model {
+        let trimmedPlan = rawPlan?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fullPlan = trimmedPlan.flatMap { $0.isEmpty ? nil : $0 }
+        let badge = compactPlanBadge(providerName: kind.shortName, rawPlan: fullPlan)
+        return Model(
+            email: normalizedEmail(rawEmail),
+            planBadge: badge,
+            planFullName: badge != nil ? fullPlan : nil,
+            fallbackTitle: kind.shortName
+        )
+    }
+
+    static func compactPlanBadge(providerName: String, rawPlan: String?) -> String? {
+        guard let trimmed = rawPlan?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        if trimmed.compare(providerName, options: .caseInsensitive) == .orderedSame {
+            return nil
+        }
+        for prefix in [providerName + " ", "Google AI "] {
+            if trimmed.count > prefix.count,
+               trimmed.prefix(prefix.count).compare(prefix, options: .caseInsensitive) == .orderedSame {
+                let remainder = trimmed.dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines)
+                return remainder.isEmpty ? nil : remainder
+            }
+        }
+        return trimmed
+    }
+}
+
 enum TokenCountFormatter {
     static func string(_ value: Int) -> String {
         let count = Double(max(0, value))
@@ -322,3 +380,41 @@ enum TokenCountFormatter {
         return String(format: "%.*f%@", digits, value, suffix)
     }
 }
+
+#if DEBUG
+#Preview("Account header · Long email & tiers") {
+    let now = Date.now
+    var claude = UsageSnapshot()
+    claude.planName = "Pro"
+    claude.email = "alexandra.developer@example.com"
+    claude.sessionUsage = UsageWindow(percentUsed: 12, resetsAt: now.addingTimeInterval(4.5 * 3600), windowDuration: 5 * 3600)
+    claude.weeklyUsage = UsageWindow(percentUsed: 18, resetsAt: now.addingTimeInterval(6 * 86_400), windowDuration: 7 * 86_400)
+
+    var antigravity = UsageSnapshot()
+    antigravity.planName = "Google AI Ultra"
+    antigravity.email = "alexandra.developer@example.com"
+    antigravity.modelQuotas = [
+        ModelQuota(
+            label: "Gemini Models · 7d",
+            remainingFraction: 0.96,
+            resetsAt: now.addingTimeInterval(5 * 86_400),
+            groupName: "Gemini Models",
+            windowLabel: "7d",
+            windowDuration: 7 * 86_400,
+            bucketId: "gemini-weekly"
+        )
+    ]
+
+    var noEmail = UsageSnapshot()
+    noEmail.planName = "Plus"
+    noEmail.sessionUsage = UsageWindow(percentUsed: 24, resetsAt: now.addingTimeInterval(3 * 3600), windowDuration: 5 * 3600)
+
+    return VStack(spacing: 4) {
+        BuiltinProviderDeck(provider: PreviewUsageProvider(kind: .claude, snapshot: claude))
+        BuiltinProviderDeck(provider: PreviewUsageProvider(kind: .antigravity, snapshot: antigravity))
+        BuiltinProviderDeck(provider: PreviewUsageProvider(kind: .codex, snapshot: noEmail))
+    }
+    .frame(width: PopoverLayout.width)
+    .background { PopoverGlassSurface() }
+}
+#endif
