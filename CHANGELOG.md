@@ -6,6 +6,43 @@ All notable changes are listed here. Each release section is bilingual
 The English half of each section is what GitHub's Release page shows;
 the 中文 half lives here only.
 
+## v0.22.0 — 2026-11-27
+
+### Added
+- **API-equivalent token cost estimation for Codex and Antigravity.** Local
+  session logs now estimate per-turn costs using model pricing fetched from
+  `models.dev/api.json` (cached locally for 24 hours with a bundled offline
+  fallback), including cached input rates and long-context pricing tiers.
+  Estimated totals and per-model rows display an explicit `~` prefix (or `≥`
+  when any tokens come from an unpriced model) with explanatory hover tooltips,
+  while Claude Code continues showing exact agent-reported costs from local logs.
+
+### Fixed
+- **macOS 26 Liquid Glass popover polish.** Removed the stray rectangular outer
+  border and corner shadow outside the rounded glass surface, simplified the
+  account header to a subtle single-row email + compact tier badge (hiding the
+  statusline icon in healthy `.valid` state), vertically centered `5h` / `7d`
+  labels with their quota bars, aligned cost and token columns across 3-digit
+  estimates, and ordered Antigravity grouped quotas consistently (`5h` above
+  `7d`).
+- **Zero-warning builds.** Excluded `AppIcon.icns` from the SwiftPM target
+  (packaged directly into `Contents/Resources/`) and routed the legacy
+  no-interaction Keychain fallback through a private protocol shim to eliminate
+  remaining build warnings.
+
+### 中文
+
+- **Codex 与 Antigravity API 等价费用估算**：本地会话日志现按单轮请求结合
+  `models.dev/api.json` 模型单价估算费用（24 小时本地缓存 + 内置离线兜底表），
+  支持缓存读取单价与长上下文阶梯定价。界面以 `~$`（含未定价模型时以 `≥$`）清晰标示
+  估算值并附带悬停说明；Claude Code 仍保持读取本地日志原生上报费用。
+- **macOS 26 液态玻璃弹窗细节修补**：移除圆角玻璃外层多余的矩形边框与四角阴影；
+  账号栏精简为克制的单排「邮箱 + 会员角标」（正常态隐藏状态栏小图标）；修复 `5h` /
+  `7d` 标签与进度条垂直居中对齐、百元级费用列对齐，并统一 Antigravity 分组额度顺序为
+  `5h` 在上、`7d` 在下。
+- **零警告构建**：在 `Package.swift` 中排除已由打包脚本直接复制的 `AppIcon.icns`，并
+  消除 Keychain 无交互查询的废弃 API 编译警告。
+
 ## v0.21.0 — 2026-11-27
 
 ### Added

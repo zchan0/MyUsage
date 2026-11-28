@@ -43,7 +43,7 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 - **Built-in tools and custom gateways in one popover** — Claude Code, Codex, Cursor, Antigravity, plus named LiteLLM gateway instances. Reorder and enable/disable each instance in Settings.
 - **Provider dock.** The popover opens directly to a provider. Switch providers in the dock and look for the amber dot on any other provider that needs attention.
 - **Quota runway.** A pace marker shows how much of a window has elapsed. The quota sheet shows reserve, usage over pace, and projected exhaustion when available.
-- **Local usage by model.** Switch between today's hours and the last 30 days in Claude or Codex. Hover a bar to see its token and cache totals by model. Claude also shows costs reported in its local logs.
+- **Local usage by model.** Switch between today's hours and the last 30 days in Claude, Codex, or Antigravity. Hover a bar to see token totals, cache hit rates, and per-model costs — agent-reported for Claude, and API-equivalent estimates (`~`) for Codex and Antigravity.
 - **Reset credits.** Claude and Codex show the available count and nearest expiry when the data source reports credits. Expand the row for individual grants.
 - **Claude quota from official statusline data.** Explicitly connect in Settings → Providers. MyUsage reads private local 5-hour / 7-day snapshots without accessing Claude credentials, querying OAuth usage/profile APIs, or launching Claude Code.
 - **Limit-pressure notifications.** Native macOS notifications fire the moment any tracked limit crosses your warn / crit threshold (default 80% / 95%, both tunable). Idempotent — same percent across two refreshes never double-fires.
@@ -56,9 +56,9 @@ It's free, MIT, no telemetry, and pure Swift / SwiftUI with zero third-party dep
 | Provider | Data Source | What You See |
 | --- | --- | --- |
 | Claude Code | Private statusline snapshot, local profile cache and JSONL logs | Optional rolling limits and reset credits · local tokens, cache hit rate and reported costs by model |
-| Codex | OAuth API (`~/.codex/auth.json` / Keychain) and local JSONL logs | Rolling limits and reset credits · local tokens and cache hit rate by model |
+| Codex | OAuth API (`~/.codex/auth.json` / Keychain) and local JSONL logs | Rolling limits and reset credits · local tokens, cache hit rate and API-equivalent cost estimates by model |
 | Cursor | Local SQLite + Connect RPC (`state.vscdb`) | Included quota and on-demand spend · billing-cycle total and reset date |
-| Antigravity | Local language server process probe, optional CLI statusline snapshot, and local transcript logs | Grouped quota windows or per-model quotas · local tokens and cache hit rate by model |
+| Antigravity | Local language server process probe, optional CLI statusline snapshot, and local transcript logs | Grouped quota windows or per-model quotas · local tokens, cache hit rate and API-equivalent cost estimates by model |
 | LiteLLM gateway | Configured host + API key; read-only usage APIs | User/key budget and spend · optional UTC month-to-date cost, model and token history |
 
 ## Requirements
