@@ -1,12 +1,22 @@
 import Foundation
 
-/// Local token activity and agent-reported costs, grouped by calendar day and hour.
+/// Local token activity and agent-reported or API-equivalent estimated costs,
+/// grouped by calendar day and hour.
 struct LocalUsageReport: Sendable, Equatable {
+    enum CostBasis: Sendable, Equatable {
+        case none
+        case reported
+        case estimated
+    }
+
     struct ModelMetrics: Sendable, Equatable {
         var tokens: TokenUsage = .zero
         var reportedCostUSD: Double = 0
+        var estimatedCostUSD: Double = 0
+        var hasUnpricedTokens: Bool = false
 
         var totalTokens: Int { tokens.total }
+        var costUSD: Double { reportedCostUSD > 0 ? reportedCostUSD : estimatedCostUSD }
 
         var cacheHitRate: Double? {
             let hits = tokens.cacheRead + tokens.cachedInput
@@ -16,7 +26,12 @@ struct LocalUsageReport: Sendable, Equatable {
         }
 
         static func + (lhs: Self, rhs: Self) -> Self {
-            Self(tokens: lhs.tokens + rhs.tokens, reportedCostUSD: lhs.reportedCostUSD + rhs.reportedCostUSD)
+            Self(
+                tokens: lhs.tokens + rhs.tokens,
+                reportedCostUSD: lhs.reportedCostUSD + rhs.reportedCostUSD,
+                estimatedCostUSD: lhs.estimatedCostUSD + rhs.estimatedCostUSD,
+                hasUnpricedTokens: lhs.hasUnpricedTokens || rhs.hasUnpricedTokens
+            )
         }
 
         static func += (lhs: inout Self, rhs: Self) {
@@ -32,6 +47,9 @@ struct LocalUsageReport: Sendable, Equatable {
 
         var totalTokens: Int { combinedTokens.total }
         var reportedCostUSD: Double { combinedMetrics(models).reportedCostUSD }
+        var estimatedCostUSD: Double { combinedMetrics(models).estimatedCostUSD }
+        var costUSD: Double { combinedMetrics(models).costUSD }
+        var hasUnpricedTokens: Bool { combinedMetrics(models).hasUnpricedTokens }
         var combinedTokens: TokenUsage { combinedMetrics(models).tokens }
         var cacheHitRate: Double? { combinedMetrics(models).cacheHitRate }
     }
@@ -42,20 +60,52 @@ struct LocalUsageReport: Sendable, Equatable {
         let tokens: Int
         let cacheHitRate: Double?
         let reportedCostUSD: Double
+        let estimatedCostUSD: Double
+        let hasUnpricedTokens: Bool
+
+        var costUSD: Double { reportedCostUSD > 0 ? reportedCostUSD : estimatedCostUSD }
+
+        init(
+            name: String,
+            tokens: Int,
+            cacheHitRate: Double?,
+            reportedCostUSD: Double,
+            estimatedCostUSD: Double = 0,
+            hasUnpricedTokens: Bool = false
+        ) {
+            self.name = name
+            self.tokens = tokens
+            self.cacheHitRate = cacheHitRate
+            self.reportedCostUSD = reportedCostUSD
+            self.estimatedCostUSD = estimatedCostUSD
+            self.hasUnpricedTokens = hasUnpricedTokens
+        }
     }
 
     struct ScopeSummary: Sendable, Equatable {
         let totalTokens: Int
         let cacheHitRate: Double?
         let reportedCostUSD: Double
+        let estimatedCostUSD: Double
+        let hasUnpricedTokens: Bool
         let models: [ModelSummary]
+
+        var costUSD: Double { reportedCostUSD > 0 ? reportedCostUSD : estimatedCostUSD }
     }
 
     let days: [Bucket]
     let hours: [Bucket]
     let hasReportedCost: Bool
+    let hasEstimatedCost: Bool
     let orderedModelNames: [String]
     private let totalsByModel: [String: ModelMetrics]
+
+    var hasCost: Bool { hasReportedCost || hasEstimatedCost }
+    var costBasis: CostBasis {
+        if hasReportedCost { return .reported }
+        if hasEstimatedCost { return .estimated }
+        return .none
+    }
 
     var summary30d: ScopeSummary { summarize(totalsByModel) }
     var summaryToday: ScopeSummary { summarize(days.last?.models ?? [:]) }
@@ -114,8 +164,8 @@ struct LocalUsageReport: Sendable, Equatable {
             if left.value.totalTokens != right.value.totalTokens {
                 return left.value.totalTokens > right.value.totalTokens
             }
-            if left.value.reportedCostUSD != right.value.reportedCostUSD {
-                return left.value.reportedCostUSD > right.value.reportedCostUSD
+            if left.value.costUSD != right.value.costUSD {
+                return left.value.costUSD > right.value.costUSD
             }
             return left.key < right.key
         }.map(\.key)
@@ -124,6 +174,7 @@ struct LocalUsageReport: Sendable, Equatable {
             days: days,
             hours: hours,
             hasReportedCost: days.contains { $0.reportedCostUSD > 0 } || hours.contains { $0.reportedCostUSD > 0 },
+            hasEstimatedCost: days.contains { $0.estimatedCostUSD > 0 } || hours.contains { $0.estimatedCostUSD > 0 },
             orderedModelNames: names,
             totalsByModel: totals
         )
@@ -135,6 +186,8 @@ struct LocalUsageReport: Sendable, Equatable {
             totalTokens: combined.totalTokens,
             cacheHitRate: combined.cacheHitRate,
             reportedCostUSD: combined.reportedCostUSD,
+            estimatedCostUSD: combined.estimatedCostUSD,
+            hasUnpricedTokens: combined.hasUnpricedTokens,
             models: orderedModelNames.compactMap { name in
                 models[name].map { Self.modelSummary(name, metrics: $0) }
             }
@@ -150,7 +203,13 @@ struct LocalUsageReport: Sendable, Equatable {
 
     private static func modelSummary(_ name: String, metrics: ModelMetrics?) -> ModelSummary {
         let metrics = metrics ?? ModelMetrics()
-        return ModelSummary(name: name, tokens: metrics.totalTokens,
-                            cacheHitRate: metrics.cacheHitRate, reportedCostUSD: metrics.reportedCostUSD)
+        return ModelSummary(
+            name: name,
+            tokens: metrics.totalTokens,
+            cacheHitRate: metrics.cacheHitRate,
+            reportedCostUSD: metrics.reportedCostUSD,
+            estimatedCostUSD: metrics.estimatedCostUSD,
+            hasUnpricedTokens: metrics.hasUnpricedTokens
+        )
     }
 }

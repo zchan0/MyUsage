@@ -109,7 +109,8 @@ enum AntigravityLogParser {
     static func scanLocalUsage(
         roots: [URL] = defaultRoots(),
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        pricing: ModelPricingCatalog = .bundledFallback
     ) -> LocalUsageReport {
         var scan = LocalUsageLogScan(now: now, calendar: calendar)
         let decoder = JSONDecoder()
@@ -121,7 +122,16 @@ enum AntigravityLogParser {
                       let model = normalizeDisplayModel(rawModel) else { return }
                 let tokens = row.tokens
                 guard !tokens.isEmpty else { return }
-                scan.add(.init(tokens: tokens), for: model, at: time)
+                let estimated = pricing.estimateCost(for: tokens, rawModel: rawModel)
+                scan.add(
+                    .init(
+                        tokens: tokens,
+                        estimatedCostUSD: estimated ?? 0,
+                        hasUnpricedTokens: estimated == nil
+                    ),
+                    for: model,
+                    at: time
+                )
             }
         }
 

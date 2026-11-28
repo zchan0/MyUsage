@@ -33,8 +33,11 @@ struct ProviderUsageInstrument: View {
                     PopoverHairline()
                         .padding(.top, 11)
                     let rows = hoveredSlot.map { report.modelRows(for: $0) } ?? report.modelRows(for: summary)
+                    let costMinWidth = costColumnMinWidth
                     VStack(spacing: 6.5) {
-                        ForEach(rows) { row in modelRow(row, totalTokens: tokens) }
+                        ForEach(rows) { row in
+                            modelRow(row, totalTokens: tokens, costColumnMinWidth: costMinWidth)
+                        }
                     }
                     .padding(.top, 9)
                 }
@@ -49,7 +52,8 @@ struct ProviderUsageInstrument: View {
         hoveredSlot: LocalUsageReport.Bucket?,
         tokens: Int
     ) -> some View {
-        let cost = hoveredSlot?.reportedCostUSD ?? summary.reportedCostUSD
+        let cost = hoveredSlot?.costUSD ?? summary.costUSD
+        let hasUnpriced = hoveredSlot?.hasUnpricedTokens ?? summary.hasUnpricedTokens
         let hit = hoveredSlot.map(\.cacheHitRate) ?? summary.cacheHitRate
         return HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
@@ -66,16 +70,16 @@ struct ProviderUsageInstrument: View {
                         .foregroundStyle(palette.inkTertiary)
                 }
                 .accessibilityElement(children: .combine)
-                subtitle(label: hoveredSlot?.label, tokens: tokens, hit: hit, cost: cost)
+                subtitle(label: hoveredSlot?.label, tokens: tokens, hit: hit, cost: cost, hasUnpriced: hasUnpriced)
             }
             Spacer(minLength: 0)
             scopePill
         }
     }
 
-    private func subtitle(label: String?, tokens: Int, hit: Double?, cost: Double) -> some View {
+    private func subtitle(label: String?, tokens: Int, hit: Double?, cost: Double, hasUnpriced: Bool) -> some View {
         let cache = hit.flatMap { rate in rate > 0 ? String(format: "%.1f%% cache", rate) : nil }
-        let showsCost = report.hasReportedCost && cost > 0
+        let showsCost = report.hasCost && cost > 0
         let hasActivityDetail = cache != nil || showsCost || tokens == 0
 
         return HStack(spacing: 4) {
@@ -92,10 +96,11 @@ struct ProviderUsageInstrument: View {
             }
 
             if showsCost {
-                let amount = costText(cost)
-                Text(label != nil && tokens == 0 ? "\(amount) settled" : amount)
+                let amount = formattedCost(cost, hasUnpriced: hasUnpriced)
+                Text(report.costBasis == .reported && label != nil && tokens == 0 ? "\(amount) settled" : amount)
                     .fontWeight(.medium)
                     .foregroundStyle(palette.inkPrimary)
+                    .help(costHelp(hasUnpriced: hasUnpriced))
             } else if tokens == 0 {
                 Text("No activity recorded")
             }
@@ -233,9 +238,20 @@ struct ProviderUsageInstrument: View {
         .foregroundStyle(palette.inkTertiary)
     }
 
-    private func modelRow(_ row: LocalUsageReport.ModelSummary, totalTokens: Int) -> some View {
+    private var costColumnMinWidth: CGFloat {
+        let maxChars = report.modelRows(for: report.summary30d)
+            .map { $0.costUSD > 0 ? formattedCost($0.costUSD, hasUnpriced: $0.hasUnpricedTokens).count : 0 }
+            .max() ?? 0
+        return max(50, ceil(CGFloat(maxChars) * 7.5))
+    }
+
+    private func modelRow(
+        _ row: LocalUsageReport.ModelSummary,
+        totalTokens: Int,
+        costColumnMinWidth: CGFloat
+    ) -> some View {
         let share = row.tokens > 0 ? max(0.08, Double(row.tokens) / Double(max(1, totalTokens))) : 0
-        let dimmed = row.tokens == 0 && row.reportedCostUSD <= 0
+        let dimmed = row.tokens == 0 && row.costUSD <= 0
         return HStack(spacing: 8) {
             Capsule()
                 .fill(palette.track)
@@ -271,13 +287,19 @@ struct ProviderUsageInstrument: View {
                 .frame(minWidth: 44, alignment: .trailing)
                 .accessibilityLabel("\(row.tokens) tokens")
 
-            if report.hasReportedCost {
-                Text(row.reportedCostUSD > 0 ? costText(row.reportedCostUSD) : "—")
+            if report.hasCost {
+                let display = row.costUSD > 0
+                    ? formattedCost(row.costUSD, hasUnpriced: row.hasUnpricedTokens)
+                    : "—"
+                Text(display)
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(palette.inkSecondary)
                     .contentTransition(.numericText())
-                    .animation(PopoverMotion.numeric, value: row.reportedCostUSD)
-                    .frame(minWidth: 44, alignment: .trailing)
+                    .animation(PopoverMotion.numeric, value: row.costUSD)
+                    .frame(minWidth: costColumnMinWidth, alignment: .trailing)
+                    .help(row.costUSD > 0
+                          ? costHelp(hasUnpriced: row.hasUnpricedTokens)
+                          : (row.hasUnpricedTokens ? "Pricing unavailable for this model" : ""))
             }
         }
         .monospacedDigit()
@@ -286,8 +308,33 @@ struct ProviderUsageInstrument: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func formattedCost(_ cost: Double, hasUnpriced: Bool) -> String {
+        let base = costText(cost)
+        switch report.costBasis {
+        case .none, .reported:
+            return base
+        case .estimated:
+            if cost < 0.005 { return hasUnpriced ? "≥\(base)" : base }
+            return hasUnpriced ? "≥\(base)" : "~\(base)"
+        }
+    }
+
     private func costText(_ cost: Double) -> String {
-        String(format: "$%.2f", cost)
+        if cost > 0 && cost < 0.005 { return "<$0.01" }
+        return String(format: "$%.2f", cost)
+    }
+
+    private func costHelp(hasUnpriced: Bool) -> String {
+        switch report.costBasis {
+        case .none:
+            return ""
+        case .reported:
+            return "Cost reported directly by local session logs."
+        case .estimated:
+            return hasUnpriced
+                ? "Partial API-equivalent estimate from local tokens (some models lack pricing; not billed on subscriptions)."
+                : "API-equivalent estimate from local tokens and reference model pricing (not billed on subscriptions)."
+        }
     }
 }
 

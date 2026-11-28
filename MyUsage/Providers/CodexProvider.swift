@@ -232,11 +232,16 @@ final class CodexProvider: BuiltinUsageProvider {
 
     private var localUsage: LocalUsageReport?
     private let logRoots: [URL]
+    private let pricingProvider: @Sendable () async -> ModelPricingCatalog
 
     // MARK: - Init
 
-    init(logRoots: [URL]? = nil) {
+    init(
+        logRoots: [URL]? = nil,
+        pricingProvider: (@Sendable () async -> ModelPricingCatalog)? = nil
+    ) {
         self.logRoots = logRoots ?? CodexLogParser.defaultRoots()
+        self.pricingProvider = pricingProvider ?? { await ModelPricingStore.shared.catalog() }
         detectAvailability()
     }
 
@@ -330,8 +335,10 @@ final class CodexProvider: BuiltinUsageProvider {
                 mapped.email = identity?.email
                 mapped.resetCredits = usageBundle.resetCredits
                 let roots = logRoots
+                let fetchPricing = pricingProvider
                 localUsage = await Task.detached(priority: .utility) {
-                    CodexLogParser.scanLocalUsage(roots: roots)
+                    let pricing: ModelPricingCatalog = roots.isEmpty ? .bundledFallback : await fetchPricing()
+                    return CodexLogParser.scanLocalUsage(roots: roots, pricing: pricing)
                 }.value
                 mapped.localUsage = localUsage
                 snapshot = mapped

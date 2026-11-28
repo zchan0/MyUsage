@@ -132,7 +132,15 @@ struct LocalUsageReportTests {
 
         let report = CodexLogParser.scanLocalUsage(roots: [logs.root], now: Self.now, calendar: Self.calendar)
         #expect(!report.hasReportedCost)
+        #expect(report.hasEstimatedCost)
+        #expect(report.hasCost)
+        #expect(report.costBasis == .estimated)
         #expect(report.summary30d.reportedCostUSD == 0)
+        // gpt-5.2-codex -> gpt-5.2 (1.75 / 14 / 0.175): (50*1.75 + 10*14 + 30*0.175) / 1e6 = 0.00023275
+        // gpt-5.5-2026-11-01 -> gpt-5.5 (5 / 30 / 0.5): (0*5 + 5*30 + 30*0.5) / 1e6 = 0.000165
+        let expectedCodexTotal = (50 * 1.75 + 10 * 14 + 30 * 0.175 + 5 * 30 + 30 * 0.5) / 1_000_000.0
+        #expect(abs(report.summary30d.estimatedCostUSD - expectedCodexTotal) < 1e-12)
+        #expect(!report.summary30d.hasUnpricedTokens)
         #expect(report.orderedModelNames == ["GPT-5.2 Codex", "GPT-5.5"])
         #expect(report.days.count == 30)
         #expect(report.days.last?.label == "Today")
@@ -186,6 +194,13 @@ struct LocalUsageReportTests {
 
         let report = AntigravityLogParser.scanLocalUsage(roots: [brain], now: Self.now, calendar: Self.calendar)
         #expect(!report.hasReportedCost)
+        #expect(report.hasEstimatedCost)
+        #expect(report.costBasis == .estimated)
+        // gemini-4-neon (3 / 15 / 0.15): (1000*3 + 200*15 + 4000*0.15) / 1e6 = 0.0066
+        // claude-opus-5-5 (4 / 20 / 0.2): (500*4 + 100*20 + 1500*0.2) / 1e6 = 0.0043
+        #expect(abs(report.summaryToday.estimatedCostUSD - 0.0066) < 1e-12)
+        #expect(abs(report.summary30d.estimatedCostUSD - 0.0109) < 1e-12)
+        #expect(!report.summary30d.hasUnpricedTokens)
         #expect(report.orderedModelNames == ["Gemini 4 Neon", "Claude Opus 5.5"])
         #expect(report.summary30d.totalTokens == 7300)
         #expect(report.summaryToday.totalTokens == 5200)

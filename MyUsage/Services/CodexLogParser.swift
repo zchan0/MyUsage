@@ -99,22 +99,34 @@ enum CodexLogParser {
     static func scanLocalUsage(
         roots: [URL] = defaultRoots(),
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        pricing: ModelPricingCatalog = .bundledFallback
     ) -> LocalUsageReport {
         var scan = LocalUsageLogScan(now: now, calendar: calendar)
         let decoder = JSONDecoder()
         for file in scan.files(in: roots) {
-            var currentModel: String?
+            var currentModel: (raw: String, display: String)?
             LocalUsageLogScan.readRows(in: file, decoder: decoder, timestamp: \Row.timestamp) { row, time in
                 switch row.type {
                 case "turn_context":
-                    currentModel = row.payload?.model.flatMap(normalizeModelFamily)
+                    currentModel = row.payload?.model.flatMap { raw in
+                        normalizeModelFamily(raw).map { (raw, $0) }
+                    }
                 case "event_msg":
                     guard row.payload?.type == "token_count", let usage = row.payload?.info?.lastTokenUsage,
                           let model = currentModel, let time else { return }
                     let tokens = usage.tokens
                     guard !tokens.isEmpty else { return }
-                    scan.add(.init(tokens: tokens), for: model, at: time)
+                    let estimated = pricing.estimateCost(for: tokens, rawModel: model.raw, preferredVendor: .openai)
+                    scan.add(
+                        .init(
+                            tokens: tokens,
+                            estimatedCostUSD: estimated ?? 0,
+                            hasUnpricedTokens: estimated == nil
+                        ),
+                        for: model.display,
+                        at: time
+                    )
                 default:
                     break
                 }

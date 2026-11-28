@@ -158,6 +158,7 @@ enum PreviewFixtures {
                 bucketId: "3p-weekly"
             ),
         ]
+        antigravity.localUsage = localUsage(for: .antigravity, now: now)
         antigravity.lastRefreshed = now.addingTimeInterval(-32)
 
         return [
@@ -171,21 +172,20 @@ enum PreviewFixtures {
     static func localUsage(for kind: ProviderKind, now: Date = .now) -> LocalUsageReport {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
-        let isClaude = kind == .claude
         let activity = [0, 0, 2, 0, 8, 0, 0, 3, 0, 0, 16, 0, 9, 3, 0, 0, 1, 0, 22, 11, 0, 5, 7, 0, 14, 4, 17, 5, 9]
         var daily: [Date: [String: LocalUsageReport.ModelMetrics]] = [:]
         for (index, amount) in activity.enumerated() {
             guard let day = calendar.date(byAdding: .day, value: index - 29, to: today) else { continue }
             if amount > 0 {
-                daily[day] = sampleModels(isClaude: isClaude, scale: amount, seed: index)
-            } else if isClaude && index == 23 {
+                daily[day] = sampleModels(for: kind, scale: amount, seed: index)
+            } else if kind == .claude && index == 23 {
                 daily[day] = ["Opus 5.5": .init(reportedCostUSD: 1.18)]
             }
         }
 
         let hours = [1: 1, 8: 2, 9: 5, 11: 3, 15: 1]
         let hourly = Dictionary(uniqueKeysWithValues: hours.map { hour, amount in
-            (hour, sampleModels(isClaude: isClaude, scale: amount, seed: hour, hourly: true))
+            (hour, sampleModels(for: kind, scale: amount, seed: hour, hourly: true))
         })
         daily[today] = hourly.values.reduce(into: [:]) { total, models in
             for (name, metrics) in models { total[name, default: .init()] += metrics }
@@ -194,10 +194,11 @@ enum PreviewFixtures {
     }
 
     private static func sampleModels(
-        isClaude: Bool, scale: Int, seed: Int, hourly: Bool = false
+        for kind: ProviderKind, scale: Int, seed: Int, hourly: Bool = false
     ) -> [String: LocalUsageReport.ModelMetrics] {
         let activity = scale * (hourly ? 120_000 : 1_500_000)
-        if isClaude {
+        let pricing = ModelPricingCatalog.bundledFallback
+        if kind == .claude {
             var models: [String: LocalUsageReport.ModelMetrics] = [
                 "Opus 5.5": .init(tokens: TokenUsage(
                     input: activity / 50, output: activity / 90, cacheWrite: activity / 70, cacheRead: activity
@@ -216,11 +217,29 @@ enum PreviewFixtures {
             return models
         }
 
+        if kind == .antigravity {
+            let neon = TokenUsage(input: activity / 25, output: activity / 70, cacheRead: activity)
+            let opus = TokenUsage(input: activity / 60, output: activity / 120, cacheRead: activity / 4)
+            let neonCost = pricing.estimateCost(for: neon, rawModel: "gemini-4-neon") ?? 0
+            let opusCost = pricing.estimateCost(for: opus, rawModel: "claude-opus-5-5") ?? 0
+            return seed.isMultiple(of: 2)
+                ? [
+                    "Gemini 4 Neon": .init(tokens: neon, estimatedCostUSD: neonCost),
+                    "Claude Opus 5.5": .init(tokens: opus, estimatedCostUSD: opusCost),
+                ]
+                : ["Gemini 4 Neon": .init(tokens: neon, estimatedCostUSD: neonCost)]
+        }
+
         let sol = TokenUsage(input: activity / 13, output: activity / 42, cachedInput: activity)
         let other = TokenUsage(input: activity / 40, output: activity / 110, cachedInput: activity / 4)
+        let solCost = pricing.estimateCost(for: sol, rawModel: "gpt-6.1-sol", preferredVendor: .openai) ?? 0
+        let otherCost = pricing.estimateCost(for: other, rawModel: "gpt-6.2-sol", preferredVendor: .openai) ?? 0
         return seed.isMultiple(of: 2)
-            ? ["GPT-6.1 Sol": .init(tokens: sol), "GPT-6.2 Sol": .init(tokens: other)]
-            : ["GPT-6.2 Sol": .init(tokens: sol)]
+            ? [
+                "GPT-6.1 Sol": .init(tokens: sol, estimatedCostUSD: solCost),
+                "GPT-6.2 Sol": .init(tokens: other, estimatedCostUSD: otherCost),
+            ]
+            : ["GPT-6.2 Sol": .init(tokens: sol, estimatedCostUSD: pricing.estimateCost(for: sol, rawModel: "gpt-6.2-sol", preferredVendor: .openai) ?? 0)]
     }
 }
 #endif

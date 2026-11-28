@@ -327,6 +327,7 @@ final class AntigravityProvider: BuiltinUsageProvider {
     private let now: @Sendable () -> Date
     private let processFinder: @Sendable () async -> [AntigravityProcessInfo]
     private let hasLocalInstallation: @Sendable () -> Bool
+    private let pricingProvider: @Sendable () async -> ModelPricingCatalog
 
     // MARK: - Constants (paths)
 
@@ -356,7 +357,8 @@ final class AntigravityProvider: BuiltinUsageProvider {
         logRoots: [URL]? = nil,
         now: @escaping @Sendable () -> Date = { .now },
         processFinder: (@Sendable () async -> [AntigravityProcessInfo])? = nil,
-        hasLocalInstallation: (@Sendable () -> Bool)? = nil
+        hasLocalInstallation: (@Sendable () -> Bool)? = nil,
+        pricingProvider: (@Sendable () async -> ModelPricingCatalog)? = nil
     ) {
         self.store = AntigravityStatuslineStore(directory: directory)
         self.bridge = bridge ?? AntigravityStatuslineBridge(directory: directory)
@@ -364,6 +366,7 @@ final class AntigravityProvider: BuiltinUsageProvider {
         self.now = now
         self.processFinder = processFinder ?? { await ProcessHelper.findAntigravityProcesses() }
         self.hasLocalInstallation = hasLocalInstallation ?? { Self.detectedInstallationPath != nil }
+        self.pricingProvider = pricingProvider ?? { await ModelPricingStore.shared.catalog() }
         detectAvailability()
         readLocalStatuslineQuota()
     }
@@ -505,9 +508,11 @@ final class AntigravityProvider: BuiltinUsageProvider {
 
         let roots = logRoots
         let date = now()
+        let fetchPricing = pricingProvider
         lastRefreshDate = date
         async let localReportTask = Task.detached(priority: .utility) {
-            AntigravityLogParser.scanLocalUsage(roots: roots, now: date)
+            let pricing: ModelPricingCatalog = roots.isEmpty ? .bundledFallback : await fetchPricing()
+            return AntigravityLogParser.scanLocalUsage(roots: roots, now: date, pricing: pricing)
         }.value
 
         // 1. Discover running language_server process(es)
