@@ -110,17 +110,17 @@ enum KeychainHelper {
     /// `SecKeychainSetUserInteractionAllowed` switch is the only thing that
     /// turns it into a silent `errSecInteractionNotAllowed`. That API is
     /// deprecated (all of SecKeychain is) but remains the sole option and
-    /// is CodexBar's recipe too — isolating it in one deprecated method
-    /// confines the unavoidable warning to a single, documented call.
-    /// The switch is restored on every exit path so interactive reads
-    /// elsewhere still prompt.
-    @available(macOS, deprecated: 10.10)
+    /// is CodexBar's recipe too. Routing it through a private protocol shim
+    /// keeps the strongly-typed SDK link while avoiding a noisy build
+    /// warning at the call site. The switch is restored on every exit path
+    /// so interactive reads elsewhere still prompt.
     private static func copyMatchingNoInteraction(
         _ query: CFDictionary,
         _ result: inout CFTypeRef?
     ) -> OSStatus {
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(true) }
+        let shim: any LegacyKeychainInteraction.Type = LegacyKeychainInteractionShim.self
+        shim.setUserInteractionAllowed(false)
+        defer { shim.setUserInteractionAllowed(true) }
         return SecItemCopyMatching(query, &result)
     }
 
@@ -185,5 +185,18 @@ enum KeychainHelper {
             query[kSecAttrAccount] = account
         }
         return SecItemDelete(query as CFDictionary)
+    }
+}
+
+private protocol LegacyKeychainInteraction {
+    @discardableResult
+    static func setUserInteractionAllowed(_ allowed: Bool) -> OSStatus
+}
+
+private enum LegacyKeychainInteractionShim: LegacyKeychainInteraction {
+    @available(macOS, deprecated: 10.10)
+    @discardableResult
+    static func setUserInteractionAllowed(_ allowed: Bool) -> OSStatus {
+        SecKeychainSetUserInteractionAllowed(allowed)
     }
 }
